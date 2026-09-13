@@ -28,12 +28,29 @@ function handshakeCookieOptions() {
   };
 }
 
-export async function beginHandshake(returnTo: string): Promise<string> {
+export type Handshake = {
+  state: string;
+  cookies: { name: string; value: string; options: ReturnType<typeof handshakeCookieOptions> }[];
+};
+
+/**
+ * Starts a handshake, returning the cookies for the caller to attach.
+ *
+ * The cookies are returned rather than written through next/headers so the
+ * route can set them on the very response that redirects to AIESEC. Setting
+ * them out of band risks the browser following the redirect without having
+ * stored the state, and the callback then rejects a sign-in that was never
+ * actually wrong.
+ */
+export function beginHandshake(returnTo: string): Handshake {
   const state = randomToken(32);
-  const store = await cookies();
-  store.set(STATE_COOKIE, state, handshakeCookieOptions());
-  store.set(RETURN_TO_COOKIE, safeReturnTo(returnTo), handshakeCookieOptions());
-  return state;
+  return {
+    state,
+    cookies: [
+      { name: STATE_COOKIE, value: state, options: handshakeCookieOptions() },
+      { name: RETURN_TO_COOKIE, value: safeReturnTo(returnTo), options: handshakeCookieOptions() },
+    ],
+  };
 }
 
 export type HandshakeResult =
