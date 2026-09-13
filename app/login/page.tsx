@@ -1,4 +1,3 @@
-import Link from "next/link";
 
 import { safeReturnTo } from "@/lib/auth/oauth";
 
@@ -34,13 +33,18 @@ export default async function LoginPage({
         </p>
       ) : null}
 
-      <Link
+      {/*
+        A plain anchor, not next/link. Link routes client-side, and this target
+        is a route handler that sets a cookie and redirects to another origin --
+        neither of which survives a client-side navigation reliably. The browser
+        has to make this request itself.
+      */}
+      <a
         href={`/api/auth/start?returnTo=${encodeURIComponent(returnTo)}`}
         className="rounded bg-neutral-900 px-4 py-3 text-center text-sm font-medium text-white"
-        prefetch={false}
       >
         Sign in with AIESEC
-      </Link>
+      </a>
     </main>
   );
 }
