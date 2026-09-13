@@ -133,23 +133,4 @@ query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
   }
 }
 
-# Backs the assignment picker. `q` is the name search field; the `name` filter is
-# prefix-only and does not match a full name.
-query EpDirectory($filters: PeopleFilter, $page: Int!, $perPage: Int!) {
-  people(filters: $filters, page: $page, per_page: $perPage) {
-    data {
-      id
-      full_name
-      home_lc {
-        id
-        name
-      }
-    }
-    paging {
-      total_items
-      total_pages
-      current_page
-    }
-  }
-}
 

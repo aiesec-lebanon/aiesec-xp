@@ -45,6 +45,7 @@ model Member {
   scoringOffice Office?            @relation("MemberScoringOffice", fields: [scoringOfficeId], references: [id], onDelete: SetNull)
   positions     Position[]
   assignments   EpAssignment[]
+  managerAliases ManagerAlias[]
   ledgerEntries ScoreLedgerEntry[]
   rewardGrants  RewardGrant[]
 
@@ -69,43 +70,38 @@ model Position {
   @@index([officeId, status])
 }
 
-// ── EP assignment: owned by this system, not EXPA ───────────────────────────
+// ── EP assignment: imported from the MC's sheet, not decided here ───────────
 
-enum AssignmentState {
-  PENDING
-  LINKED
-  NEEDS_REVIEW
-}
-
-enum AssignmentSource {
-  MANUAL
-  IMPORT
-  GIS_FALLBACK
-}
-
-// D-40. There is no epEmail or epPhone: GIS exposes only a relay alias in place
-// of an EP address, so contact details identify nobody and are not stored. UI
-// assignments resolve epPersonId from the directory and are LINKED on creation;
-// only CSV import rows arrive unresolved.
+// D-44, O-08. The sheet carries the EXPA person id, so every imported row
+// resolves exactly and there is no pending or review state to model. A row that
+// cannot be resolved is an import error, reported per row, never a stored
+// half-assignment.
 model EpAssignment {
-  id            String           @id @default(cuid())
-  epPersonId    BigInt?
-  // Held only while an imported row is unresolved, and cleared once it links.
-  // A linked assignment displays its EP by reading GIS, not this column (D-42).
-  epFullName    String?
-  state         AssignmentState  @default(PENDING)
+  id            String    @id @default(cuid())
+  epPersonId    BigInt
   memberId      BigInt
   effectiveFrom DateTime
   effectiveTo   DateTime? // null = still current (D-36)
-  source        AssignmentSource
   createdBy     BigInt
-  createdAt     DateTime         @default(now())
+  createdAt     DateTime  @default(now())
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([epPersonId, effectiveFrom])
   @@index([memberId])
-  @@index([state])
+}
+
+// The sheet names a manager by first name, not by id: "Joseph", "Ahmad M",
+// "Ahmad K". Those labels are a human convention and cannot be matched to a
+// person reliably, so an admin maps each one to a member once, and the import
+// refuses any label it has not been told about rather than guessing.
+model ManagerAlias {
+  label    String @id
+  memberId BigInt
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
 }
 
 // ── Raw exchange events from GIS ────────────────────────────────────────────

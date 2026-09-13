@@ -3,10 +3,10 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-// D-42. EP personal data lives in EXPA and only in EXPA. These tests read the
-// schema and the GIS operations as text, so adding a name column or selecting a
-// name in the sync query fails here rather than being noticed after it has
-// already collected a few thousand rows.
+// D-42, D-44. EP personal data lives in EXPA and only in EXPA, and this product
+// neither assigns EPs nor displays them. These tests read the schema and the GIS
+// operations as text, so a name column or a name selection fails here rather
+// than being noticed after it has already collected a few thousand rows.
 
 const root = resolve(__dirname, "..");
 const schema = readFileSync(resolve(root, "prisma/schema.prisma"), "utf8");
@@ -47,6 +47,12 @@ describe("ExchangeEvent holds no EP personal data", () => {
   it("still declares epPersonId, the join without which nothing is attributable", () => {
     expect(body).toMatch(/epPersonId\s+BigInt/);
   });
+
+  it("carries only what scoring reads (D-44)", () => {
+    for (const dropped of ["personHomeLcId", "opportunityHomeLcId", "gisManagerIds"]) {
+      expect(body).not.toContain(dropped);
+    }
+  });
 });
 
 describe("the sync query does not request what it must not store", () => {
@@ -63,25 +69,33 @@ describe("the sync query does not request what it must not store", () => {
 });
 
 describe("no operation reads EP data for display", () => {
-  it("has no EpDetails query: viewing EP data is EXPA's job, not this product's (D-44)", () => {
+  it("has no EpDetails query: viewing EP data is EXPA's job (D-44)", () => {
     expect(operations).not.toMatch(/query EpDetails/);
+  });
+
+  it("has no EpDirectory query: assignment happens in the sheet, not here (D-44)", () => {
+    expect(operations).not.toMatch(/query EpDirectory/);
   });
 });
 
-describe("assignment records a name only while unresolved", () => {
+describe("the assignment register holds no EP personal data", () => {
   const body = modelBody("EpAssignment");
 
-  it("keeps epFullName optional, so it can be cleared once linked", () => {
-    expect(body).toMatch(/epFullName\s+String\?/);
+  it("stores no EP name: the sheet supplies an id, so a name is never needed (O-08)", () => {
+    expect(body).not.toMatch(FORBIDDEN);
   });
 
-  it("holds no other contact detail", () => {
-    expect(body).not.toMatch(/email|phone/i);
+  it("stores the EP id, which is what makes the register attributable", () => {
+    expect(body).toMatch(/epPersonId\s+BigInt/);
+  });
+
+  it("requires that id, so an unresolvable row is an import error not a stored gap", () => {
+    expect(body).not.toMatch(/epPersonId\s+BigInt\?/);
   });
 });
 
 describe("no other model stores EP contact details", () => {
-  it.each(["ScoreLedgerEntry", "RewardGrant", "ScoringAnomaly"])("%s", (model) => {
+  it.each(["ScoreLedgerEntry", "RewardGrant", "ScoringAnomaly", "ManagerAlias"])("%s", (model) => {
     expect(modelBody(model)).not.toMatch(FORBIDDEN);
   });
 });

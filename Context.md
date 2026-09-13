@@ -222,10 +222,12 @@ already in the ledger.
 
 ## 8. Open items
 
-- **O-08 — What the assignment sheet identifies an EP by.** Attribution needs a
-  GIS person id. If the sheet holds one, the import is exact. If it holds only a
-  name, matching is unreliable for the reasons that sank option A, and the
-  import will need a review step for every ambiguous row. **Open.**
+- **O-10 — Manager labels in the sheet.** The sheet names a manager by first
+  name: `Joseph`, `Mona`, `Ahmad M`, `Ahmad K`, `Nour`. Those are a human
+  convention, disambiguated by initial, and cannot be matched to a member
+  reliably. An admin maps each label to a member once, in `ManagerAlias`, and
+  the import refuses a label it has not been told about rather than guessing.
+  The mapping needs filling in before any score is attributed. **Open.**
 - **O-09 — Production sync token.** Development runs on a standard two-hour
   token, which cannot drive a fifteen-minute cron. Production uses a separate
   non-expiring token per D-13, added directly to the deployment platform. **Open
@@ -233,6 +235,9 @@ already in the ledger.
 
 Closed:
 
+- **O-08** — closed. The sheet carries the EXPA person id, so an imported
+  assignment resolves exactly. The identity problem moves to the manager column
+  instead; see O-10.
 - **O-03** — closed. Measured against office 182: `role.name` takes the values
   `TM`, `LCVP`, `TL`, `MCVP`, `LCP`, `ESTL`, `MCP`, `ESTM`. `role.name = MCP`
   identifies the president safely, but `role.name = MCVP` does not identify the
