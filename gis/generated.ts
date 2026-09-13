@@ -230,7 +230,8 @@ export type OfficeChildrenQueryVariables = Exact<{
 export type OfficeChildrenQuery = { committees: { data: Array<{ id: string, name: string | null, tag: string | null, parent: { id: string } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null } | null } | null };
 
 export type MemberPositionsQueryVariables = Exact<{
-  officeId: number;
+  officeId?: number | null | undefined;
+  personIds?: Array<string | number> | string | number | null | undefined;
   status?: Array<string | null | undefined> | string | null | undefined;
   page: number;
   perPage: number;
@@ -306,9 +307,9 @@ export const OfficeChildrenDocument = gql`
 }
     `;
 export const MemberPositionsDocument = gql`
-    query MemberPositions($officeId: Int!, $status: [String], $page: Int!, $perPage: Int!) {
+    query MemberPositions($officeId: Int, $personIds: [ID!], $status: [String], $page: Int!, $perPage: Int!) {
   memberPositions(
-    filters: {office_id: $officeId, status: $status}
+    filters: {office_id: $officeId, person_ids: $personIds, status: $status}
     page: $page
     per_page: $perPage
   ) {

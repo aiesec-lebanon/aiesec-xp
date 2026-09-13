@@ -52,9 +52,17 @@ query OfficeChildren($parentIds: [Int]) {
 }
 
 # status must be ["active"]; "current" is accepted and silently matches nothing.
-query MemberPositions($officeId: Int!, $status: [String], $page: Int!, $perPage: Int!) {
+# personIds narrows to one member, which is how an admin action re-verifies a
+# position against live GIS rather than against the last sync (Architecture.md 11).
+query MemberPositions(
+  $officeId: Int
+  $personIds: [ID!]
+  $status: [String]
+  $page: Int!
+  $perPage: Int!
+) {
   memberPositions(
-    filters: { office_id: $officeId, status: $status }
+    filters: { office_id: $officeId, person_ids: $personIds, status: $status }
     page: $page
     per_page: $perPage
   ) {
