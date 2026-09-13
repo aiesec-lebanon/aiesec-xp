@@ -1,0 +1,155 @@
+# Every GIS call this product makes is one of these named, parameter-constrained
+# operations. There is deliberately no generic proxy and no dynamic query
+# construction: with an entity-wide token, GIS permissions provide no isolation,
+# so the set of possible queries has to be closed at build time.
+# See Architecture.md section 4.4.
+
+query CurrentPerson {
+  currentPerson {
+    id
+    full_name
+    profile_photo
+    current_office {
+      id
+      name
+    }
+    current_positions {
+      id
+      title
+      status
+      start_date
+      end_date
+      office {
+        id
+        name
+        tag
+      }
+      role {
+        id
+        name
+      }
+    }
+  }
+}
+
+# The office tree is derived by recursing this, never hardcoded (D-39).
+# There is no root `office` field on this schema.
+query OfficeChildren($parentIds: [Int]) {
+  committees(filters: { parent: $parentIds }, per_page: 100) {
+    data {
+      id
+      name
+      tag
+      parent {
+        id
+      }
+    }
+    paging {
+      total_items
+      total_pages
+    }
+  }
+}
+
+# status must be ["active"]; "current" is accepted and silently matches nothing.
+query MemberPositions($officeId: Int!, $status: [String], $page: Int!, $perPage: Int!) {
+  memberPositions(
+    filters: { office_id: $officeId, status: $status }
+    page: $page
+    per_page: $perPage
+  ) {
+    data {
+      id
+      title
+      status
+      start_date
+      end_date
+      office {
+        id
+        name
+      }
+      role {
+        id
+        name
+      }
+      person {
+        id
+        full_name
+        profile_photo
+      }
+    }
+    paging {
+      total_items
+      total_pages
+      current_page
+    }
+  }
+}
+
+# One operation serves every sync pass; the caller varies the filter, which is
+# what keeps the query set closed. No EP contact detail is selected (D-40).
+query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
+  allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
+    data {
+      id
+      status
+      created_at
+      person {
+        id
+        full_name
+        home_lc {
+          id
+          name
+        }
+      }
+      opportunity {
+        id
+        title
+        programme {
+          id
+        }
+        home_lc {
+          id
+          name
+        }
+        home_mc {
+          id
+        }
+      }
+      meta {
+        date_approved
+        date_approval_broken
+        date_realized
+        date_realisation_broke
+        remote_realized_at
+        date_rejected
+        date_withdrawn
+      }
+    }
+    paging {
+      total_items
+      total_pages
+      current_page
+    }
+  }
+}
+
+# Backs the assignment picker. `q` is the name search field; the `name` filter is
+# prefix-only and does not match a full name.
+query EpDirectory($filters: PeopleFilter, $page: Int!, $perPage: Int!) {
+  people(filters: $filters, page: $page, per_page: $perPage) {
+    data {
+      id
+      full_name
+      home_lc {
+        id
+        name
+      }
+    }
+    paging {
+      total_items
+      total_pages
+      current_page
+    }
+  }
+}
