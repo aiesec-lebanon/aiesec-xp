@@ -1,6 +1,6 @@
 # Architecture.md — AIESEC in Lebanon | Gamified Performance Dashboard
 
-Companion: `Context.md` (domain, glossary, decisions D-01…D-38, open item O-03)
+Companion: `Context.md` (domain, glossary, decisions D-01…D-41; all open items closed)
 
 ---
 
@@ -94,7 +94,7 @@ for a missing in-scope position.
 
 | Role | Derivation | Capability |
 |---|---|---|
-| `ADMIN` | Active position whose `role.name` or `title` matches the configured matcher list — seeded with `MCP` and `MCVP IM` (D-14, O-03) | Everything: config, assignments anywhere, overrides, sync control |
+| `ADMIN` | Active position matching a configured `AdminMatcher` — seeded `ROLE_NAME: MCP`, `TITLE: MCVP IM`, `TITLE: MCM IM` (D-14, O-03). `role.name = MCVP` is deliberately not a matcher: it also matches MXP and MKT | Everything: config, assignments anywhere, overrides, sync control |
 | `LEAD` | Active LCP / LCVP / TL position | Assign EPs within own LC, view all |
 | `MEMBER` | Any other active position in scope (D-02) | Own progress, leaderboards |
 | `DENIED` | Authenticated but holding no active position inside the office 182 subtree | No access (D-16, D-31) |
@@ -147,10 +147,11 @@ Prisma-flavoured, indicative.
 ```prisma
 // ── Org and members ──────────────────────────────────────────────────
 model Office {
-  id       BigInt  @id           // 182 and descendants
-  name     String
-  parentId BigInt?
-  isMc     Boolean @default(false)
+  id          BigInt  @id        // 182 and descendants
+  name        String
+  parentId    BigInt?
+  isMc        Boolean @default(false)
+  isOperating Boolean @default(false)  // D-39, seeded from the alignments list
 }
 
 model Member {
@@ -181,9 +182,8 @@ enum AssignmentSource { MANUAL IMPORT GIS_FALLBACK }
 
 model EpAssignment {
   id            String   @id @default(cuid())
-  epPersonId    BigInt?                 // null until resolved (see 4.2 of Context.md)
-  epEmail       String?                 // the only auto-matching key
-  epFullName    String
+  epPersonId    BigInt?                 // null only on an unresolved import row
+  epFullName    String                  // the only match key, used by CSV import
   state         AssignmentState @default(PENDING)
   memberId      BigInt
   effectiveFrom DateTime
@@ -192,7 +192,6 @@ model EpAssignment {
   createdBy     BigInt
   createdAt     DateTime
   @@index([epPersonId, effectiveFrom])
-  @@index([epEmail])
   @@index([state])
 }
 ```
@@ -213,7 +212,7 @@ model ExchangeEvent {
   occurredAt          DateTime
   epPersonId          BigInt                  // always present on an application
   epFullName          String                  // D-18
-  epEmail             String?                 // used to back-resolve assignments
+  epHomeLcId          BigInt?                 // EP's own office, not the scoring office
   programmeId         Int                     // 7 | 8 | 9
   direction           Direction
   personHomeLcId      BigInt?
@@ -232,7 +231,7 @@ model ScoreConfig {
   aplPoints        Decimal
   apdPoints        Decimal
   rePoints         Decimal
-  reverseApl       Boolean @default(false)    // D-35
+  reverseApl       Boolean @default(true)     // D-35, D-41: APL counts are net
   productWeights   Json                        // { "7": 1, "8": 1, "9": 1 }
   directionWeights Json                        // { "OUTGOING": 1, "INCOMING": 1 }
   scopeSides       Json                        // ["PERSON"] today, ["PERSON","OPPORTUNITY"] for incoming (D-27)
@@ -333,23 +332,27 @@ sides is stored once, as `OUTGOING` (D-25).
 | 3 | `date_realized` + `date_remote_realized` | `RE` |
 | 4 | `date_approval_broken` | `APD_BROKEN` |
 | 5 | `date_realisation_broke` | `RE_BROKEN` |
-| 5b | `statuses` = rejected / withdrawn, dated from `meta.date_rejected` or `meta.date_withdrawn` | `APL_BROKEN` (D-35) |
+| 5b | `statuses` = rejected / withdrawn | `applicationStatus` on the existing `APL` row (D-41) |
 
-Pass 5b has no date filter to watermark against, because GIS exposes none for
-rejection or withdrawal. It re-reads the status of applications already in the
-ledger rather than scanning the whole corpus.
+Pass 5b is not a break pass and emits no event. It has no date filter to
+watermark against, because GIS exposes none for rejection or withdrawal, so it
+re-reads the status of applications already in the ledger and updates
+`ExchangeEvent.applicationStatus` in place. That field is raw observed state from
+GIS, not a derived value, so writing it is not a ledger patch.
 
 Each pass paginates to `paging.total_pages`, sorted ascending on its date field,
 and upserts on `(applicationId, eventType)`, so reruns are idempotent. A 48-hour
 overlap behind the watermark absorbs back-dated records. The watermark advances
 only on a fully successful pass.
 
-**Pass 6 — assignment reconciliation.** For every `PENDING` assignment, attempt
-resolution in order: `checkPersonPresent(epEmail)`, then exact full-name match
-within the LC. An email match promotes to `LINKED` automatically. Name-only
-matches go to `NEEDS_REVIEW` for admin confirmation — never applied silently,
-because a wrong match sends someone else's reward to the wrong person. Phone is
-not a match key and EP phone numbers are never pulled.
+**Pass 6 — import reconciliation.** Assignments made through the UI are `LINKED`
+on creation, because the LCVP picks the EP out of the GIS directory and the row
+stores `epPersonId` (D-40). This pass exists only for rows from the bulk CSV
+import, which arrive as typed names. Each is resolved by exact full name within
+the LC; anything that is not a single unambiguous hit becomes `NEEDS_REVIEW` for
+admin confirmation, never applied silently, because a wrong match sends someone
+else's reward to the wrong person. No contact detail is used or stored: GIS
+exposes only a relay alias in place of an EP's email, which identifies nobody.
 
 **Pass 7 — nightly reconciliation of ledger applications.** `ApplicationFilter`
 has no `updated_at` filter, so applications already ingested are re-read nightly
@@ -406,6 +409,15 @@ points = basePoints(eventType)
        × directionWeight(direction)
 ```
 
+An `APL` scores only while its application is neither withdrawn nor rejected
+(D-41). This is evaluated against `applicationStatus`, the current observed state,
+rather than as a dated reversal, because GIS dates neither transition. One
+consequence is deliberate and worth stating: an application rejected after the
+display window closes removes its point from that window retrospectively. That is
+consistent with a system whose ledger is rebuilt rather than patched (D-15), and
+it is what "final APL count" means. At spike volumes it is the difference between
+432 gross applications and 71 net.
+
 An event whose `programmeId` has no entry in `productWeights` scores zero and is
 returned as an anomaly, never scored at an assumed weight of 1 (D-30). Remote and
 physical realization share one weight; where both dates exist the earlier wins
@@ -441,9 +453,11 @@ the simplest correct option. Replays are audited.
   leaderboard diff preview before committing.
 - **Display window** — the date range everyone sees.
 - **Rewards** — create, edit, activate.
-- **Assignments** — search the GIS-backed EP directory, or create a pending
-  assignment by name and email when the EP is not in GIS yet. Bulk CSV/Sheet
-  import with dry-run preview and per-row error report.
+- **Assignments** — search the GIS-backed EP directory and pick the EP, which
+  links the assignment immediately. Bulk CSV/Sheet import with dry-run preview and
+  per-row error report for the launch backfill.
+- **Offices** — which offices are operating (D-39), seeded from the alignments
+  list and editable without a deploy.
 - **Match review queue** — `NEEDS_REVIEW` assignments awaiting confirmation.
 - **Unattributed queue** — events with no assignment.
 - **Sync health** — per-pass last run, watermark, errors, manual run, manual replay.
@@ -543,13 +557,26 @@ Technical measures that remain regardless:
 
 **Day 1 — MVP**
 
-1. **GIS spike.** Before scaffolding anything else, verify with the service token:
-   the exact `role.name` / `title` values identifying MCP and MCVP IM (O-03); that
-   every filter in `Context.md` section 6 returns data for office 182; that
-   `programmes: [7,8,9]` filters correctly; that the 182 subtree resolves; that
-   `checkPersonPresent(email)` works; the status values that identify a rejected or
-   withdrawn application (D-35); and the active member position count per office.
-   Report observed rate limits and page sizes. Stop and review.
+1. **GIS spike — done.** Verified against office 182 with the service token;
+   harness in `scripts/spike`, reports written to `scripts/spike/out` and not
+   committed, since they contain EP names. What it established:
+
+   - Auth is a raw `Authorization` header with no `Bearer` prefix; `Bearer` is
+     rejected. Introspection is enabled, 473 types, which is the codegen source.
+   - All six funnel date filters return data. Over Jan 2024 to Sep 2026 on
+     programmes 7, 8 and 9: 432 applications, 19 approvals, 16 realizations, 4
+     broken approvals, no remote realizations and no broken realizations.
+   - `programmes` filters correctly: 158 + 261 + 13 sums exactly to the 432
+     unfiltered total.
+   - Scope confirms outgoing-only: `person_home_mc` returns 432 and
+     `opportunity_home_mc` returns 0 (D-27).
+   - The subtree is two levels and resolves only through `committees`; three of
+     the six children are closed (D-39).
+   - 65 active positions, on status value `active`. Role vocabulary closed O-03.
+   - EP addresses are relay aliases, which closed the identity question (D-40).
+   - `per_page` up to 1000 accepted, no ceiling reached. Ten concurrent requests
+     all returned 200, no rate-limit headers of any kind, 287-736ms latency.
+     Nothing constrains a 15-minute sync.
 2. Repo scaffold, Prisma schema, migrations, codegen, seed config.
 3. Auth, role resolution, office-tree scoping, route protection.
 4. Sync passes 1–5 with idempotency tests.
@@ -585,7 +612,7 @@ Steps 1–5 are the correctness core and must not be compressed.
 | Service token leaked | Entity-wide read access to AIESEC data by a third party | Section 4.3 handling rules, no proxy route, log redaction, single-env-var rotation |
 | Authorization bug with an entity-wide token | One LC sees or edits another's data | Section 4.4 rules, Playwright privilege tests as a release gate |
 | Member positions not maintained in EXPA | Those members cannot log in at all (D-31) | Failure is loud rather than silent; the spike reports active position counts per office before launch |
-| Sign-ups not in GIS (O-06) | Large backlog of `PENDING` assignments | Assignment by email works before the EP exists; automatic reconciliation on first application |
+| EP identity cannot be matched on contact details | A reward credited to the wrong person | GIS exposes no real EP address (D-40), so the product does not guess: assignment is selection from the directory, and imported names that are not a single unambiguous hit go to a review queue |
 | Wrong identity match | Reward credited to the wrong person | Email and phone auto-match only; name matches require admin confirmation |
 | Assignment backlog at launch | Points sit in the unattributed queue | CSV import on day 6; queue visible to every LEAD, not only admins |
 | GIS rate limits or schema drift | Sync stalls | Codegen from published schema, backoff, contract tests, staleness banner |

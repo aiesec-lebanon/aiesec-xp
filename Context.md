@@ -1,6 +1,6 @@
 # context.md — AIESEC in Lebanon | Gamified Performance Dashboard
 
-Status: Decisions locked, ready for build
+Status: Decisions locked, GIS verified against office 182, ready for build
 Companion: `Architecture.md`
 
 ---
@@ -36,7 +36,7 @@ Two behavioural goals:
 | **MCP / MCVP / LCP / LCVP / TL** | Position roles. MCP and MCVP IM are the admin roles. |
 | **GIS / EXPA** | AIESEC GraphQL API at `https://gis-api.aiesec.org/graphql`, and its staff UI. |
 | **Assignment** | The EP-to-member link that decides who earns points for that EP's funnel. |
-| **Break** | A reversed APD or RE. Reduces count and score. |
+| **Break** | A reversed APL, APD or RE. Reduces count and score. An APL is reversed by the application being withdrawn or rejected (D-41); APD and RE have their own dated break fields. |
 
 ---
 
@@ -44,7 +44,7 @@ Two behavioural goals:
 
 | # | Decision |
 |---|---|
-| D-01 | Scope: AIESEC in Lebanon MC (office **182**) and all descendant LC offices. |
+| D-01 | Scope: AIESEC in Lebanon MC (office **182**) and its **operating** descendant offices (D-39). Closed offices are in the tree but out of the competition. |
 | D-02 | Eligible competitors: anyone holding an **active member position** in scope — MCP, MCVP, LCP, LCVP, TL, member. There is no manual eligibility override: an active in-scope position is the single gate, enforced at login (see D-31). |
 | D-03 | Direction: outgoing and incoming count at the **same weight**. Lebanon is outgoing-only today; incoming must work without code changes (see D-27). |
 | D-04 | Products in scope: **7 = GV, 8 = GTa, 9 = GTe**. Per-product point multipliers are admin-editable. |
@@ -78,10 +78,13 @@ Two behavioural goals:
 | D-32 | A member's LC is the office of their highest-ranked active position; MC-direct means that office is 182 itself. A member counts for exactly one entity on the LC leaderboard. |
 | D-33 | Leaderboard tie-break order: points, then RE count, then APD count, then APL count, then the earliest timestamp at which the current score was reached. |
 | D-34 | A replay that no longer supports a `RewardGrant` **deletes** it. There is no `REVOKED` state; whether to honour an already-announced reward is an MC decision taken outside the system (D-10). The replay itself is audited. |
-| D-35 | APL is reversed from application **status** — rejected or withdrawn — not from a date filter, since GIS has no broken-application date. Gated by `ScoreConfig.reverseApl`. Closes O-02. |
+| D-35 | APL is reversed from application **status** — rejected or withdrawn — not from a date filter, since GIS has no broken-application date. Gated by `ScoreConfig.reverseApl`, which ships **on** (D-41). Closes O-02. |
 | D-36 | New assignments default `effectiveFrom` to the EP's earliest known event, so an assignment claims the whole funnel unless an admin narrows it. Only events inside the display window score. Closes O-01. |
 | D-37 | Hosting is Vercel, production only. There is no staging deployment: AIESEC auth does not accept Vercel preview URLs as registered redirect URIs. |
 | D-38 | Auth is AIESEC OAuth2 directly, following the `auth-template` project. No Auth.js, no second credential system. |
+| D-39 | Which offices are **operating** is derived, not hardcoded. The tree comes from `committees(filters: { parent })`, and the operating set is seeded from the public alignments list at `gis-api.aiesec.org/v2/lists/mcs_alignments?mc_name=Lebanon`, which returns 6550, 1735 and 5854 alongside the MC. `Office.isOperating` is admin-editable, so opening or closing an LC is a toggle rather than a deploy. Verified at spike: 6549, 6547 and 5853 are closed. |
+| D-40 | **No EP email is stored or matched on.** GIS exposes only a per-person relay alias of the form `p_<hash>@inbound.aiesec.org`, never a real address, so email cannot identify anyone. Assignment picks the EP from the GIS directory and stores `epPersonId` directly. A performance dashboard has no other use for the address. |
+| D-41 | The APL count is **net**: an application that is withdrawn or rejected does not count, whenever that happened. APL is evaluated against the application's current status rather than as a dated reversal, because GIS has no broken-application date and the MC wants a final figure. Verified at spike: 361 of 432 applications in the sample window are withdrawn or rejected, so this is the difference between 432 and 71. |
 
 ---
 
@@ -115,17 +118,24 @@ So at APL, APD and RE, the EP always has a `person_id`. Scoring is never blocked
 already exists in GIS at assignment time and is picked from a directory — the
 assignment is `LINKED` on creation and never enters reconciliation.
 
-The pending path remains, because an assignment must not be blocked on GIS
-latency or on an EP who has not finished registering. `EpAssignment` stores an
-optional `epPersonId` plus match keys (`epEmail`, `epFullName`). An assignment
-made before the EP exists in GIS is `PENDING`; a reconciliation job resolves it
-and promotes it to `LINKED`. GIS supports this natively via
-`checkPersonPresent(email)` and `peopleAutocomplete(q)`.
+Identity matching on contact details is not possible and is not attempted
+(D-40). GIS returns only a per-person relay alias in place of an EP's email —
+every one of the 600 EPs sampled at the spike had an address of the form
+`p_<hash>@inbound.aiesec.org`. Those aliases resolve nothing: `checkPersonPresent`
+rejects them, and both `people(q:)` and `peopleAutocomplete` return empty for
+them. No EP email or phone number is stored by this system.
 
-Match precedence: email, then exact full name within the LC. Phone is not a match
-key and EP phone numbers are not pulled from GIS at all. Name matches are never
-applied silently — they surface in the admin queue for confirmation, because a
-wrong name match means a reward goes to the wrong person.
+Assignment therefore works by **selection, not matching**. The LCVP searches the
+GIS-backed EP directory — `people(filters: { home_committee, has_opportunity_applications }, q)`,
+which the spike confirmed resolves a full name to a single person — and picks the
+EP. The assignment stores `epPersonId` and is `LINKED` on creation.
+
+`PENDING` survives for one path only: the bulk CSV import used to backfill
+existing assignments, where rows arrive as names typed by humans. Those resolve
+against the directory by exact full name within the LC, and any row that is not a
+single unambiguous hit becomes `NEEDS_REVIEW` for admin confirmation. A name
+match is never applied silently, because a wrong match sends someone else's
+reward to the wrong person.
 
 ---
 
@@ -165,9 +175,7 @@ Verified against the published schema.
 
 | Need | GIS query / field |
 |---|---|
-| EP directory for assignment | `people(filters: PeopleFilter{ home_committee, committee_scope, registered }, pagination)` |
-| Resolve a pending assignment by email | `checkPersonPresent(email: String)` |
-| Resolve by fuzzy name | `peopleAutocomplete(filters: BaseFilter{ q })` |
+| EP directory for assignment | `people(filters: PeopleFilter{ home_committee, has_opportunity_applications, q }, page, per_page)`. Use `q` for name search; the `name` filter is prefix-only and does not match a full name |
 | APL events | `allOpportunityApplication(filters: { created_at: DateInput, ... })` |
 | APD events | `ApplicationFilter.date_approved` |
 | RE events | `ApplicationFilter.date_realized`, `date_remote_realized` |
@@ -175,11 +183,12 @@ Verified against the published schema.
 | APL reversal (D-35) | `ApplicationFilter.statuses`, with `meta.date_rejected` / `meta.date_withdrawn` as the occurrence date |
 | Scope | `person_home_lc`, `person_home_mc`, `opportunity_home_lc`, `opportunity_home_mc`, `committee_scope` |
 | Product | `ApplicationFilter.programmes: [Int]` — 7, 8, 9 |
-| EP on an application | `OpportunityApplication.person { id full_name contact_detail { email } }` — email only, never phone |
+| EP on an application | `OpportunityApplication.person { id full_name home_lc { id name } }`. No contact details: `contact_detail.email` is null on every row, and `person.email` is a relay alias, never a real address (D-40) |
 | Fallback attribution | `OpportunityApplication.managers`, `Person.managers`, `meta.ep_approved_by` |
 | Logged-in identity | `currentPerson { id full_name profile_photo current_office current_positions { role { name } title office { id } status } }` |
-| Office tree under 182 | `Office.children` (the shape `finance-dashboard` uses), with `committees(filters: OfficeFilter{ parent })` and `Office.suboffices` as alternates. The subtree is always derived, never hardcoded. |
-| Roster | `memberPositions(filters: MemberPositionFilter{ office_id, status }, pagination)` |
+| Office tree under 182 | `committees(filters: OfficeFilter{ parent: [...] })`, recursed. There is **no root `office` field** on this schema, so the `office(id:)` shape used by `finance-dashboard` does not work here. The subtree is always derived, never hardcoded. |
+| Which offices are operating | `GET gis-api.aiesec.org/v2/lists/mcs_alignments?mc_name=Lebanon` — public, unauthenticated, returns the operating office ids (D-39) |
+| Roster | `memberPositions(filters: MemberPositionFilter{ office_id, status: ["active"] }, page, per_page)`. The status value is `active`; `current` is accepted and matches nothing |
 
 **Known limitation:** `ApplicationFilter` has no `updated_at` filter. Change
 detection uses the per-stage date windows plus a nightly re-read of applications
@@ -198,11 +207,16 @@ already in the ledger.
 
 ## 8. Open items
 
-- **O-03 — Exact role strings.** `MCP` and `MCVP IM` must be matched against real
-  `MemberPosition.role.name` and `.title` values in office 182. Confirm at spike;
-  the matcher is a config list. **Open.**
+All open items are closed. The spike measured the last of them.
 
 Closed:
+
+- **O-03** — closed. Measured against office 182: `role.name` takes the values
+  `TM`, `LCVP`, `TL`, `MCVP`, `LCP`, `ESTL`, `MCP`, `ESTM`. `role.name = MCP`
+  identifies the president safely, but `role.name = MCVP` does not identify the
+  IM — it also matches MXP and MKT. The IM is identified by title, and there are
+  two spellings in use, `MCVP IM` and `MCM IM`. `AdminMatcher` therefore seeds
+  with `ROLE_NAME: MCP`, `TITLE: MCVP IM` and `TITLE: MCM IM`.
 
 - **O-01** — closed by D-36. Effective-dated assignments, defaulting
   `effectiveFrom` to the EP's earliest known event.
