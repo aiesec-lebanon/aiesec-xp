@@ -15,7 +15,9 @@ import {
   type PassDefinition,
   type ScopeSide,
 } from "@/lib/sync/passes";
+import { syncRoster } from "@/lib/sync/roster";
 import { advanceWatermark, formatDate, OVERLAP_MS, windowFor } from "@/lib/sync/watermark";
+import { syncOfficeTree } from "@/lib/org/office-tree";
 
 const PAGE_SIZE = 250;
 const MAX_PAGES = 200;
@@ -277,7 +279,38 @@ export async function refreshApplicationStatuses(now = new Date()): Promise<Pass
 /** One pass failing does not stop the others; each owns its own watermark. */
 export async function runAllPasses(now = new Date()): Promise<PassResult[]> {
   const results: PassResult[] = [];
+
+  // The office tree and roster come first: scope and membership decide what the
+  // event passes are allowed to collect and who they can be attributed to.
+  results.push(await runStructuralPass("offices", async () => (await syncOfficeTree()).officesSeen));
+  results.push(await runStructuralPass("roster", async () => (await syncRoster()).membersUpserted));
+
   for (const pass of PASSES) results.push(await runPass(pass, now));
   results.push(await refreshApplicationStatuses(now));
   return results;
+}
+
+/**
+ * Office tree and roster refresh state rather than ingesting dated events, so
+ * they have no watermark. A failure is reported and the run continues: stale
+ * membership is better than no sync at all.
+ */
+async function runStructuralPass(
+  name: string,
+  work: () => Promise<number>
+): Promise<PassResult> {
+  try {
+    const count = await work();
+    return { pass: name, rowsSeen: count, eventsWritten: count, rowsSkipped: 0, status: "SUCCESS" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      pass: name,
+      rowsSeen: 0,
+      eventsWritten: 0,
+      rowsSkipped: 0,
+      status: "FAILED",
+      error: message,
+    };
+  }
 }
