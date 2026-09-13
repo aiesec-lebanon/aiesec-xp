@@ -24,25 +24,37 @@ export type ImportResult = {
   issues: ImportIssue[];
 };
 
-async function fetchSheet(spreadsheetId: string, tabName: string): Promise<string> {
-  const response = await fetch(csvExportUrl(spreadsheetId, tabName), {
-    cache: "no-store",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+export const NOT_SHARED_MESSAGE =
+  "Sheet is not readable. Share it as 'Anyone with the link can view', or the import cannot see it.";
+
+type Fetcher = (url: string) => Promise<{ status: number; ok: boolean; text: () => Promise<string> }>;
+
+/**
+ * Reads one sheet as CSV, turning every way Google can refuse into a message an
+ * admin can act on.
+ *
+ * Exported and fetch-injectable so the refusal paths are testable: a sheet that
+ * is not shared must be a reported issue, never something that stops the other
+ * sheets importing.
+ */
+export async function readSheetCsv(
+  spreadsheetId: string,
+  tabName: string,
+  fetcher: Fetcher = (url) => fetch(url, { cache: "no-store", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+): Promise<string> {
+  const response = await fetcher(csvExportUrl(spreadsheetId, tabName));
 
   if (response.status === 401 || response.status === 403) {
-    throw new Error(
-      "Sheet is not readable. Share it as 'Anyone with the link can view', or the import cannot see it."
-    );
+    throw new Error(NOT_SHARED_MESSAGE);
   }
   if (!response.ok) {
     throw new Error(`Sheet responded ${response.status}`);
   }
 
   const body = await response.text();
-  // A sheet that is not shared returns an HTML sign-in page with a 200.
+  // A sheet that is not shared can also answer 200 with an HTML sign-in page.
   if (body.trimStart().startsWith("<")) {
-    throw new Error("Sheet returned a sign-in page rather than CSV; check its sharing settings.");
+    throw new Error(NOT_SHARED_MESSAGE);
   }
   return body;
 }
@@ -64,7 +76,13 @@ export async function importAssignments(
   const [sheets, aliasRows, members, windowRow] = await Promise.all([
     db.assignmentSheet.findMany({ where: { isActive: true } }),
     db.managerAlias.findMany(),
-    db.member.findMany({ select: { id: true, fullName: true } }),
+    db.member.findMany({
+      // Only members who hold an in-scope position are candidates: someone
+      // whose LC has closed no longer earns points, so offering them as a match
+      // would create an assignment that can never score (D-01, D-31).
+      where: { positions: { some: {} } },
+      select: { id: true, fullName: true },
+    }),
     db.displayWindow.findFirst({ where: { isActive: true } }),
   ]);
 
@@ -83,7 +101,7 @@ export async function importAssignments(
   for (const sheet of sheets) {
     let csv: string;
     try {
-      csv = await fetchSheet(sheet.spreadsheetId, sheet.tabName);
+      csv = await readSheetCsv(sheet.spreadsheetId, sheet.tabName);
     } catch (error) {
       issues.push({
         sheet: sheet.label,

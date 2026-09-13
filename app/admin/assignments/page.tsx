@@ -19,7 +19,11 @@ export default async function AssignmentsAdminPage() {
 
   const [preview, members, aliases, assignments, eps, expaManagers] = await Promise.all([
     importAssignments(user.id, { dryRun: true }),
-    db.member.findMany({ select: { id: true, fullName: true }, orderBy: { fullName: "asc" } }),
+    db.member.findMany({
+      where: { positions: { some: {} } },
+      select: { id: true, fullName: true },
+      orderBy: { fullName: "asc" },
+    }),
     db.managerAlias.findMany(),
     db.epAssignment.findMany(),
     db.exchangeEvent.findMany({ select: { epPersonId: true }, distinct: ["epPersonId"] }),

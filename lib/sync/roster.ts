@@ -70,11 +70,31 @@ export async function syncRoster(): Promise<RosterSyncResult> {
   const officeIds = await operatingOfficeIds();
   const run = await db.syncRun.create({ data: { pass: "roster", status: "RUNNING" } });
 
+  const officeSet = new Set(officeIds.map(String));
+
   try {
-    const positions: GisPosition[] = [];
+    const collected: GisPosition[] = [];
     for (const officeId of officeIds) {
-      positions.push(...(await readOffice(officeId)));
+      collected.push(...(await readOffice(officeId)));
     }
+
+    // office_id is scope-inclusive: querying the MC returns the whole subtree,
+    // closed offices included. Keeping those would put members of a closed LC on
+    // the leaderboard and offer them as candidates when mapping sheet names,
+    // which contradicts D-01 and D-31.
+    const positions = collected.filter((position) => officeSet.has(String(position.officeId)));
+
+    // The same position can arrive once per office queried, since each query
+    // returns the subtree beneath it.
+    const seen = new Set<string>();
+    const deduped = positions.filter((position) => {
+      const key = String(position.id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    positions.length = 0;
+    positions.push(...deduped);
 
     // Group by person: one member may hold several positions, and their scoring
     // office is decided across all of them (D-32).
@@ -85,8 +105,6 @@ export async function syncRoster(): Promise<RosterSyncResult> {
       if (bucket) bucket.push(position);
       else byMember.set(key, [position]);
     }
-
-    const officeSet = new Set(officeIds.map(String));
 
     for (const [key, held] of byMember) {
       const memberId = BigInt(key);
@@ -114,6 +132,10 @@ export async function syncRoster(): Promise<RosterSyncResult> {
         update: profile,
       });
     }
+
+    // Anything outside the operating offices is out of scope by definition, and
+    // would otherwise linger from a period when an office was still open.
+    await db.position.deleteMany({ where: { officeId: { notIn: officeIds } } });
 
     // Replaced rather than merged: a position that has gone from GIS must go
     // from here, or a terminated officer keeps the access it still grants.

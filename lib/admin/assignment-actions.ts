@@ -192,7 +192,10 @@ export async function overrideAssignmentAction(
 /** Candidate members for a label, for the admin to pick from. */
 export async function suggestForLabel(label: string) {
   await requireAdminLive();
-  const members = await db.member.findMany({ select: { id: true, fullName: true } });
+  const members = await db.member.findMany({
+    where: { positions: { some: {} } },
+    select: { id: true, fullName: true },
+  });
   return suggestMembers(label, members).map((suggestion) => ({
     memberId: String(suggestion.member.id),
     fullName: suggestion.member.fullName,
