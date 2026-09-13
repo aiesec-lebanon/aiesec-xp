@@ -1,9 +1,321 @@
+// Data model for AIESEC XP. The authority for this design is Architecture.md
+// section 5; decisions are cited as D-xx and live in Context.md section 3.
+//
+// Connection URLs live in prisma.config.ts: Prisma 7 no longer accepts url or
+// directUrl here. The runtime connection is supplied by a driver adapter.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+}
+
+// ── Org and members ─────────────────────────────────────────────────────────
+
+model Office {
+  id          BigInt  @id
+  name        String
+  parentId    BigInt?
+  isMc        Boolean @default(false)
+  // D-39. Closed offices stay in the tree so historical events still resolve a
+  // name, but their members neither compete nor sign in.
+  isOperating Boolean @default(false)
+
+  members         Member[]        @relation("MemberHomeOffice")
+  scoringMembers  Member[]        @relation("MemberScoringOffice")
+
+  @@index([parentId])
+  @@index([isOperating])
+}
+
+model Member {
+  id              BigInt   @id // GIS person id, always present at login
+  fullName        String
+  aiesecEmail     String?
+  profilePhotoUrl String?
+  homeOfficeId    BigInt?
+  // D-32. The office whose LC total this member's points count towards.
+  scoringOfficeId BigInt?
+  firstSeenAt     DateTime @default(now())
+  lastSyncedAt    DateTime @updatedAt
+
+  homeOffice    Office?            @relation("MemberHomeOffice", fields: [homeOfficeId], references: [id], onDelete: SetNull)
+  scoringOffice Office?            @relation("MemberScoringOffice", fields: [scoringOfficeId], references: [id], onDelete: SetNull)
+  positions     Position[]
+  assignments   EpAssignment[]
+  ledgerEntries ScoreLedgerEntry[]
+  rewardGrants  RewardGrant[]
+
+  @@index([scoringOfficeId])
+}
+
+model Position {
+  id        BigInt    @id // GIS member_position id
+  memberId  BigInt
+  // Not a relation: a member may hold a position in an office outside the 182
+  // subtree, which this system never syncs. A foreign key would reject the row.
+  officeId  BigInt
+  roleName  String?
+  title     String?
+  status    String // GIS uses "active"; "current" is accepted and matches nothing
+  startDate DateTime?
+  endDate   DateTime?
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([officeId, status])
+}
+
+// ── EP assignment: owned by this system, not EXPA ───────────────────────────
+
+enum AssignmentState {
+  PENDING
+  LINKED
+  NEEDS_REVIEW
+}
+
+enum AssignmentSource {
+  MANUAL
+  IMPORT
+  GIS_FALLBACK
+}
+
+// D-40. There is no epEmail or epPhone: GIS exposes only a relay alias in place
+// of an EP address, so contact details identify nobody and are not stored. UI
+// assignments resolve epPersonId from the directory and are LINKED on creation;
+// only CSV import rows arrive unresolved.
+model EpAssignment {
+  id            String           @id @default(cuid())
+  epPersonId    BigInt?
+  epFullName    String
+  state         AssignmentState  @default(PENDING)
+  memberId      BigInt
+  effectiveFrom DateTime
+  effectiveTo   DateTime? // null = still current (D-36)
+  source        AssignmentSource
+  createdBy     BigInt
+  createdAt     DateTime         @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([epPersonId, effectiveFrom])
+  @@index([memberId])
+  @@index([state])
+}
+
+// ── Raw exchange events from GIS ────────────────────────────────────────────
+
+enum FunnelEvent {
+  APL
+  APD
+  RE
+  APD_BROKEN
+  RE_BROKEN
+}
+
+enum Direction {
+  OUTGOING
+  INCOMING
+}
+
+model ExchangeEvent {
+  id                  String      @id @default(cuid())
+  applicationId       BigInt
+  eventType           FunnelEvent
+  occurredAt          DateTime
+  epPersonId          BigInt // always present on an application
+  epFullName          String // D-18
+  epHomeLcId          BigInt? // the EP's own office, not the scoring office
+  programmeId         Int // 7 | 8 | 9
+  direction           Direction
+  personHomeLcId      BigInt?
+  opportunityHomeLcId BigInt?
+  opportunityTitle    String?
+  // Current observed state, refreshed by sync pass 5b. Net APL is a status
+  // check rather than a dated reversal, because GIS dates neither withdrawal
+  // nor rejection in a filterable way (D-41).
+  applicationStatus   String?
+  gisManagerIds       BigInt[]
+  fetchedAt           DateTime    @updatedAt
+
+  ledgerEntries ScoreLedgerEntry[]
+  anomalies     ScoringAnomaly[]
+
+  @@unique([applicationId, eventType]) // idempotency key
+  @@index([epPersonId, occurredAt])
+  @@index([eventType, occurredAt])
+  @@index([occurredAt])
+}
+
+// ── Configuration, versioned, admin-editable ────────────────────────────────
+
+model ScoreConfig {
+  id               String   @id @default(cuid())
+  version          Int      @unique
+  aplPoints        Decimal  @db.Decimal(10, 4)
+  apdPoints        Decimal  @db.Decimal(10, 4)
+  rePoints         Decimal  @db.Decimal(10, 4)
+  // D-41: an application that is withdrawn or rejected does not count. Ships on;
+  // configurable so the MC can reverse the decision without a deploy.
+  reverseApl       Boolean  @default(true)
+  productWeights   Json // { "7": 1, "8": 1, "9": 1 }
+  directionWeights Json // { "OUTGOING": 1, "INCOMING": 1 }
+  scopeSides       Json // ["PERSON"] today; add "OPPORTUNITY" for incoming (D-27)
+  isActive         Boolean  @default(false)
+  createdBy        BigInt
+  createdAt        DateTime @default(now())
+
+  ledgerEntries ScoreLedgerEntry[]
+
+  @@index([isActive])
+}
+
+model DisplayWindow {
+  id       String    @id @default(cuid())
+  label    String
+  startsAt DateTime
+  endsAt   DateTime?
+  isActive Boolean   @default(false)
+
+  @@index([isActive])
+}
+
+enum ThresholdType {
+  POINTS
+  APL_COUNT
+  APD_COUNT
+  RE_COUNT
+}
+
+model Reward {
+  id            String        @id @default(cuid())
+  label         String
+  description   String?
+  thresholdType ThresholdType
+  threshold     Decimal       @db.Decimal(10, 4)
+  valueAmount   Decimal?      @db.Decimal(12, 2)
+  valueCurrency String?
+  iconKey       String?
+  isActive      Boolean       @default(true)
+  sortOrder     Int           @default(0)
+
+  grants RewardGrant[]
+
+  @@index([isActive, sortOrder])
+}
+
+enum MatcherField {
+  ROLE_NAME
+  TITLE
+}
+
+// D-14, O-03. role.name = MCVP is deliberately absent: it also matches MXP and
+// MKT, which would hand admin to the wrong people.
+model AdminMatcher {
+  id      String       @id @default(cuid())
+  pattern String
+  field   MatcherField
+
+  @@unique([field, pattern])
+}
+
+// ── Derived, fully recomputable ─────────────────────────────────────────────
+
+model ScoreLedgerEntry {
+  id              String   @id @default(cuid())
+  memberId        BigInt
+  exchangeEventId String
+  configVersion   Int
+  points          Decimal  @db.Decimal(12, 4) // negative on break
+  countDelta      Int
+  occurredAt      DateTime
+
+  member Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  event  ExchangeEvent @relation(fields: [exchangeEventId], references: [id], onDelete: Cascade)
+  config ScoreConfig   @relation(fields: [configVersion], references: [version], onDelete: Restrict)
+
+  @@unique([memberId, exchangeEventId])
+  @@index([memberId, occurredAt])
+  @@index([exchangeEventId])
+}
+
+// D-34. A replay that no longer supports a grant deletes it; there is no
+// REVOKED state, because honouring an announced reward is an MC decision.
+model RewardGrant {
+  id       String   @id @default(cuid())
+  memberId BigInt
+  rewardId String
+  earnedAt DateTime
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  reward Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, rewardId])
+  @@index([rewardId])
+}
+
+enum AnomalyKind {
+  UNKNOWN_PROGRAMME_WEIGHT
+  BREAK_WITHOUT_STAGE_EVENT
+  UNATTRIBUTED
+}
+
+// Events the engine could not score confidently. Derived alongside the ledger
+// and rebuilt with it, so an admin queue can be read without running a replay.
+model ScoringAnomaly {
+  id              String      @id @default(cuid())
+  exchangeEventId String
+  kind            AnomalyKind
+  detail          String?
+  createdAt       DateTime    @default(now())
+
+  event ExchangeEvent @relation(fields: [exchangeEventId], references: [id], onDelete: Cascade)
+
+  @@unique([exchangeEventId, kind])
+  @@index([kind])
+}
+
+// ── Operations ──────────────────────────────────────────────────────────────
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model SyncRun {
+  id         String     @id @default(cuid())
+  pass       String
+  startedAt  DateTime   @default(now())
+  finishedAt DateTime?
+  eventsSeen Int        @default(0)
+  status     SyncStatus @default(RUNNING)
+  error      String?
+
+  @@index([pass, startedAt])
+}
+
+// Advances only on a fully successful pass, and is read back with a 48-hour
+// overlap so back-dated records are not missed.
+model SyncWatermark {
+  pass      String   @id
+  watermark DateTime
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    BigInt
+  action     String // CONFIG_UPDATE, ASSIGNMENT_SET, MATCH_CONFIRM, IMPORT, REPLAY, EXPORT
+  targetType String
+  targetId   String
+  beforeJson Json?
+  afterJson  Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
 }
