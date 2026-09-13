@@ -202,7 +202,7 @@ resolves it. Only `LINKED` assignments attribute points; `PENDING` and
 
 ```prisma
 // ── Raw exchange events from GIS ─────────────────────────────────────
-enum FunnelEvent { APL APD RE APL_BROKEN APD_BROKEN RE_BROKEN }
+enum FunnelEvent { APL APD RE APD_BROKEN RE_BROKEN }
 enum Direction   { OUTGOING INCOMING }
 
 model ExchangeEvent {
@@ -218,7 +218,7 @@ model ExchangeEvent {
   personHomeLcId      BigInt?
   opportunityHomeLcId BigInt?
   opportunityTitle    String?
-  applicationStatus   String?                 // drives APL_BROKEN (D-35)
+  applicationStatus   String?                 // net APL is a status check (D-41)
   gisManagerIds       BigInt[]                // fallback attribution
   fetchedAt           DateTime
   @@unique([applicationId, eventType])        // idempotency key
