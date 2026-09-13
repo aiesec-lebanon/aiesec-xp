@@ -11,9 +11,10 @@ try {
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
+  // Configuration is seeded by migration, not by a seed script, so a deploy
+  // cannot reach a running state with no active config.
   migrations: {
     path: "prisma/migrations",
-    seed: "node --experimental-strip-types prisma/seed.ts",
   },
   datasource: {
     // Migrations run over the session-mode pooler. The transaction-mode pooler
