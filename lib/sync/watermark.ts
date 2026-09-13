@@ -13,10 +13,23 @@ import { db } from "@/lib/db";
  */
 export const OVERLAP_MS = 48 * 60 * 60 * 1000;
 
-/** Where a pass starts when it has never run. */
-const DEFAULT_LOOKBACK_MS = 365 * 24 * 60 * 60 * 1000;
-
 export type Window = { from: Date; to: Date };
+
+/**
+ * The earliest moment this system may collect anything (D-43).
+ *
+ * Nothing before the active display window is scored, so nothing before it is
+ * fetched or stored either. This is the difference between holding data with a
+ * purpose and holding a copy of EXPA: at the point it was introduced, 206 of
+ * 269 stored events fell outside the window and existed for no reason.
+ */
+export async function collectionFloor(): Promise<Date> {
+  const window = await db.displayWindow.findFirst({ where: { isActive: true } });
+  if (!window) {
+    throw new Error("No active DisplayWindow; sync has no bound and must not run");
+  }
+  return window.startsAt;
+}
 
 export async function readWatermark(pass: string): Promise<Date | null> {
   const row = await db.syncWatermark.findUnique({ where: { pass } });
@@ -24,12 +37,13 @@ export async function readWatermark(pass: string): Promise<Date | null> {
 }
 
 export async function windowFor(pass: string, now = new Date()): Promise<Window> {
+  const floor = await collectionFloor();
   const watermark = await readWatermark(pass);
-  const from = watermark
-    ? new Date(watermark.getTime() - OVERLAP_MS)
-    : new Date(now.getTime() - DEFAULT_LOOKBACK_MS);
 
-  return { from, to: now };
+  const candidate = watermark ? new Date(watermark.getTime() - OVERLAP_MS) : floor;
+  // The floor wins even against a watermark, so moving the display window later
+  // narrows collection immediately rather than at the next full rebuild.
+  return { from: candidate < floor ? floor : candidate, to: now };
 }
 
 /** Called only after a pass has read every page without error. */

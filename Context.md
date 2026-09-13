@@ -61,7 +61,7 @@ Two behavioural goals:
 | D-15 | Config changes **recompute history**. The ledger is replayed. |
 | D-16 | Audience: any logged-in member of office 182 or a descendant office. |
 | D-17 | Controller: AIESEC in Lebanon MC. DPO: MCVP IM. No public privacy notice, no consent prompt, no opt-out, no privacy messaging in the UI. Participation is compulsory for all members. |
-| D-18 | EP details may be shown in the score audit trail. |
+| D-18 | EP details may be shown in the score audit trail, **read live from EXPA at display time**. They are never stored in this system's database (D-42). |
 | D-19 | `Person.meta.opt_out_of_statistical_data` is **not** honoured for leaderboard exclusion. |
 | D-20 | No data purge cycle. The display window filters what is counted and shown. |
 | D-21 | No hosting-region constraint. |
@@ -85,6 +85,8 @@ Two behavioural goals:
 | D-39 | Which offices are **operating** is derived, not hardcoded. The tree comes from `committees(filters: { parent })`, and the operating set is seeded from the public alignments list at `gis-api.aiesec.org/v2/lists/mcs_alignments?mc_name=Lebanon`, which returns 6550, 1735 and 5854 alongside the MC. `Office.isOperating` is admin-editable, so opening or closing an LC is a toggle rather than a deploy. Verified at spike: 6549, 6547 and 5853 are closed. |
 | D-40 | **No EP email is stored or matched on.** GIS exposes only a per-person relay alias of the form `p_<hash>@inbound.aiesec.org`, never a real address, so email cannot identify anyone. Assignment picks the EP from the GIS directory and stores `epPersonId` directly. A performance dashboard has no other use for the address. |
 | D-41 | The APL count is **net**: an application that is withdrawn or rejected does not count, whenever that happened. APL is evaluated against the application's current status rather than as a dated reversal, because GIS has no broken-application date and the MC wants a final figure. Which statuses reverse an APL is configuration (`ScoreConfig.aplReversingStatuses`), seeded with `withdrawn` and `rejected`. The full observed vocabulary is `open`, `withdrawn`, `approved`, `rejected`, `matched`, `finished`, `completed`, `realized`, `approval_broken`; note that `approval_broken` does **not** reverse an APL, since a broken approval does not undo the application. Measured over the last 365 days: 242 applications, 183 withdrawn or rejected, 59 net. |
+| D-42 | **No EP personal data is held at rest.** `ExchangeEvent` stores scoring facts only: no name, no opportunity title, no contact detail. The sole EP datum retained is `epPersonId`, which is the join to `EpAssignment` and without which no event could be attributed to anyone. Names for the audit trail, the assignment picker and the review queue are read from GIS per view and discarded. `EpAssignment.epFullName` survives only while an imported row is unresolved and is cleared once it links. |
+| D-43 | **Nothing before the active display window is collected.** Sync is floored at `DisplayWindow.startsAt`, not at a lookback constant, so the system holds only what it scores. Moving the window later narrows collection immediately. |
 
 ---
 
@@ -183,7 +185,8 @@ Verified against the published schema.
 | APL reversal (D-35) | `ApplicationFilter.statuses`, with `meta.date_rejected` / `meta.date_withdrawn` as the occurrence date |
 | Scope | `person_home_lc`, `person_home_mc`, `opportunity_home_lc`, `opportunity_home_mc`, `committee_scope` |
 | Product | `ApplicationFilter.programmes: [Int]` — 7, 8, 9 |
-| EP on an application | `OpportunityApplication.person { id full_name home_lc { id name } }`. No contact details: `contact_detail.email` is null on every row, and `person.email` is a relay alias, never a real address (D-40) |
+| EP on an application, for sync | `OpportunityApplication.person { id home_lc { id } }`. Ids only: the sync query does not request a name, so it cannot store one (D-42). No contact details exist to request in any case — `contact_detail.email` is null on every row and `person.email` is a relay alias (D-40) |
+| EP details, for display | `people(filters: { ids })`, read per view and discarded. The audit trail (D-18), the assignment picker and the review queue all render from this, never from stored data |
 | Fallback attribution | `OpportunityApplication.managers`, `Person.managers`, `meta.ep_approved_by` |
 | Logged-in identity | `currentPerson { id full_name profile_photo current_office current_positions { role { name } title office { id } status } }` |
 | Office tree under 182 | `committees(filters: OfficeFilter{ parent: [...] })`, recursed. There is **no root `office` field** on this schema, so the `office(id:)` shape used by `finance-dashboard` does not work here. The subtree is always derived, never hardcoded. |

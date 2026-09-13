@@ -11,7 +11,9 @@ Companion: `Context.md` (domain, glossary, decisions D-01…D-41; all open items
 2. **The dashboard owns EP-to-member assignment**, because EXPA does not record
    it at sign-up time. See `Context.md` sections 4 and 5.
 3. **Event-sourced scoring.** Immutable events in, derived score out. A config
-   change is a replay, not a patch — this is what makes D-15 cheap.
+   change is a replay, not a patch — this is what makes D-15 cheap. The events
+   record what happened, not who it happened to: EP personal data stays in EXPA
+   and is read at display time (D-42).
 4. **Configuration over code.** Point values, per-product multipliers, rewards,
    thresholds, display window, scope sides and admin role matchers all live
    in tables.
@@ -183,7 +185,7 @@ enum AssignmentSource { MANUAL IMPORT GIS_FALLBACK }
 model EpAssignment {
   id            String   @id @default(cuid())
   epPersonId    BigInt?                 // null only on an unresolved import row
-  epFullName    String                  // the only match key, used by CSV import
+  epFullName    String?                 // held only while unresolved, cleared on link
   state         AssignmentState @default(PENDING)
   memberId      BigInt
   effectiveFrom DateTime
@@ -210,14 +212,12 @@ model ExchangeEvent {
   applicationId       BigInt
   eventType           FunnelEvent
   occurredAt          DateTime
-  epPersonId          BigInt                  // always present on an application
-  epFullName          String                  // D-18
-  epHomeLcId          BigInt?                 // EP's own office, not the scoring office
+  epPersonId          BigInt                  // the join to EpAssignment, and the
+                                              // only EP datum held (D-42)
   programmeId         Int                     // 7 | 8 | 9
   direction           Direction
   personHomeLcId      BigInt?
   opportunityHomeLcId BigInt?
-  opportunityTitle    String?
   applicationStatus   String?                 // net APL is a status check (D-41)
   gisManagerIds       BigInt[]                // fallback attribution
   fetchedAt           DateTime
@@ -319,7 +319,8 @@ what makes D-15 safe.
 ## 6. Sync pipeline
 
 Runs every 15 minutes on the service token, scoped to the 182 subtree and
-`programmes: [7, 8, 9]`. Scope is applied on the person side today; the
+`programmes: [7, 8, 9]`, and floored at the active display window's start: the
+system fetches only what it scores (D-43). Scope is applied on the person side today; the
 opportunity side is the same code path selected by `ScoreConfig.scopeSides`, so
 incoming exchange is a configuration change (D-27). Results from both sides
 converge on the same idempotency key, so an application that is Lebanese on both
@@ -525,9 +526,18 @@ or opt-out, and EP details appear in the audit trail behind AIESEC auth.
 
 Technical measures that remain regardless:
 
-- Only the fields in `Context.md` section 6 are pulled. No DOB, gender,
-  nationality, CVs or academic history, all of which GIS exposes and none of which
-  this product needs.
+- **Data minimisation is structural, not a policy.** The sync query does not
+  request an EP's name, so no code path can store one (D-42). The only EP datum
+  held is `epPersonId`, the join that makes attribution possible at all. Names
+  are read from GIS per view and discarded.
+- **Collection is bounded by purpose.** Nothing before the active display window
+  is fetched or stored, because nothing before it is scored (D-43). When this
+  was introduced, 206 of 269 stored events fell outside the window and existed
+  for no reason; they were deleted by migration.
+- A test suite reads the schema and the GIS operations as text and fails if a
+  name, email or phone field reappears in either.
+- No DOB, gender, nationality, CVs or academic history, all of which GIS exposes
+  and none of which this product needs.
 - No special category data stored.
 - Encryption in transit and at rest.
 - No third-party analytics with cross-site tracking.

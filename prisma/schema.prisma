@@ -90,7 +90,9 @@ enum AssignmentSource {
 model EpAssignment {
   id            String           @id @default(cuid())
   epPersonId    BigInt?
-  epFullName    String
+  // Held only while an imported row is unresolved, and cleared once it links.
+  // A linked assignment displays its EP by reading GIS, not this column (D-42).
+  epFullName    String?
   state         AssignmentState  @default(PENDING)
   memberId      BigInt
   effectiveFrom DateTime
@@ -121,20 +123,22 @@ enum Direction {
   INCOMING
 }
 
+// D-42. Scoring facts only. No EP name, no opportunity title, nothing
+// descriptive: those are read live from GIS when something is displayed, never
+// held here. epPersonId stays because it is the join to EpAssignment, and
+// without it no event can be attributed to anyone.
 model ExchangeEvent {
   id                  String      @id @default(cuid())
   applicationId       BigInt
   eventType           FunnelEvent
   occurredAt          DateTime
-  epPersonId          BigInt // always present on an application
-  epFullName          String // D-18
+  epPersonId          BigInt // the join key to EpAssignment, and the only EP data held
   programmeId         Int // 7 | 8 | 9
   direction           Direction
   // The EP's own office. Distinct from the member's scoring office (D-32):
   // attribution follows the assignment, never the EP's LC.
   personHomeLcId      BigInt?
   opportunityHomeLcId BigInt?
-  opportunityTitle    String?
   // Current observed state, refreshed by sync pass 5b. Net APL is a status
   // check rather than a dated reversal, because GIS dates neither withdrawal
   // nor rejection in a filterable way (D-41).

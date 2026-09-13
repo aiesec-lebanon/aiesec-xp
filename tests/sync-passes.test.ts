@@ -29,16 +29,13 @@ function row(over: { id?: string; status?: string; created_at?: string; programm
     created_at: over.created_at ?? "2026-08-31T10:41:48Z",
     person: {
       id: "5534242",
-      full_name: "Omar Aladawy",
-      home_lc: { id: "1735", name: "MC Lebanon" },
+      home_lc: { id: "1735" },
     },
     managers: [{ id: "999" }],
     opportunity: {
       id: "1338627",
-      title: "Sales Representative",
       programme: { id: over.programme ?? "8" },
-      home_lc: { id: "813", name: "ISTANBUL" },
-      home_mc: { id: "1622" },
+      home_lc: { id: "813" },
     },
     meta: {
       date_approved: null,
@@ -158,7 +155,6 @@ describe("mapRow", () => {
       applicationId: 7163866n,
       eventType: "APL",
       epPersonId: 5534242n,
-      epFullName: "Omar Aladawy",
       programmeId: 8,
       direction: "OUTGOING",
       personHomeLcId: 1735n,
@@ -175,9 +171,13 @@ describe("mapRow", () => {
     ).toBe("INCOMING");
   });
 
-  it("stores no EP contact detail of any kind (D-40)", () => {
+  it("stores no EP personal data beyond the id needed to attribute (D-40, D-42)", () => {
     const event = mapRow(row(), "APL", OPTIONS)!;
-    expect(Object.keys(event).join(" ")).not.toMatch(/email|phone/i);
+    expect(Object.keys(event).join(" ")).not.toMatch(/email|phone|name|title/i);
+  });
+
+  it("keeps epPersonId, without which nothing can be attributed", () => {
+    expect(mapRow(row(), "APL", OPTIONS)?.epPersonId).toBe(5534242n);
   });
 
   it("drops a programme outside the configured set", () => {
@@ -202,12 +202,6 @@ describe("mapRow", () => {
       expect(() => mapRow(broken as ApplicationRow, "APL", OPTIONS)).not.toThrow();
       expect(mapRow(broken as ApplicationRow, "APL", OPTIONS)).toBeNull();
     }
-  });
-
-  it("substitutes a name when GIS omits one, since epFullName is required", () => {
-    const anonymous = { ...(row() as Record<string, unknown>) };
-    (anonymous.person as Record<string, unknown>).full_name = null;
-    expect(mapRow(anonymous as ApplicationRow, "APL", OPTIONS)?.epFullName).toBe("Person 5534242");
   });
 
   it("tolerates an application with no managers", () => {

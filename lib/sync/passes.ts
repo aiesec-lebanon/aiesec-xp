@@ -55,17 +55,17 @@ export const PASSES: readonly PassDefinition[] = [
   },
 ] as const;
 
+// Scoring facts only. No EP name and no opportunity title: those are read live
+// from GIS when something is displayed, never stored (D-42).
 export type MappedEvent = {
   applicationId: bigint;
   eventType: FunnelEvent;
   occurredAt: Date;
   epPersonId: bigint;
-  epFullName: string;
   programmeId: number;
   direction: Direction;
   personHomeLcId: bigint | null;
   opportunityHomeLcId: bigint | null;
-  opportunityTitle: string | null;
   applicationStatus: string | null;
   gisManagerIds: bigint[];
 };
@@ -166,14 +166,12 @@ export function mapRow(
     eventType,
     occurredAt,
     epPersonId,
-    epFullName: row?.person?.full_name ?? `Person ${epPersonId}`,
     programmeId,
     // D-25: the person side is what decides direction, so an application that
     // is Lebanese on both sides is OUTGOING and stored once.
     direction: side === "PERSON" ? "OUTGOING" : "INCOMING",
     personHomeLcId: toBigInt(row?.person?.home_lc?.id),
     opportunityHomeLcId: toBigInt(row?.opportunity?.home_lc?.id),
-    opportunityTitle: row?.opportunity?.title ?? null,
     applicationStatus: row?.status ?? null,
     gisManagerIds: (row?.managers ?? []).flatMap((manager) => {
       const id = toBigInt(manager?.id);

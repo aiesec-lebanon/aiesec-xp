@@ -247,7 +247,7 @@ export type ApplicationsQueryVariables = Exact<{
 }>;
 
 
-export type ApplicationsQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, created_at: string | null, person: { id: string, full_name: string | null, home_lc: { id: string, name: string | null } | null } | null, managers: Array<{ id: string } | null> | null, opportunity: { id: string, title: string | null, programme: { id: string | null } | null, home_lc: { id: string, name: string | null } | null, home_mc: { id: string } | null } | null, meta: { date_approved: string | null, date_approval_broken: string | null, date_realized: string | null, date_realisation_broke: string | null, remote_realized_at: string | null, date_rejected: string | null, date_withdrawn: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
+export type ApplicationsQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, created_at: string | null, person: { id: string, home_lc: { id: string } | null } | null, managers: Array<{ id: string } | null> | null, opportunity: { id: string, programme: { id: string | null } | null, home_lc: { id: string } | null } | null, meta: { date_approved: string | null, date_approval_broken: string | null, date_realized: string | null, date_realisation_broke: string | null, remote_realized_at: string | null, date_rejected: string | null, date_withdrawn: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
 
 export type EpDirectoryQueryVariables = Exact<{
   filters?: PeopleFilter | null | undefined;
@@ -257,6 +257,13 @@ export type EpDirectoryQueryVariables = Exact<{
 
 
 export type EpDirectoryQuery = { people: { data: Array<{ id: string, full_name: string | null, home_lc: { id: string, name: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
+
+export type EpDetailsQueryVariables = Exact<{
+  ids?: Array<string | number> | string | number | null | undefined;
+}>;
+
+
+export type EpDetailsQuery = { people: { data: Array<{ id: string, full_name: string | null, home_lc: { id: string, name: string | null } | null } | null> | null } | null };
 
 
 export const CurrentPersonDocument = gql`
@@ -350,10 +357,8 @@ export const ApplicationsDocument = gql`
       created_at
       person {
         id
-        full_name
         home_lc {
           id
-          name
         }
       }
       managers {
@@ -361,15 +366,10 @@ export const ApplicationsDocument = gql`
       }
       opportunity {
         id
-        title
         programme {
           id
         }
         home_lc {
-          id
-          name
-        }
-        home_mc {
           id
         }
       }
@@ -410,6 +410,20 @@ export const EpDirectoryDocument = gql`
   }
 }
     `;
+export const EpDetailsDocument = gql`
+    query EpDetails($ids: [ID!]) {
+  people(filters: {ids: $ids}, page: 1, per_page: 200) {
+    data {
+      id
+      full_name
+      home_lc {
+        id
+        name
+      }
+    }
+  }
+}
+    `;
 
 export type SdkFunctionWrapper = <T>(action: (requestHeaders?:Record<string, string>) => Promise<T>, operationName: string, operationType?: string, variables?: any) => Promise<T>;
 
@@ -432,6 +446,9 @@ export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = 
     },
     EpDirectory(variables: EpDirectoryQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<EpDirectoryQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<EpDirectoryQuery>({ document: EpDirectoryDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'EpDirectory', 'query', variables);
+    },
+    EpDetails(variables?: EpDetailsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<EpDetailsQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<EpDetailsQuery>({ document: EpDetailsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'EpDetails', 'query', variables);
     }
   };
 }
