@@ -1,4 +1,4 @@
-# context.md — AIESEC in Lebanon | Gamified Performance Dashboard
+# context.md — AIESEC in Lebanon | AIESEC XP
 
 Status: Decisions locked, GIS verified against office 182, ready for build
 Companion: `Architecture.md`

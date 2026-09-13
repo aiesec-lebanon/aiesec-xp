@@ -1,4 +1,4 @@
-# Architecture.md — AIESEC in Lebanon | Gamified Performance Dashboard
+# Architecture.md — AIESEC in Lebanon | AIESEC XP
 
 Companion: `Context.md` (domain, glossary, decisions D-01…D-41; all open items closed)
 
