@@ -14,7 +14,9 @@
     "db:status": "prisma migrate status",
     "gis:schema": "node scripts/gis-schema.mjs",
     "gis:codegen": "graphql-codegen",
-    "gis:spike": "node scripts/spike/run.mjs"
+    "gis:spike": "node scripts/spike/run.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -24,15 +26,17 @@
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "zod": "^4.6.4"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^7.4.1",
     "@graphql-codegen/typescript": "^6.1.0",
     "@graphql-codegen/typescript-graphql-request": "^7.1.0",
     "@graphql-codegen/typescript-operations": "^6.1.6",
+    "@rolldown/binding-win32-x64-msvc": "^1.2.8",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.13.4",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -41,6 +45,8 @@
     "graphql": "^16.14.2",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.13",
+    "typescript": "^5",
+    "vitest": "^5.0.0"
   }
 }
