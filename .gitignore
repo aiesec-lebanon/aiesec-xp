@@ -48,3 +48,6 @@ next-env.d.ts
 
 # vendored agent skills, restorable from skills-lock.json
 /.agents/
+
+# scratch downloads: sheet exports contain EP personal data
+/.tmp/

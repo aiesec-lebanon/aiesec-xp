@@ -76,19 +76,39 @@ model Position {
 // resolves exactly and there is no pending or review state to model. A row that
 // cannot be resolved is an import error, reported per row, never a stored
 // half-assignment.
+enum AssignmentSource {
+  SHEET
+  ADMIN
+}
+
 model EpAssignment {
-  id            String    @id @default(cuid())
+  id            String           @id @default(cuid())
   epPersonId    BigInt
   memberId      BigInt
   effectiveFrom DateTime
   effectiveTo   DateTime? // null = still current (D-36)
+  // An ADMIN row is a deliberate correction and survives re-import; a SHEET row
+  // is replaced by whatever the sheet says next.
+  source        AssignmentSource @default(SHEET)
   createdBy     BigInt
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime         @default(now())
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
+  @@unique([epPersonId, effectiveFrom])
   @@index([epPersonId, effectiveFrom])
   @@index([memberId])
+}
+
+// Where the assignment register is imported from. Configuration rather than a
+// constant: the MC keeps more than one sheet and they change between terms.
+model AssignmentSheet {
+  id            String   @id @default(cuid())
+  label         String
+  spreadsheetId String   @unique
+  tabName       String
+  isActive      Boolean  @default(true)
+  lastImportAt  DateTime?
 }
 
 // The sheet names a manager by first name, not by id: "Joseph", "Ahmad M",

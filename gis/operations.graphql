@@ -134,3 +134,25 @@ query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
 }
 
 
+
+# The manager EXPA itself records on an application. Shown next to the imported
+# assignment so an admin can see where the two disagree; it is read at display
+# time and never stored (D-42). EXPA populates it only after approval, so it is
+# frequently absent.
+query ApplicationManagers($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
+  allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
+    data {
+      id
+      person {
+        id
+      }
+      managers {
+        id
+        full_name
+      }
+    }
+    paging {
+      total_pages
+    }
+  }
+}
