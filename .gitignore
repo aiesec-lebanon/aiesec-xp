@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# env: the example is the one file that ships
+!.env.example
+
+# spike output contains real GIS data (EP names, emails)
+/scripts/spike/out/
+
+# vendored agent skills, restorable from skills-lock.json
+/.agents/
