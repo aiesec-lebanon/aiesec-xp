@@ -9,6 +9,7 @@ INSERT INTO "ScoreConfig" (
   "id", "version", "aplPoints", "apdPoints", "rePoints", "reverseApl",
   "productWeights", "directionWeights", "scopeSides", "isActive", "createdBy", "createdAt"
 ) VALUES (
+  -- aplReversingStatuses is added by a later migration, which backfills this row.
   'cfg_seed_v1', 1, 1.0000, 5.0000, 10.0000, true,
   '{"7": 1, "8": 1, "9": 1}'::jsonb,
   '{"OUTGOING": 1, "INCOMING": 1}'::jsonb,

@@ -110,6 +110,11 @@ query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
           name
         }
       }
+      # Populated only after approval, so it is a fallback attribution source,
+      # never the primary one (Context.md section 5).
+      managers {
+        id
+      }
       opportunity {
         id
         title

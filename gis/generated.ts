@@ -247,7 +247,7 @@ export type ApplicationsQueryVariables = Exact<{
 }>;
 
 
-export type ApplicationsQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, created_at: string | null, person: { id: string, full_name: string | null, home_lc: { id: string, name: string | null } | null } | null, opportunity: { id: string, title: string | null, programme: { id: string | null } | null, home_lc: { id: string, name: string | null } | null, home_mc: { id: string } | null } | null, meta: { date_approved: string | null, date_approval_broken: string | null, date_realized: string | null, date_realisation_broke: string | null, remote_realized_at: string | null, date_rejected: string | null, date_withdrawn: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
+export type ApplicationsQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, created_at: string | null, person: { id: string, full_name: string | null, home_lc: { id: string, name: string | null } | null } | null, managers: Array<{ id: string } | null> | null, opportunity: { id: string, title: string | null, programme: { id: string | null } | null, home_lc: { id: string, name: string | null } | null, home_mc: { id: string } | null } | null, meta: { date_approved: string | null, date_approval_broken: string | null, date_realized: string | null, date_realisation_broke: string | null, remote_realized_at: string | null, date_rejected: string | null, date_withdrawn: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
 
 export type EpDirectoryQueryVariables = Exact<{
   filters?: PeopleFilter | null | undefined;
@@ -355,6 +355,9 @@ export const ApplicationsDocument = gql`
           id
           name
         }
+      }
+      managers {
+        id
       }
       opportunity {
         id

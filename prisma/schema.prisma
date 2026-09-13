@@ -128,9 +128,10 @@ model ExchangeEvent {
   occurredAt          DateTime
   epPersonId          BigInt // always present on an application
   epFullName          String // D-18
-  epHomeLcId          BigInt? // the EP's own office, not the scoring office
   programmeId         Int // 7 | 8 | 9
   direction           Direction
+  // The EP's own office. Distinct from the member's scoring office (D-32):
+  // attribution follows the assignment, never the EP's LC.
   personHomeLcId      BigInt?
   opportunityHomeLcId BigInt?
   opportunityTitle    String?
@@ -161,6 +162,10 @@ model ScoreConfig {
   // D-41: an application that is withdrawn or rejected does not count. Ships on;
   // configurable so the MC can reverse the decision without a deploy.
   reverseApl       Boolean  @default(true)
+  // Which GIS statuses reverse an APL. Config rather than a constant: the
+  // observed vocabulary is open, withdrawn, approved, rejected, matched,
+  // finished, completed, realized and approval_broken, and GIS may add more.
+  aplReversingStatuses Json
   productWeights   Json // { "7": 1, "8": 1, "9": 1 }
   directionWeights Json // { "OUTGOING": 1, "INCOMING": 1 }
   scopeSides       Json // ["PERSON"] today; add "OPPORTUNITY" for incoming (D-27)
