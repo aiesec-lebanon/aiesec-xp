@@ -7,6 +7,7 @@ import { requireAdminLive } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { importAssignments } from "@/lib/import/run-import";
 import { normalise, suggestMembers } from "@/lib/import/name-matching";
+import { replay } from "@/lib/scoring/replay";
 
 // Every action re-verifies the actor against live GIS (Architecture.md 11):
 // these change who is credited with a reward, which is exactly the case where a
@@ -47,7 +48,11 @@ export async function runImportAction(
   const commit = formData.get("commit") === "true";
 
   const result = await importAssignments(admin.id, { dryRun: !commit });
+  if (commit) await replay(admin.id);
+
   revalidatePath("/admin/assignments");
+  revalidatePath("/leaderboard");
+  revalidatePath("/");
 
   const verb = commit ? "Imported" : "Dry run";
   const unmapped = result.unmappedLabels.length;
@@ -184,7 +189,11 @@ export async function overrideAssignmentAction(
   });
 
   await audit(admin.id, "ASSIGNMENT_SET", "EpAssignment", String(epPersonId), existing, after);
+  await replay(admin.id);
+
   revalidatePath("/admin/assignments");
+  revalidatePath("/leaderboard");
+  revalidatePath("/");
 
   return { ok: true, message: `EP ${epPersonId} is now credited to ${member.fullName}.` };
 }
