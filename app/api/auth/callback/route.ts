@@ -42,8 +42,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL("/unauthorized", request.url));
   }
 
-  const session = issueSession(result.memberId);
-  const response = NextResponse.redirect(new URL(handshake.returnTo, request.url));
-  response.cookies.set(SESSION_COOKIE, session.value, sessionCookieOptions(session.expiresAt));
-  return response;
+  // Issuing the session can only fail on configuration, and it is the last step
+  // of an otherwise successful sign-in. Left unguarded it surfaces as a 500 on
+  // the callback, which reads as an auth fault rather than a missing variable.
+  try {
+    const session = issueSession(result.memberId);
+    const response = NextResponse.redirect(new URL(handshake.returnTo, request.url));
+    response.cookies.set(SESSION_COOKIE, session.value, sessionCookieOptions(session.expiresAt));
+    return response;
+  } catch (error) {
+    logger.error("Signed in, but the session could not be issued", { error });
+    return failure(request, "session_unavailable");
+  }
 }

@@ -7,6 +7,8 @@ const ERRORS: Record<string, string> = {
   missing_state: "That sign-in link has expired. Start again.",
   state_mismatch: "That sign-in link could not be verified. Start again.",
   gis_unavailable: "AIESEC could not be reached. Try again in a moment.",
+  session_unavailable:
+    "You signed in, but this app could not start a session. Its SESSION_SECRET is missing or too short.",
 };
 
 export default async function LoginPage({
