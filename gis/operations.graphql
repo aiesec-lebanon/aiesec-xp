@@ -102,26 +102,16 @@ query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
       id
       status
       created_at
-      # Ids only. The EP's name is not requested here, because sync must not be
-      # able to store what it never receives (D-42); names are read at display
-      # time by EpDetails.
+      # Ids only, and only what scoring reads. The EP's name is not requested,
+      # so sync cannot store one (D-42); nothing descriptive is requested
+      # either, because this product does not display EP or opportunity data --
+      # EXPA does that (D-44).
       person {
-        id
-        home_lc {
-          id
-        }
-      }
-      # Populated only after approval, so it is a fallback attribution source,
-      # never the primary one (Context.md section 5).
-      managers {
         id
       }
       opportunity {
         id
         programme {
-          id
-        }
-        home_lc {
           id
         }
       }
@@ -163,18 +153,3 @@ query EpDirectory($filters: PeopleFilter, $page: Int!, $perPage: Int!) {
   }
 }
 
-# Reads EP details at display time for the score audit trail (D-18). Nothing it
-# returns is written to the database: the trail is rendered from GIS on each
-# view, so EP personal data lives in EXPA and only in EXPA (D-42).
-query EpDetails($ids: [ID!]) {
-  people(filters: { ids: $ids }, page: 1, per_page: 200) {
-    data {
-      id
-      full_name
-      home_lc {
-        id
-        name
-      }
-    }
-  }
-}

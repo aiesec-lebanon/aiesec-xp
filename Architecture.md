@@ -8,8 +8,14 @@ Companion: `Context.md` (domain, glossary, decisions D-01…D-41; all open items
 
 1. **GIS is the source of truth for exchange events; this system is a read-only
    projection.** No writes to EXPA.
-2. **The dashboard owns EP-to-member assignment**, because EXPA does not record
-   it at sign-up time. See `Context.md` sections 4 and 5.
+2. **The dashboard reads EP-to-member assignment; it does not perform it.** The
+   MC assigns in a Google Sheet, which this product imports, because EXPA does
+   not record the assignment at sign-up time (D-44). See `Context.md` sections 4
+   and 5.
+2a. **Scope discipline.** This is a rewards and ranking product. It does not
+   assign EPs and does not display EP data; a Google Sheet and EXPA already do
+   those. Every stored column and every requested GIS field has to earn its
+   place against that scope.
 3. **Event-sourced scoring.** Immutable events in, derived score out. A config
    change is a replay, not a patch — this is what makes D-15 cheap. The events
    record what happened, not who it happened to: EP personal data stays in EXPA
@@ -216,10 +222,7 @@ model ExchangeEvent {
                                               // only EP datum held (D-42)
   programmeId         Int                     // 7 | 8 | 9
   direction           Direction
-  personHomeLcId      BigInt?
-  opportunityHomeLcId BigInt?
   applicationStatus   String?                 // net APL is a status check (D-41)
-  gisManagerIds       BigInt[]                // fallback attribution
   fetchedAt           DateTime
   @@unique([applicationId, eventType])        // idempotency key
 }
@@ -454,9 +457,9 @@ the simplest correct option. Replays are audited.
   leaderboard diff preview before committing.
 - **Display window** — the date range everyone sees.
 - **Rewards** — create, edit, activate.
-- **Assignments** — search the GIS-backed EP directory and pick the EP, which
-  links the assignment immediately. Bulk CSV/Sheet import with dry-run preview and
-  per-row error report for the launch backfill.
+- **Assignments** — import the MC's sheet, with a dry-run preview and a per-row
+  error report. There is no EP picker and no browsable directory: assignment is
+  decided in the sheet, and this is only where it is read (D-44).
 - **Offices** — which offices are operating (D-39), seeded from the alignments
   list and editable without a deploy.
 - **Match review queue** — `NEEDS_REVIEW` assignments awaiting confirmation.
@@ -478,7 +481,6 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 | `/leaderboard` | Individual ranking, filterable by LC and MC |
 | `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11) |
 | `/me` | Full event history and point trail |
-| `/assignments` | LEAD and ADMIN: assign EPs |
 | `/tv` | Fullscreen display mode for office screens |
 | `/admin/*` | Configuration |
 
@@ -496,8 +498,9 @@ Every mutation writes an `AuditLog` row with before/after JSON.
   legible. Contextual nudge: "1 approval behind the next rank."
 - **Milestone moment.** Full-screen celebration on a new scored event, plus a
   server-rendered share card.
-- **Audit drawer.** Any score expands into the events behind it, including EP name
-  and opportunity (D-18).
+- **Audit drawer.** Any score expands into the events behind it: stage, date,
+  product and points. It names no EP and no opportunity — those are looked up in
+  EXPA, not here (D-44).
 - **Break transparency.** A score reduction is explained inline. Unexplained drops
   destroy trust in the mechanism.
 

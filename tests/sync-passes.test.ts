@@ -27,15 +27,10 @@ function row(over: { id?: string; status?: string; created_at?: string; programm
     id: over.id ?? "7163866",
     status: over.status ?? "open",
     created_at: over.created_at ?? "2026-08-31T10:41:48Z",
-    person: {
-      id: "5534242",
-      home_lc: { id: "1735" },
-    },
-    managers: [{ id: "999" }],
+    person: { id: "5534242" },
     opportunity: {
       id: "1338627",
       programme: { id: over.programme ?? "8" },
-      home_lc: { id: "813" },
     },
     meta: {
       date_approved: null,
@@ -157,10 +152,7 @@ describe("mapRow", () => {
       epPersonId: 5534242n,
       programmeId: 8,
       direction: "OUTGOING",
-      personHomeLcId: 1735n,
-      opportunityHomeLcId: 813n,
       applicationStatus: "open",
-      gisManagerIds: [999n],
     });
   });
 
@@ -204,9 +196,16 @@ describe("mapRow", () => {
     }
   });
 
-  it("tolerates an application with no managers", () => {
-    const unmanaged = { ...(row() as Record<string, unknown>), managers: null };
-    expect(mapRow(unmanaged as ApplicationRow, "APL", OPTIONS)?.gisManagerIds).toEqual([]);
+  it("carries only the fields scoring reads (D-44)", () => {
+    expect(Object.keys(mapRow(row(), "APL", OPTIONS)!).sort()).toEqual([
+      "applicationId",
+      "applicationStatus",
+      "direction",
+      "epPersonId",
+      "eventType",
+      "occurredAt",
+      "programmeId",
+    ]);
   });
 });
 

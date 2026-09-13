@@ -62,9 +62,9 @@ describe("the sync query does not request what it must not store", () => {
   });
 });
 
-describe("display-time lookup", () => {
-  it("is the one operation allowed to read an EP name", () => {
-    expect(operationBody("EpDetails")).toMatch(/full_name/);
+describe("no operation reads EP data for display", () => {
+  it("has no EpDetails query: viewing EP data is EXPA's job, not this product's (D-44)", () => {
+    expect(operations).not.toMatch(/query EpDetails/);
   });
 });
 

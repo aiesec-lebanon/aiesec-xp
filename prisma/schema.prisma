@@ -135,15 +135,10 @@ model ExchangeEvent {
   epPersonId          BigInt // the join key to EpAssignment, and the only EP data held
   programmeId         Int // 7 | 8 | 9
   direction           Direction
-  // The EP's own office. Distinct from the member's scoring office (D-32):
-  // attribution follows the assignment, never the EP's LC.
-  personHomeLcId      BigInt?
-  opportunityHomeLcId BigInt?
   // Current observed state, refreshed by sync pass 5b. Net APL is a status
   // check rather than a dated reversal, because GIS dates neither withdrawal
   // nor rejection in a filterable way (D-41).
   applicationStatus   String?
-  gisManagerIds       BigInt[]
   fetchedAt           DateTime    @updatedAt
 
   ledgerEntries ScoreLedgerEntry[]
@@ -151,7 +146,6 @@ model ExchangeEvent {
 
   @@unique([applicationId, eventType]) // idempotency key
   @@index([epPersonId, occurredAt])
-  @@index([eventType, occurredAt])
   @@index([occurredAt])
 }
 

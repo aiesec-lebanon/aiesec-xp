@@ -61,7 +61,7 @@ Two behavioural goals:
 | D-15 | Config changes **recompute history**. The ledger is replayed. |
 | D-16 | Audience: any logged-in member of office 182 or a descendant office. |
 | D-17 | Controller: AIESEC in Lebanon MC. DPO: MCVP IM. No public privacy notice, no consent prompt, no opt-out, no privacy messaging in the UI. Participation is compulsory for all members. |
-| D-18 | EP details may be shown in the score audit trail, **read live from EXPA at display time**. They are never stored in this system's database (D-42). |
+| D-18 | **Superseded by D-44.** EP details are not shown in this product at all. The audit trail explains a score in terms of stage, date, product and points; whoever the EP was is looked up in EXPA. |
 | D-19 | `Person.meta.opt_out_of_statistical_data` is **not** honoured for leaderboard exclusion. |
 | D-20 | No data purge cycle. The display window filters what is counted and shown. |
 | D-21 | No hosting-region constraint. |
@@ -87,6 +87,7 @@ Two behavioural goals:
 | D-41 | The APL count is **net**: an application that is withdrawn or rejected does not count, whenever that happened. APL is evaluated against the application's current status rather than as a dated reversal, because GIS has no broken-application date and the MC wants a final figure. Which statuses reverse an APL is configuration (`ScoreConfig.aplReversingStatuses`), seeded with `withdrawn` and `rejected`. The full observed vocabulary is `open`, `withdrawn`, `approved`, `rejected`, `matched`, `finished`, `completed`, `realized`, `approval_broken`; note that `approval_broken` does **not** reverse an APL, since a broken approval does not undo the application. Measured over the last 365 days: 242 applications, 183 withdrawn or rejected, 59 net. |
 | D-42 | **No EP personal data is held at rest.** `ExchangeEvent` stores scoring facts only: no name, no opportunity title, no contact detail. The sole EP datum retained is `epPersonId`, which is the join to `EpAssignment` and without which no event could be attributed to anyone. Names for the audit trail, the assignment picker and the review queue are read from GIS per view and discarded. `EpAssignment.epFullName` survives only while an imported row is unresolved and is cleared once it links. |
 | D-43 | **Nothing before the active display window is collected.** Sync is floored at `DisplayWindow.startsAt`, not at a lookback constant, so the system holds only what it scores. Moving the window later narrows collection immediately. |
+| D-44 | **Scope: rewards and ranking, nothing else.** EP-to-member assignment happens in the MC's Google Sheet and EP data is viewed in EXPA; this product does neither. It therefore has no EP directory, no assignment UI and no EP display surface. `ExchangeEvent` keeps only what the scoring engine reads — application, stage, date, EP id, product, direction, status — and the sync query requests only those fields. Supersedes D-18 and narrows option C in section 5. |
 
 ---
 
@@ -164,10 +165,19 @@ Rejected for v1: it forces a process change on every LC in the same week the
 product goes live. Kept as a fallback strategy in the attribution chain, so
 adopting it later requires no code change.
 
-**Option C — assignment registry inside the dashboard. Chosen.** One assignment
-drives APL, APD and RE for that EP, consistent by construction. LCVPs and TLs
-assign within their own LC; MCP and MCVP IM assign anywhere. Unassigned events
-go to a visible **unattributed queue**, never silently dropped.
+**Option C — an assignment register inside the dashboard, populated by import.
+Chosen, in a narrower form than first written (D-44).** One assignment drives
+APL, APD and RE for that EP, consistent by construction.
+
+Assignment itself is **not performed here**. The MC assigns EPs to members in a
+Google Sheet, and this product imports that sheet to learn who earns what. There
+is no assignment UI, no EP picker and no EP directory to browse: the register is
+a mirror of a decision taken elsewhere, held only so points can be attributed.
+Unassigned events go to a visible **unattributed queue**, never silently dropped.
+
+The open question this leaves is what the sheet identifies an EP by. A GIS
+person id joins reliably; a name does not, which is precisely why option A was
+rejected. See O-08.
 
 ---
 
@@ -204,13 +214,22 @@ already in the ledger.
 - Writing to GIS.
 - Paying out rewards. The dashboard declares eligibility; finance pays.
 - Sign-up scoring.
+- **Assigning EPs to members.** That happens in the MC's Google Sheet (D-44).
+- **Viewing EP data.** That is what EXPA is for (D-44).
 - Native mobile apps. Responsive web plus a fullscreen TV mode.
 
 ---
 
 ## 8. Open items
 
-All open items are closed. The spike measured the last of them.
+- **O-08 — What the assignment sheet identifies an EP by.** Attribution needs a
+  GIS person id. If the sheet holds one, the import is exact. If it holds only a
+  name, matching is unreliable for the reasons that sank option A, and the
+  import will need a review step for every ambiguous row. **Open.**
+- **O-09 — Production sync token.** Development runs on a standard two-hour
+  token, which cannot drive a fifteen-minute cron. Production uses a separate
+  non-expiring token per D-13, added directly to the deployment platform. **Open
+  until production is configured.**
 
 Closed:
 

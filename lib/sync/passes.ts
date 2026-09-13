@@ -64,10 +64,7 @@ export type MappedEvent = {
   epPersonId: bigint;
   programmeId: number;
   direction: Direction;
-  personHomeLcId: bigint | null;
-  opportunityHomeLcId: bigint | null;
   applicationStatus: string | null;
-  gisManagerIds: bigint[];
 };
 
 function parseDate(value: string | null | undefined): Date | null {
@@ -170,13 +167,7 @@ export function mapRow(
     // D-25: the person side is what decides direction, so an application that
     // is Lebanese on both sides is OUTGOING and stored once.
     direction: side === "PERSON" ? "OUTGOING" : "INCOMING",
-    personHomeLcId: toBigInt(row?.person?.home_lc?.id),
-    opportunityHomeLcId: toBigInt(row?.opportunity?.home_lc?.id),
     applicationStatus: row?.status ?? null,
-    gisManagerIds: (row?.managers ?? []).flatMap((manager) => {
-      const id = toBigInt(manager?.id);
-      return id === null ? [] : [id];
-    }),
   };
 }
 
