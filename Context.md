@@ -61,13 +61,13 @@ Two behavioural goals:
 | D-15 | Config changes **recompute history**. The ledger is replayed. |
 | D-16 | Audience: any logged-in member of office 182 or a descendant office. |
 | D-17 | Controller: AIESEC in Lebanon MC. DPO: MCVP IM. No public privacy notice, no consent prompt, no opt-out, no privacy messaging in the UI. Participation is compulsory for all members. |
-| D-18 | EP details may be shown in the score audit trail. |
+| D-18 | **Superseded by D-44.** EP details are not shown in this product at all. The audit trail explains a score in terms of stage, date, product and points; whoever the EP was is looked up in EXPA. |
 | D-19 | `Person.meta.opt_out_of_statistical_data` is **not** honoured for leaderboard exclusion. |
 | D-20 | No data purge cycle. The display window filters what is counted and shown. |
 | D-21 | No hosting-region constraint. |
 | D-22 | MVP built day 1. Production go-live within 7 days. |
 | D-23 | Handover is by role: next term's MCP and MCVP IM gain access automatically. |
-| D-24 | AIESEC brand colours and typography, applied to a visual identity distinct to this product. |
+| D-24 | **Superseded by D-48.** AIESEC brand colours and typography, applied to a visual identity distinct to this product. |
 | D-25 | Direction is decided by the **person side**: an EP whose home office is in the 182 subtree is `OUTGOING`, regardless of where the opportunity sits. An application is one event per stage and therefore exactly one direction. |
 | D-26 | A **break only scores if the event it reverses also falls inside the display window.** A break whose original event is outside the window is ingested but contributes nothing, so a visible score can never go negative for work done before the window. |
 | D-27 | Sync queries the **person side only** today, because Lebanon runs outgoing exchange only. The opportunity-side scope is implemented and config-gated, so enabling incoming is a configuration change, not a code change (D-03). |
@@ -84,7 +84,14 @@ Two behavioural goals:
 | D-38 | Auth is AIESEC OAuth2 directly, following the `auth-template` project. No Auth.js, no second credential system. |
 | D-39 | Which offices are **operating** is derived, not hardcoded. The tree comes from `committees(filters: { parent })`, and the operating set is seeded from the public alignments list at `gis-api.aiesec.org/v2/lists/mcs_alignments?mc_name=Lebanon`, which returns 6550, 1735 and 5854 alongside the MC. `Office.isOperating` is admin-editable, so opening or closing an LC is a toggle rather than a deploy. Verified at spike: 6549, 6547 and 5853 are closed. |
 | D-40 | **No EP email is stored or matched on.** GIS exposes only a per-person relay alias of the form `p_<hash>@inbound.aiesec.org`, never a real address, so email cannot identify anyone. Assignment picks the EP from the GIS directory and stores `epPersonId` directly. A performance dashboard has no other use for the address. |
-| D-41 | The APL count is **net**: an application that is withdrawn or rejected does not count, whenever that happened. APL is evaluated against the application's current status rather than as a dated reversal, because GIS has no broken-application date and the MC wants a final figure. Verified at spike: 361 of 432 applications in the sample window are withdrawn or rejected, so this is the difference between 432 and 71. |
+| D-41 | The APL count is **net**: an application that is withdrawn or rejected does not count, whenever that happened. APL is evaluated against the application's current status rather than as a dated reversal, because GIS has no broken-application date and the MC wants a final figure. Which statuses reverse an APL is configuration (`ScoreConfig.aplReversingStatuses`), seeded with `withdrawn` and `rejected`. The full observed vocabulary is `open`, `withdrawn`, `approved`, `rejected`, `matched`, `finished`, `completed`, `realized`, `approval_broken`; note that `approval_broken` does **not** reverse an APL, since a broken approval does not undo the application. Measured over the last 365 days: 242 applications, 183 withdrawn or rejected, 59 net. |
+| D-42 | **No EP personal data is held at rest.** `ExchangeEvent` stores scoring facts only: no name, no opportunity title, no contact detail. The sole EP datum retained is `epPersonId`, which is the join to `EpAssignment` and without which no event could be attributed to anyone. Names for the audit trail, the assignment picker and the review queue are read from GIS per view and discarded. `EpAssignment.epFullName` survives only while an imported row is unresolved and is cleared once it links. |
+| D-43 | **Nothing before the active display window is collected.** Sync is floored at `DisplayWindow.startsAt`, not at a lookback constant, so the system holds only what it scores. Moving the window later narrows collection immediately. |
+| D-44 | **Scope: rewards and ranking, nothing else.** EP-to-member assignment happens in the MC's Google Sheet and EP data is viewed in EXPA; this product does neither. It therefore has no EP directory, no assignment UI and no EP display surface. `ExchangeEvent` keeps only what the scoring engine reads — application, stage, date, EP id, product, direction, status — and the sync query requests only those fields. Supersedes D-18 and narrows option C in section 5. |
+| D-45 | Assignment is **imported** from the MC's sheets, and an admin may **correct** a row afterwards. A correction is marked `ADMIN` and survives re-import, because it is a deliberate decision about who earned something and the sheet must not quietly reverse it. Sheet labels are mapped to members through `ManagerAlias`, never guessed: suggestions are ranked for a human to confirm (O-10). This narrows D-44, which said the product does no assignment at all. |
+| D-46 | **Motion is on for everyone by default, and the operating system's `prefers-reduced-motion` is not consulted.** This product is a game; a system default set long ago for an unrelated reason should not silently mute the thing it exists to be. WCAG 2.2.2 is satisfied by a control instead: a "reduce motion" switch in the footer, reachable from every page including before sign-in, which the member sets themselves. The preference is a cookie so the root layout renders it server-side — reading it after hydration would show a burst of exactly the motion the member opted out of. One switch governs every animated surface: Motion, the three.js frame loop, the Rapier simulation, Recharts and the CSS backstop. This amends the `Architecture.md` 9 non-negotiable, which previously made the OS setting the trigger. |
+| D-47 | **The game surface is React Three Fiber, and every asset is free-forever and self-hosted.** three.js + `@react-three/fiber` + `@react-three/drei` (MIT), physics by `@react-three/rapier` (MIT over Apache-2.0 Rapier); art from Poly Haven and Kenney (CC0) and Blender (GPL), compressed with glTF-Transform and Draco (MIT/Apache-2.0); icons from game-icons.net (CC BY 3.0, attribution required — `ATTRIBUTIONS.md`); typefaces from Google Fonts (OFL). Nothing is fetched from a CDN at runtime, which matters beyond principle: the CSP would block it. Each of drei's `Environment`, three's `DRACOLoader` and troika's font resolver defaults to a CDN, and each is overridden to a copy under `public/` synced from `node_modules` at install. Spline was evaluated and rejected: its free tier caps scenes and exports, so it is not free-forever by this project's own bar. |
+| D-48 | **Neither a visual identity nor a fixed set of dashboard components is specified any more.** The "Visual identity" and "Interactions" subsections of `Architecture.md` section 9 are removed. Nothing now requires a dark competitive surface, one accent per funnel stage, heavy numerals, or the particular seven components that section named — funnel progress ring, next reward card, pace meter, live leaderboard, milestone moment, audit drawer, break transparency. Those remain reasonable things to build; they are no longer requirements, and a design direction may replace, rename or drop any of them. Supersedes D-24; the direction stays open under O-11. This is a change to what the documents prescribe, **not** to what the code enforces: `lib/design/tokens.ts`, its drift test against `app/globals.css`, and the validated ordinal chart ramp in `components/charts/chart-theme.ts` are all still in place and still govern implementation — they are simply no longer described in `Architecture.md`. |
 
 ---
 
@@ -162,10 +169,19 @@ Rejected for v1: it forces a process change on every LC in the same week the
 product goes live. Kept as a fallback strategy in the attribution chain, so
 adopting it later requires no code change.
 
-**Option C — assignment registry inside the dashboard. Chosen.** One assignment
-drives APL, APD and RE for that EP, consistent by construction. LCVPs and TLs
-assign within their own LC; MCP and MCVP IM assign anywhere. Unassigned events
-go to a visible **unattributed queue**, never silently dropped.
+**Option C — an assignment register inside the dashboard, populated by import.
+Chosen, in a narrower form than first written (D-44).** One assignment drives
+APL, APD and RE for that EP, consistent by construction.
+
+Assignment itself is **not performed here**. The MC assigns EPs to members in a
+Google Sheet, and this product imports that sheet to learn who earns what. There
+is no assignment UI, no EP picker and no EP directory to browse: the register is
+a mirror of a decision taken elsewhere, held only so points can be attributed.
+Unassigned events go to a visible **unattributed queue**, never silently dropped.
+
+The open question this leaves is what the sheet identifies an EP by. A GIS
+person id joins reliably; a name does not, which is precisely why option A was
+rejected. See O-08.
 
 ---
 
@@ -183,7 +199,8 @@ Verified against the published schema.
 | APL reversal (D-35) | `ApplicationFilter.statuses`, with `meta.date_rejected` / `meta.date_withdrawn` as the occurrence date |
 | Scope | `person_home_lc`, `person_home_mc`, `opportunity_home_lc`, `opportunity_home_mc`, `committee_scope` |
 | Product | `ApplicationFilter.programmes: [Int]` — 7, 8, 9 |
-| EP on an application | `OpportunityApplication.person { id full_name home_lc { id name } }`. No contact details: `contact_detail.email` is null on every row, and `person.email` is a relay alias, never a real address (D-40) |
+| EP on an application, for sync | `OpportunityApplication.person { id home_lc { id } }`. Ids only: the sync query does not request a name, so it cannot store one (D-42). No contact details exist to request in any case — `contact_detail.email` is null on every row and `person.email` is a relay alias (D-40) |
+| EP details, for display | `people(filters: { ids })`, read per view and discarded. The audit trail (D-18), the assignment picker and the review queue all render from this, never from stored data |
 | Fallback attribution | `OpportunityApplication.managers`, `Person.managers`, `meta.ep_approved_by` |
 | Logged-in identity | `currentPerson { id full_name profile_photo current_office current_positions { role { name } title office { id } status } }` |
 | Office tree under 182 | `committees(filters: OfficeFilter{ parent: [...] })`, recursed. There is **no root `office` field** on this schema, so the `office(id:)` shape used by `finance-dashboard` does not work here. The subtree is always derived, never hardcoded. |
@@ -201,16 +218,43 @@ already in the ledger.
 - Writing to GIS.
 - Paying out rewards. The dashboard declares eligibility; finance pays.
 - Sign-up scoring.
+- **Assigning EPs to members.** That happens in the MC's Google Sheet (D-44).
+- **Viewing EP data.** That is what EXPA is for (D-44).
 - Native mobile apps. Responsive web plus a fullscreen TV mode.
 
 ---
 
 ## 8. Open items
 
-All open items are closed. The spike measured the last of them.
+- **O-11 — Which design direction, and whose typeface.** Three type systems are
+  built and switchable in one line at `lib/design/fonts.ts`: **Arena** (Orbitron
+  / Rajdhani / Space Mono), **Clay Arcade** (Fredoka / Poppins / Baloo 2 / Space
+  Mono) and **Overworld** (Bricolage Grotesque / Space Grotesk / Space Mono).
+  Arena is active because it was the first one built, not because the direction
+  has been decided. D-48 withdrew the visual identity that used to justify it,
+  so nothing now argues for a dark competitive surface over any other direction.
+
+  Underneath sits a tension nobody has resolved, and withdrawing D-24 does not
+  settle it: none of these three is AIESEC's brand typeface, and a face that
+  carries the brand and a face that reads as distinct from EXPA are not
+  obviously the same choice. Someone with the current AIESEC brand book needs
+  to say which face carries which job. **Open.**
+- **O-10 — Manager labels in the sheet.** The sheet names a manager by first
+  name: `Joseph`, `Mona`, `Ahmad M`, `Ahmad K`, `Nour`. Those are a human
+  convention, disambiguated by initial, and cannot be matched to a member
+  reliably. An admin maps each label to a member once, in `ManagerAlias`, and
+  the import refuses a label it has not been told about rather than guessing.
+  The mapping needs filling in before any score is attributed. **Open.**
+- **O-09 — Production sync token.** Development runs on a standard two-hour
+  token, which cannot drive a fifteen-minute cron. Production uses a separate
+  non-expiring token per D-13, added directly to the deployment platform. **Open
+  until production is configured.**
 
 Closed:
 
+- **O-08** — closed. The sheet carries the EXPA person id, so an imported
+  assignment resolves exactly. The identity problem moves to the manager column
+  instead; see O-10.
 - **O-03** — closed. Measured against office 182: `role.name` takes the values
   `TM`, `LCVP`, `TL`, `MCVP`, `LCP`, `ESTL`, `MCP`, `ESTM`. `role.name = MCP`
   identifies the president safely, but `role.name = MCVP` does not identify the
