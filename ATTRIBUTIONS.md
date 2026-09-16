@@ -15,6 +15,17 @@ Individual icons are by contributors to game-icons.net including Lorc, Delapouit
 and Skoll, licensed under CC BY 3.0. See
 https://game-icons.net/about.html#authors for the full list.
 
+## Character renders — licence unconfirmed (O-12)
+
+`public/characters/char-walk-blue.png`, `char-curly-front.png` and
+`char-hoodie-front.png` are flat renders of the same CGTrader characters
+described below, produced for the STUDIO comps and now shipped as the placeholder
+body every screen stands on until the 3D layer replaces them (D-47,
+`components/studio/character.tsx`). They inherit the same unresolved licence
+question as the models they were rendered from, and O-12 must close before they
+ship to members — a render of a model licensed for editorial use only is still
+editorial use only.
+
 ## Character models — licence unconfirmed (O-12)
 
 The four member-avatar characters — `avatar-hoodie-joggers`, `avatar-tee-shorts`,
@@ -47,8 +58,8 @@ licence strictly demands.
 ## Open source software
 
 Typefaces are served under the SIL Open Font License, self-hosted at build time
-by `next/font` so no request reaches Google: Orbitron, Rajdhani, Space Mono,
-Fredoka, Baloo 2, Poppins, Bricolage Grotesque, Space Grotesk.
+by `next/font` so no request reaches Google. STUDIO uses four (D-48): Fredoka,
+Figtree, Baloo 2 and Space Mono.
 
 The 3D stack — three.js, @react-three/fiber, @react-three/drei, @pmndrs/assets,
 Motion, Recharts, react-icons and glTF-Transform — is MIT or CC0.

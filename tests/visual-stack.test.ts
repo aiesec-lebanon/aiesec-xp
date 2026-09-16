@@ -17,6 +17,7 @@ const VISUAL_DIRS = [
   "components/charts",
   "components/icons",
   "components/motion",
+  "components/studio",
   "lib/three",
   "lib/design",
 ];

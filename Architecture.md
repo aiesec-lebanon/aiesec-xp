@@ -508,27 +508,52 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 - **Break transparency.** A score reduction is explained inline. Unexplained drops
   destroy trust in the mechanism.
 
-### Visual identity (D-24)
+### Visual identity — STUDIO (D-24, D-48)
 
 AIESEC brand colours and typography, arranged into a product identity distinct
-from EXPA: dark competitive surface, one accent per funnel stage, heavy numerals,
-motion only on state change. Read `/mnt/skills/public/frontend-design/SKILL.md`
-before building UI.
+from EXPA. The surface is **warm paper**, not the dark competitive field the
+first pass carried: every screen is an infinite-white cyclorama with a horizon
+line, and the member's character stands on it at full height as the primary data
+ink. A member is a body on a set, not a row of numerals.
+
+The rules the direction is held to:
+
+- **One number is large.** Points, set behind the body as a ghost numeral and
+  again at reading size beside it. Everything else is a chip that opens when
+  asked — which is also where the audit drawer lives.
+- **Depth is shadow, never gradient.** Three elevation steps, `--elevation-1..3`,
+  plus a radial contact shadow under every body so it is planted rather than
+  floating.
+- **Nothing animates except the idle breath and what you touch.** The idle loop
+  is CSS keyframes, because a dozen bodies breathe at once and a dozen animation
+  controllers would not be worth it; entrance, hover, count-up and the character
+  lab are Motion, loaded after first paint through `LazyMotion` in strict mode.
+- **Four typefaces, one job each.** Fredoka display, Figtree UI, Baloo 2 for
+  every score and rank, Space Mono for labels. Declared once in
+  `lib/design/fonts.ts` (D-48).
 
 Tokens live in `lib/design/tokens.ts` and are mirrored into `app/globals.css`; a
 test fails if the two drift, because three.js and Recharts read the TypeScript
 values while everything else reads the custom properties. The four stage accents
-are the raw AIESEC brand hues, which clear WCAG AA on both surface tones without
-tinting.
+are the raw AIESEC brand hues, unaltered; each also carries a wash, a mid tone
+and an ink in `STAGE_TINT`, and it is the ink that clears WCAG AA as text.
 
 **Charts are the one place the stage accents are not used.** APL < APD < RE is an
 ordinal scale — swapping two stages would change the meaning — so chart series
 take a one-hue ramp stepped from AIESEC blue, in which the reader sees the funnel
-order in the colour. Both the light and dark ramps are validated, not eyeballed;
-re-run the validator before changing a step and never derive one mode from the
-other by flipping it.
+order in the colour. The ramp is validated, not eyeballed; re-run the validator
+before changing a step. There is one ramp because there is one surface.
 
 ### The 3D layer (D-47)
+
+**Where the models go.** Every character on every screen is rendered by
+`components/studio/character.tsx`, which today returns a flat render and reserves
+the height and contact shadow the posed glTF will need. That is the only seam:
+nothing else names an image file, so swapping in a `<Scene>` there changes no
+layout and no caller. Which body a member gets is a hash of their name
+(`lib/design/character.ts`), not a stored column, so the same person keeps the
+same body everywhere without a migration; when the costume variants clear O-12
+the hash becomes a variant index instead.
 
 A scene is mounted through `components/three/scene.tsx` and never by rendering
 `<Canvas>` directly. That wrapper is where four rules are enforced rather than
