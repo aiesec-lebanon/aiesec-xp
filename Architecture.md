@@ -1,6 +1,6 @@
 # Architecture.md — AIESEC in Lebanon | AIESEC XP
 
-Companion: `Context.md` (domain, glossary, decisions D-01…D-41; all open items closed)
+Companion: `Context.md` (domain, glossary, decisions D-01…D-47; open items O-09, O-10, O-11, O-12)
 
 ---
 
@@ -60,8 +60,12 @@ JavaScript.
 |---|---|---|
 | Framework | Next.js 16 App Router, TypeScript strict | Server components keep the token and full ledger server-side; one artifact for handover. Note Next 16 renames `middleware.ts` to `proxy.ts` |
 | UI | Tailwind + shadcn/ui | Accessible primitives, nothing bespoke to maintain in 7 days |
-| Motion | Framer Motion | Spring progress, FLIP rank transitions, honours `prefers-reduced-motion` |
-| Charts | Recharts | Trend and pace views |
+| Motion | Motion (published as `motion`, formerly `framer-motion`) | Spring progress, FLIP rank transitions. Loaded through `LazyMotion` in `strict` mode, so the runtime stays out of the initial bundle and the saving cannot be undone by reaching for `motion.*` |
+| 3D | three.js + `@react-three/fiber` + `@react-three/drei`, physics by `@react-three/rapier` (D-47) | The game surface the product is named for. Every scene mounts through `components/three/scene.tsx`, which is client-only, viewport-gated and falls back to DOM when there is no GPU |
+| 3D assets | Poly Haven / Kenney (CC0) and Blender, compressed by glTF-Transform with Draco | All free-forever, all self-hosted. `npm run assets:models` is the pipeline; `assets/README.md` is the workflow |
+| Charts | Recharts | Trend and pace views, on the validated ordinal ramp in `components/charts/chart-theme.ts` |
+| Icons | Game Icons (CC BY 3.0) via `react-icons/gi` | 4000+ tree-shaken SVG components, no sprite sheet and no emoji. Domain concepts are mapped once in `components/icons` so a stage has one picture everywhere. Attribution is required: `ATTRIBUTIONS.md` |
+| Typography | Google Fonts (OFL), self-hosted by `next/font` | Three switchable type systems in `lib/design/type/`; only the active one is imported, so the unchosen faces are never downloaded (O-11) |
 | Auth | AIESEC OAuth2 directly, following the `auth-template` project (D-38) | AIESEC auth is not OIDC-discoverable and GIS wants the raw token as `Authorization` with no `Bearer` prefix. A hand-rolled Authorization Code flow is less machinery than bending Auth.js around both. Identity only |
 | DB | PostgreSQL (Neon or Supabase) | Relational, transactional, cheap |
 | ORM | Prisma | Typed access, versioned migrations |
@@ -511,12 +515,46 @@ from EXPA: dark competitive surface, one accent per funnel stage, heavy numerals
 motion only on state change. Read `/mnt/skills/public/frontend-design/SKILL.md`
 before building UI.
 
+Tokens live in `lib/design/tokens.ts` and are mirrored into `app/globals.css`; a
+test fails if the two drift, because three.js and Recharts read the TypeScript
+values while everything else reads the custom properties. The four stage accents
+are the raw AIESEC brand hues, which clear WCAG AA on both surface tones without
+tinting.
+
+**Charts are the one place the stage accents are not used.** APL < APD < RE is an
+ordinal scale — swapping two stages would change the meaning — so chart series
+take a one-hue ramp stepped from AIESEC blue, in which the reader sees the funnel
+order in the colour. Both the light and dark ramps are validated, not eyeballed;
+re-run the validator before changing a step and never derive one mode from the
+other by flipping it.
+
+### The 3D layer (D-47)
+
+A scene is mounted through `components/three/scene.tsx` and never by rendering
+`<Canvas>` directly. That wrapper is where four rules are enforced rather than
+remembered:
+
+- **Client-only and lazily loaded.** three, drei and the scene graph never reach
+  the server bundle, and a route that shows no scene downloads none of them.
+- **Viewport-gated.** A canvas below the fold does not boot a WebGL context.
+- **A DOM equivalent is required, not optional.** `Scene` takes a `fallback`,
+  shown when there is no GPU or the context is lost, and exposed to assistive
+  technology otherwise. A `<canvas>` is invisible to a screen reader and
+  unreachable by keyboard, so the data is always in the DOM as well.
+- **Nothing is fetched from a CDN.** drei's `Environment` presets, three's Draco
+  decoder and troika's font resolver all default to one. Each is overridden to a
+  copy under `public/`, synced from `node_modules` at install time so it cannot
+  drift from the installed version.
+
 ### Non-negotiables
 
 - Mobile-first.
 - WCAG 2.1 AA: keyboard-navigable leaderboard, checked contrast, ARIA live regions
   for rank updates.
-- `prefers-reduced-motion` disables every celebratory animation.
+- Every 3D surface has a DOM equivalent, and degrades to it without a GPU.
+- Motion is on for everyone by default; the member's own switch reduces it, and
+  the operating system's `prefers-reduced-motion` is deliberately not consulted
+  (D-46). WCAG 2.2.2 is satisfied by the control, not by the OS default.
 - Skeletons, never spinners.
 
 ---
@@ -559,7 +597,22 @@ Technical measures that remain regardless:
   relied on for isolation.
 - CSRF protection on server actions, strict `SameSite` cookies.
 - Rate limiting on auth, admin and sync-trigger routes.
-- CSP with a nonce, no inline scripts.
+- CSP with a per-request nonce, no inline scripts, built in `lib/security/csp.ts`
+  and applied in `proxy.ts`. Because the nonce is minted per request, every route
+  must render dynamically — a statically prerendered page gets no nonce and its
+  scripts are blocked by `strict-dynamic`.
+
+  Three allowances exist for the 3D layer and each is load-bearing:
+  `'wasm-unsafe-eval'` because Rapier and the Draco decoder both instantiate
+  WebAssembly, `worker-src blob:` because three assembles the Draco worker as a
+  string and loads it through `URL.createObjectURL`, and `img-src blob: data:`
+  because glTF textures arrive that way. `tests/csp.test.ts` asserts all three,
+  since losing one breaks production while development still works.
+
+  `style-src` carries `'unsafe-inline'` deliberately: React serialises every
+  `style={{…}}` prop into a style attribute during SSR and Recharts sizes its
+  container that way, so nonce-only styles would break the charts without
+  affecting the threat `script-src` actually holds.
 - Secrets in the platform secret store; `.env.example` holds placeholders only.
 - Admin actions re-verified against live GIS positions rather than cached session
   claims.
@@ -606,6 +659,9 @@ Technical measures that remain regardless:
 **Days 4–5**
 
 10. Visual identity, motion, progress ring, pace meter, SSE, share cards, TV mode.
+    The stack this runs on is installed and wired — tokens, type systems, the 3D
+    runtime and its fallbacks, the asset pipeline, icons, Motion and Recharts.
+    `/lab` renders one of everything and exists only in development.
 11. Playwright suite including cross-LC and privilege-escalation tests,
     accessibility pass.
 
@@ -631,4 +687,6 @@ Steps 1–5 are the correctness core and must not be compressed.
 | GIS rate limits or schema drift | Sync stalls | Codegen from published schema, backoff, contract tests, staleness banner |
 | Gaming via low-quality applications | Reward paid for no exchange value | RE weighted highest; break-driven reduction; weights adjustable at any time |
 | Ranking demotivates the bottom half | Net-negative behaviour change | Personal progress first, ranking second, nearby-ranks view |
+| The 3D surface is unusable on a member's phone or the office TV | The member cannot read their own score | Every scene declares a DOM fallback and drops to it with no WebGL or on context loss; dpr is clamped and adapts down under load; canvases below the fold never boot a context (section 9) |
+| The 3D bundle sinks time-to-interactive | The leaderboard is slow on the device most members use | three, drei and Rapier are all dynamically imported — Rapier alone inlines 1.5MB of WebAssembly and loads only when a scene asks for physics; `next experimental-analyze` is the check |
 | 7-day timeline | Scope creep sinks correctness | Day-1 MVP is scoring correctness only; visual work explicitly later |
