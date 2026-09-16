@@ -1,16 +1,8 @@
 import Image from "next/image";
 
-import { characterFor } from "@/lib/design/character";
+import { characterFor, characterStillPath } from "@/lib/design/character";
 
-// The slot D-47's posed glTF drops into. Until then the body is the flat render
-// the design comps run on, so every screen already reserves the right height and
-// the right contact shadow -- swapping in a <Scene> here changes no layout.
-//
-// The idle loop is CSS rather than Motion on purpose: a body breathes on the
-// leaderboard, the podium, the dock avatar and the ticker at once, and a single
-// declarative keyframe costs nothing per instance where thirty animation
-// controllers would. The member's reduce-motion switch reaches it through the
-// [data-reduce-motion="true"] backstop in globals.css.
+import { CharacterStage } from "./character-stage";
 
 type Idle = "bob" | "small" | "squash" | "none";
 
@@ -27,7 +19,8 @@ export function Character({
   idle = "bob",
   priority = false,
   className = "",
-  srcOverride,
+  stage = false,
+  idOverride,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
@@ -36,13 +29,23 @@ export function Character({
   idle?: Idle;
   priority?: boolean;
   className?: string;
-  /** Renders this variant instead of the one `name` hashes to -- the character lab's preview carousel is the only caller. */
-  srcOverride?: string;
+  /** Render the rigged model live. Worth a canvas only where one body is shown and can change. */
+  stage?: boolean;
+  /** Renders this character instead of the one `name` hashes to -- the character lab's picker is the only caller. */
+  idOverride?: string;
 }) {
+  const id = idOverride ?? characterFor(name).id;
+
+  if (stage) {
+    return <CharacterStage id={id} name={name} height={height} className={className} />;
+  }
+
+  // The still is rendered from the same .glb (D-50), so it is the same
+  // character in the same pose as the live stage.
   return (
     <Image
       data-model-slot="character"
-      src={srcOverride ?? characterFor(name)}
+      src={characterStillPath(id)}
       alt={`${name}'s character`}
       width={Math.round(height * 0.72)}
       height={height}
@@ -71,11 +74,10 @@ export function CharacterAvatar({
       className={`relative shrink-0 overflow-hidden ${rounded} ${tone}`}
     >
       {/* Inset rather than `fill`: the renders carry headroom above and a floor
-          line below, so the body is nudged up inside its own frame. `fill` would
-          pin the image to 100% height and lose that. */}
+          line below, so the body is nudged up inside its own frame. */}
       <Image
         data-model-slot="character"
-        src={characterFor(name)}
+        src={characterStillPath(characterFor(name).id)}
         alt=""
         width={size}
         height={size}
