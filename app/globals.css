@@ -3,13 +3,50 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* D-24 competitive surface and funnel accents. Mirrors lib/design/tokens.ts,
+     which three.js and Recharts read directly; tests/design-tokens.test.ts
+     fails if the two drift. */
+  --surface-base: #0a0c10;
+  --surface-raised: #12151b;
+  --surface-sunken: #06080b;
+  --surface-line: #232833;
+
+  --ink-primary: #f2f5fa;
+  --ink-secondary: #c3cbd9;
+  --ink-muted: #7b8496;
+
+  --stage-apl: #037ef3;
+  --stage-apd: #00c16e;
+  --stage-re: #ffc845;
+  --stage-break: #f85a40;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-surface: var(--surface-base);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-line: var(--surface-line);
+
+  --color-ink: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-stage-apl: var(--stage-apl);
+  --color-stage-apd: var(--stage-apd);
+  --color-stage-re: var(--stage-re);
+  --color-stage-break: var(--stage-break);
+
+  /* Faces come from lib/design/type/*, bound by next/font on <html>. A direction
+     that needs no separate numeral face falls through to its display face. */
+  --font-display: var(--face-display);
+  --font-ui: var(--face-ui);
+  --font-numeric: var(--face-numeric, var(--face-display));
+  --font-mono: var(--face-mono);
+  --font-sans: var(--face-ui);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,5 +59,34 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--face-ui), system-ui, sans-serif;
+}
+
+/* Scores and ranks are read at a glance and compared down a column, so they get
+   the numeral face and fixed-width figures wherever they appear. */
+.tabular {
+  font-family: var(--face-numeric, var(--face-display)), var(--face-ui), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* D-46: motion is on for everyone; the member's own switch turns it down, and
+   the operating system's prefers-reduced-motion is deliberately not consulted.
+   The React layer reads the same state through useReduceMotion; this is the
+   backstop for anything animated purely in CSS. The attribute is rendered
+   server-side from the cookie, so a member who reduced motion never sees a
+   frame of the motion they asked not to see. */
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(200%);
+  }
 }
