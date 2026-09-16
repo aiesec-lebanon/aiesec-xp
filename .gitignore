@@ -61,3 +61,6 @@ next-env.d.ts
 # pipeline's tracked input is the exported .glb (assets/README.md), not these.
 *.blend
 *.blend[0-9]
+
+ref/
+.claude/
