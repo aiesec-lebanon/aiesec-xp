@@ -13,6 +13,8 @@ export type XpCanvasProps = {
   fallback: ReactNode;
   /** Raised when the GPU context is lost, so the caller can drop to `fallback`. */
   onContextLost?: () => void;
+  /** Leave the canvas unpainted, for a scene composited over DOM drawn behind it. */
+  transparent?: boolean;
 } & Omit<CanvasProps, "children" | "fallback">;
 
 // Defaults chosen for the two screens this has to survive: a mid-range Android
@@ -22,7 +24,13 @@ export type XpCanvasProps = {
 // frames. The frame loop runs for everyone by default (D-46); `demand` renders
 // the scene once and then only on invalidation, for the member who asked for
 // less motion -- the still image, not the animation.
-export function XpCanvas({ children, fallback, onContextLost, ...props }: XpCanvasProps) {
+export function XpCanvas({
+  children,
+  fallback,
+  onContextLost,
+  transparent = false,
+  ...props
+}: XpCanvasProps) {
   const reduceMotion = useReduceMotion();
   const [contextLost, setContextLost] = useState(false);
 
@@ -52,7 +60,7 @@ export function XpCanvas({ children, fallback, onContextLost, ...props }: XpCanv
       onCreated={handleCreated}
       {...props}
     >
-      <color attach="background" args={[SURFACE.base]} />
+      {transparent ? null : <color attach="background" args={[SURFACE.base]} />}
       <Suspense fallback={null}>{children}</Suspense>
       <AdaptiveDpr pixelated />
       <AdaptiveEvents />
