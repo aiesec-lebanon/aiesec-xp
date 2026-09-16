@@ -4,20 +4,15 @@ import { SURFACE, TEXT } from "@/lib/design/tokens";
 // stages would change what the chart means. So chart series take a one-hue ramp
 // with monotone lightness -- the reader sees the funnel order in the colour --
 // rather than the four independent stage accents D-24 gives the UI. Both are
-// AIESEC blue: #258bfd is the brand hue stepped to sit inside the mode's
-// lightness band.
+// AIESEC blue, stepped to sit inside the paper surface's lightness band, with
+// the darkest step as the prominent end.
 //
-// Both ramps pass the ordinal checks (monotone L, adjacent dL >= 0.06, single
+// The ramp passes the ordinal checks (monotone L, adjacent dL >= 0.06, single
 // hue, light end clear of the surface). Re-run the validator before changing a
-// step; do not derive one mode from the other by flipping it.
-export const STAGE_RAMP = {
-  // light end last: on a dark surface the furthest stage is the brightest.
-  dark: { APL: "#0467c7", APD: "#258bfd", RE: "#7bb4fd" },
-  // and inverted on a light surface, where dark is the prominent end.
-  light: { APL: "#68aafd", APD: "#1682f6", RE: "#0059ab" },
-} as const;
-
-export type ChartMode = keyof typeof STAGE_RAMP;
+// step. STUDIO has one surface, so there is one ramp: the dark counterpart the
+// first direction carried is gone rather than kept switchable, because a second
+// ramp nothing renders is a second ramp nobody revalidates.
+export const STAGE_RAMP = { APL: "#68aafd", APD: "#1682f6", RE: "#0059ab" } as const;
 
 /** Reserved status colour. Never a series slot; always shipped with icon + label. */
 export const BREAK_COLOUR = "#f85a40";

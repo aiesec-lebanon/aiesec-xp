@@ -16,7 +16,7 @@ import {
 import { useReduceMotion } from "@/components/motion/motion-provider";
 import { SURFACE, TEXT } from "@/lib/design/tokens";
 
-import { axis, grid, line, SERIES_LABEL, SERIES_ORDER, STAGE_RAMP, type ChartMode } from "./chart-theme";
+import { axis, grid, line, SERIES_LABEL, SERIES_ORDER, STAGE_RAMP } from "./chart-theme";
 
 export type FunnelTrendPoint = {
   /** Bucket label as it should read on the axis. */
@@ -27,7 +27,6 @@ export type FunnelTrendChartProps = {
   data: readonly FunnelTrendPoint[];
   /** Names what is plotted; a chart with a legend still needs a title. */
   title: string;
-  mode?: ChartMode;
   height?: number;
 };
 
@@ -55,11 +54,11 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
 // Every value is reachable without reading the plot: the table below is the
 // accessible equivalent of the line chart, not an optional extra, and it is what
 // makes the chart usable by keyboard and screen reader (Architecture.md 9).
-export function FunnelTrendChart({ data, title, mode = "dark", height = 260 }: FunnelTrendChartProps) {
+export function FunnelTrendChart({ data, title, height = 260 }: FunnelTrendChartProps) {
   const reduceMotion = useReduceMotion();
   const [showTable, setShowTable] = useState(false);
   const tableId = useId();
-  const ramp = STAGE_RAMP[mode];
+  const ramp = STAGE_RAMP;
 
   return (
     <figure className="flex flex-col gap-3 rounded-xl bg-surface-raised p-4">

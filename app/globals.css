@@ -1,47 +1,85 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* STUDIO (D-24). Mirrors lib/design/tokens.ts, which three.js and Recharts
+     read directly; tests/visual-stack.test.ts fails if the two drift. */
+  --surface-base: #f6f4f0;
+  --surface-raised: #ffffff;
+  --surface-sunken: #edeae4;
+  --surface-line: #e3dfd7;
 
-  /* D-24 competitive surface and funnel accents. Mirrors lib/design/tokens.ts,
-     which three.js and Recharts read directly; tests/design-tokens.test.ts
-     fails if the two drift. */
-  --surface-base: #0a0c10;
-  --surface-raised: #12151b;
-  --surface-sunken: #06080b;
-  --surface-line: #232833;
+  --set-wall: #fbfaf8;
+  --set-floor: #f1eee8;
+  --set-horizon: #e6e2da;
+  --set-ghost: #efece5;
 
-  --ink-primary: #f2f5fa;
-  --ink-secondary: #c3cbd9;
-  --ink-muted: #7b8496;
+  --ink-primary: #171614;
+  --ink-secondary: #4a4842;
+  --ink-muted: #6a675f;
+  --ink-faint: #8f8b81;
 
   --stage-apl: #037ef3;
   --stage-apd: #00c16e;
   --stage-re: #ffc845;
   --stage-break: #f85a40;
+
+  --stage-apl-wash: #e2eeff;
+  --stage-apl-mid: #7fb4f7;
+  --stage-apl-ink: #0b5cb8;
+  --stage-apd-wash: #d9f4e6;
+  --stage-apd-mid: #6fd5a6;
+  --stage-apd-ink: #08704a;
+  --stage-re-wash: #fff1d0;
+  --stage-re-mid: #f7ce6b;
+  --stage-re-ink: #8a6108;
+  --stage-break-wash: #ffe4dd;
+  --stage-break-mid: #f8a08c;
+  --stage-break-ink: #b23a22;
+
+  --elevation-1: 0 1px 2px rgba(23, 22, 20, 0.04), 0 4px 12px rgba(23, 22, 20, 0.05);
+  --elevation-2: 0 2px 4px rgba(23, 22, 20, 0.04), 0 12px 28px rgba(23, 22, 20, 0.07);
+  --elevation-3: 0 4px 8px rgba(23, 22, 20, 0.05), 0 24px 56px rgba(23, 22, 20, 0.1);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-
   --color-surface: var(--surface-base);
   --color-surface-raised: var(--surface-raised);
   --color-surface-sunken: var(--surface-sunken);
   --color-line: var(--surface-line);
 
+  --color-wall: var(--set-wall);
+  --color-floor: var(--set-floor);
+  --color-horizon: var(--set-horizon);
+  --color-ghost: var(--set-ghost);
+
   --color-ink: var(--ink-primary);
   --color-ink-secondary: var(--ink-secondary);
   --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
 
   --color-stage-apl: var(--stage-apl);
   --color-stage-apd: var(--stage-apd);
   --color-stage-re: var(--stage-re);
   --color-stage-break: var(--stage-break);
 
-  /* Faces come from lib/design/type/*, bound by next/font on <html>. A direction
-     that needs no separate numeral face falls through to its display face. */
+  --color-apl-wash: var(--stage-apl-wash);
+  --color-apl-mid: var(--stage-apl-mid);
+  --color-apl-ink: var(--stage-apl-ink);
+  --color-apd-wash: var(--stage-apd-wash);
+  --color-apd-mid: var(--stage-apd-mid);
+  --color-apd-ink: var(--stage-apd-ink);
+  --color-re-wash: var(--stage-re-wash);
+  --color-re-mid: var(--stage-re-mid);
+  --color-re-ink: var(--stage-re-ink);
+  --color-break-wash: var(--stage-break-wash);
+  --color-break-mid: var(--stage-break-mid);
+  --color-break-ink: var(--stage-break-ink);
+
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+  --shadow-e3: var(--elevation-3);
+
+  /* Faces come from lib/design/fonts.ts, bound by next/font on <html>. */
   --font-display: var(--face-display);
   --font-ui: var(--face-ui);
   --font-numeric: var(--face-numeric, var(--face-display));
@@ -49,16 +87,9 @@
   --font-sans: var(--face-ui);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--surface-base);
+  color: var(--ink-primary);
   font-family: var(--face-ui), system-ui, sans-serif;
 }
 
@@ -67,7 +98,74 @@ body {
 .tabular {
   font-family: var(--face-numeric, var(--face-display)), var(--face-ui), system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+}
+
+/* The idle loop. Written against `translate`/`scale` rather than `transform` so
+   a mirrored or offset body keeps its own transform while it breathes. */
+@keyframes bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -9px;
+  }
+}
+
+@keyframes bob-small {
+  0%,
+  100% {
+    translate: 0 0;
+    scale: 1 1;
+  }
+  50% {
+    translate: 0 -5px;
+    scale: 1.01 0.99;
+  }
+}
+
+@keyframes squash {
+  0%,
+  100% {
+    scale: 1 1;
+  }
+  50% {
+    scale: 1.04 0.96;
+  }
+}
+
+.idle {
+  animation: bob 4.5s ease-in-out infinite;
+}
+
+.idle-small {
+  animation: bob-small 5.2s ease-in-out infinite;
+}
+
+.idle-squash {
+  animation: squash 5.5s ease-in-out infinite;
+}
+
+/* /tv runs unattended on an office screen, so its ticker is CSS rather than a
+   React animation: nothing re-renders, and nothing accumulates over a week. */
+@keyframes tv-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.tv-ticker {
+  animation: tv-ticker 30s linear infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(200%);
+  }
 }
 
 /* D-46: motion is on for everyone; the member's own switch turns it down, and
@@ -83,10 +181,4 @@ body {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
-}
-
-@keyframes shimmer {
-  100% {
-    transform: translateX(200%);
-  }
 }
