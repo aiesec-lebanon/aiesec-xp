@@ -51,3 +51,13 @@ next-env.d.ts
 
 # scratch downloads: sheet exports contain EP personal data
 /.tmp/
+
+# vendor 3D assets, regenerated from node_modules by postinstall
+/public/draco/
+/public/hdri/
+/public/fonts/
+
+# Blender authoring files: tens of MB of packed source textures, and the
+# pipeline's tracked input is the exported .glb (assets/README.md), not these.
+*.blend
+*.blend[0-9]

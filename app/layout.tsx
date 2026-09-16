@@ -1,29 +1,35 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+
+import { MotionProvider } from "@/components/motion/motion-provider";
+import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
+import { typeSystem } from "@/lib/design/fonts";
+import { readReduceMotion } from "@/lib/design/motion-preference";
+
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "AIESEC XP",
   description: "AIESEC in Lebanon | AIESEC XP",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const reduceMotion = await readReduceMotion();
+
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      data-type-system={typeSystem.name}
+      data-reduce-motion={reduceMotion ? "true" : "false"}
+      className={`${typeSystem.className} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <MotionProvider reduceMotion={reduceMotion}>
+          <div className="flex min-h-full flex-1 flex-col">{children}</div>
+          <footer className="mt-auto flex justify-end px-6 py-4">
+            <ReduceMotionToggle />
+          </footer>
+        </MotionProvider>
+      </body>
     </html>
   );
 }

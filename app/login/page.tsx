@@ -1,5 +1,6 @@
-
 import { safeReturnTo } from "@/lib/auth/oauth";
+
+export const dynamic = "force-dynamic";
 
 const ERRORS: Record<string, string> = {
   denied_at_aiesec: "Sign-in was cancelled at AIESEC.",
