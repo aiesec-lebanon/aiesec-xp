@@ -1,57 +1,153 @@
-import Link from "next/link";
-
 import { requireMemberPage } from "@/lib/auth/guards";
-import { officeStandings } from "@/lib/leaderboard";
+import { individualStandings, officeStandings } from "@/lib/leaderboard";
+
+import { Character, ContactShadow } from "@/components/studio/character";
+import { BrandMark } from "@/components/studio/chrome";
+import { Dock } from "@/components/studio/dock";
+import { GhostNumber, Rise } from "@/components/studio/motion";
+import { Crown } from "@/components/studio/podium";
 
 export const dynamic = "force-dynamic";
 
 export default async function LcLeaderboardPage() {
   await requireMemberPage("/leaderboard/lcs");
-  const standings = await officeStandings();
+  const [standings, members] = await Promise.all([officeStandings(), individualStandings()]);
+
+  const [leader, ...rest] = standings;
+
+  // The three bodies on the leading LC's plinth are its own top three, so the
+  // group on the page is the group that put it there rather than decoration.
+  const faces = leader
+    ? members
+        .filter((standing) => standing.officeId === leader.officeId)
+        .slice(0, 3)
+        .map((standing) => standing.fullName)
+    : [];
+
+  const totalMembers = standings.reduce((sum, entry) => sum + entry.memberCount, 0);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-6 px-6 py-12">
-      <header className="flex items-baseline justify-between gap-4">
-        <h1 className="text-2xl font-semibold">LC leaderboard</h1>
-        <Link href="/" className="text-sm underline">
-          Back
-        </Link>
-      </header>
+    <main className="flex min-h-dvh flex-col bg-wall">
+      <div className="flex items-center justify-between gap-4 px-6 pt-8 sm:px-11">
+        <BrandMark />
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          {standings.length} entit{standings.length === 1 ? "y" : "ies"} · {totalMembers} members
+        </p>
+      </div>
 
-      <table className="w-full text-left text-sm">
-        <thead className="text-neutral-500">
-          <tr>
-            <th className="py-2">#</th>
-            <th>Entity</th>
-            <th className="text-right">Members</th>
-            <th className="text-right">APL</th>
-            <th className="text-right">APD</th>
-            <th className="text-right">RE</th>
-            <th className="text-right">Points</th>
-          </tr>
-        </thead>
-        <tbody>
-          {standings.map((standing) => (
-            <tr key={String(standing.officeId)} className="border-t">
-              <td className="py-2 tabular-nums">{standing.rank}</td>
-              <td>{standing.officeName}</td>
-              <td className="text-right tabular-nums">{standing.memberCount}</td>
-              <td className="text-right tabular-nums">{standing.aplCount}</td>
-              <td className="text-right tabular-nums">{standing.apdCount}</td>
-              <td className="text-right tabular-nums">{standing.reCount}</td>
-              <td className="text-right tabular-nums">{standing.points}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="px-6 pt-7 text-center sm:px-11">
+        <h1 className="font-display text-[28px] font-semibold text-ink">Local Committees</h1>
+        <p className="mt-1.5 text-[13px] text-ink-muted">
+          Each member counts once, for the office of their highest active position.
+        </p>
+      </div>
 
-      <p className="text-sm text-neutral-500">
-        Each member counts for one entity: the office of their highest-ranked active position.
-        Members of the MC are their own entity.
-      </p>
-      <Link href="/leaderboard" className="text-sm underline">
-        Individual leaderboard
-      </Link>
+      {leader ? (
+        <Rise
+          delay={0.08}
+          className="relative mx-6 mt-7 flex flex-col items-center overflow-hidden rounded-3xl bg-surface px-10 pb-8 pt-11 sm:mx-16"
+        >
+          <div className="absolute inset-x-0 top-[-18px]">
+            <GhostNumber>{Math.round(leader.points)}</GhostNumber>
+          </div>
+
+          <Crown />
+
+          <div className="relative z-10 mt-6 flex items-end">
+            {faces[1] ? (
+              <div className="-mr-5.5">
+                <Character name={faces[1]} height={150} idle="small" />
+              </div>
+            ) : null}
+            <div className="relative z-10">
+              <Character name={faces[0] ?? leader.officeName} height={196} />
+            </div>
+            {faces[2] ? (
+              <div className="-ml-5.5">
+                <Character name={faces[2]} height={150} idle="small" />
+              </div>
+            ) : null}
+          </div>
+
+          <ContactShadow width={260} height={30} opacity={0.16} className="-mt-3.5" />
+
+          <div className="relative z-10 mt-3.5 text-center">
+            <p className="font-display text-[22px] font-semibold text-ink">{leader.officeName}</p>
+            <p className="mt-0.5 text-[13px] text-ink-muted">
+              {leader.memberCount} member{leader.memberCount === 1 ? "" : "s"} · rank 1
+            </p>
+            <p className="tabular mt-2.5 text-[52px] font-bold leading-none text-ink">
+              {leader.points}
+            </p>
+
+            <div className="mt-4 flex justify-center gap-2.5">
+              <StageTile label="APL" value={leader.aplCount} wash="bg-apl-wash" ink="text-apl-ink" />
+              <StageTile label="APD" value={leader.apdCount} wash="bg-apd-wash" ink="text-apd-ink" />
+              <StageTile label="RE" value={leader.reCount} wash="bg-re-wash" ink="text-re-ink" />
+            </div>
+          </div>
+        </Rise>
+      ) : (
+        <p className="py-20 text-center text-sm text-ink-secondary">
+          No operating office has scored yet.
+        </p>
+      )}
+
+      <ol className="flex flex-col gap-2.5 px-6 pb-2 pt-7 sm:px-16">
+        {rest.map((entry, index) => (
+          <Rise
+            key={String(entry.officeId)}
+            delay={0.12 + index * 0.05}
+            className="flex items-center gap-5 rounded-2xl bg-surface-raised px-6 py-4 shadow-e1"
+          >
+            <span className="tabular w-8 text-xl font-bold text-ink-faint">{entry.rank}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-display text-[17px] font-semibold text-ink">
+                {entry.officeName}
+              </span>
+              <span className="block text-xs text-ink-muted">
+                {entry.memberCount} member{entry.memberCount === 1 ? "" : "s"}
+              </span>
+            </span>
+            <span className="hidden gap-5.5 sm:flex">
+              {[entry.aplCount, entry.apdCount, entry.reCount].map((count, position) => (
+                <span
+                  key={position}
+                  className="tabular w-8.5 text-right text-[15px] font-semibold text-ink-secondary"
+                >
+                  {count}
+                </span>
+              ))}
+            </span>
+            <span className="tabular w-15 text-right text-[22px] font-bold text-ink">
+              {entry.points}
+            </span>
+          </Rise>
+        ))}
+      </ol>
+
+      <div className="sticky bottom-7 z-20 mt-6 flex justify-center px-6 pb-1">
+        <Dock />
+      </div>
     </main>
+  );
+}
+
+function StageTile({
+  label,
+  value,
+  wash,
+  ink,
+}: {
+  label: string;
+  value: number;
+  wash: string;
+  ink: string;
+}) {
+  return (
+    <span className={`block rounded-[11px] px-4 py-2 ${wash}`}>
+      <span className={`tabular block text-[17px] font-bold ${ink}`}>{value}</span>
+      <span className={`block text-[10px] font-bold tracking-[0.06em] ${ink}`}>{label}</span>
+    </span>
   );
 }

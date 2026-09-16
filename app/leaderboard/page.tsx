@@ -4,12 +4,20 @@ import { requireMemberPage } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { individualStandings } from "@/lib/leaderboard";
 
+import { CharacterAvatar } from "@/components/studio/character";
+import { BrandMark } from "@/components/studio/chrome";
+import { Dock } from "@/components/studio/dock";
+import { Lift, Rise } from "@/components/studio/motion";
+import { Podium, type PodiumPlace } from "@/components/studio/podium";
+
 export const dynamic = "force-dynamic";
+
+const PER_PAGE = 20;
 
 export default async function LeaderboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ office?: string }>;
+  searchParams: Promise<{ office?: string; page?: string }>;
 }) {
   const user = await requireMemberPage("/leaderboard");
   const params = await searchParams;
@@ -24,76 +32,211 @@ export default async function LeaderboardPage({
     params.office && /^\d+$/.test(params.office) ? BigInt(params.office) : undefined;
   const standings = await individualStandings(selected);
 
+  // The podium always shows the top three of whatever is being looked at, so a
+  // filtered board still has a winner rather than three empty plinths.
+  const places: PodiumPlace[] = standings.slice(0, 3).map((standing) => ({
+    rank: standing.rank as 1 | 2 | 3,
+    name: standing.fullName,
+    office: standing.officeName,
+    points: standing.points,
+  }));
+
+  const rest = standings.slice(3);
+  const pageCount = Math.max(1, Math.ceil(rest.length / PER_PAGE));
+  const page = Math.min(
+    pageCount,
+    Math.max(1, params.page && /^\d+$/.test(params.page) ? Number(params.page) : 1)
+  );
+  const rows = rest.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const href = (next: { office?: bigint; page?: number }) => {
+    const query = new URLSearchParams();
+    const office = "office" in next ? next.office : selected;
+    if (office !== undefined) query.set("office", String(office));
+    if (next.page && next.page > 1) query.set("page", String(next.page));
+    const search = query.toString();
+    return search ? `/leaderboard?${search}` : "/leaderboard";
+  };
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-6 px-6 py-12">
-      <header className="flex items-baseline justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Individual leaderboard</h1>
-        <Link href="/" className="text-sm underline">
-          Back
-        </Link>
-      </header>
+    <main className="relative flex min-h-dvh flex-col bg-wall">
+      <div className="bg-surface pb-12">
+        <div className="flex items-center justify-between gap-4 px-6 pt-8 sm:px-11">
+          <BrandMark />
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+            {standings.length} member{standings.length === 1 ? "" : "s"} · live
+          </p>
+        </div>
 
-      <nav className="flex flex-wrap gap-3 text-sm">
-        <Link
-          href="/leaderboard"
-          className={selected === undefined ? "font-medium underline" : "underline"}
-        >
-          Everyone
-        </Link>
-        {offices.map((office) => (
-          <Link
-            key={String(office.id)}
-            href={`/leaderboard?office=${office.id}`}
-            className={selected === office.id ? "font-medium underline" : "underline"}
+        <div className="mt-12 px-6 sm:px-11">
+          {places.length > 0 ? (
+            <Podium places={places} />
+          ) : (
+            <p className="py-16 text-center text-sm text-ink-secondary">
+              Nobody is in scope for this filter yet.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="h-0.5 bg-horizon" />
+
+      <div className="flex-1 px-6 py-8 sm:px-16 lg:px-30">
+        <Rise className="mb-5 flex flex-wrap items-center justify-between gap-5">
+          <nav aria-label="Filter by office" className="flex flex-wrap gap-2">
+            <Link
+              href={href({ office: undefined, page: 1 })}
+              aria-current={selected === undefined ? "true" : undefined}
+              className={`rounded-full px-4.5 py-2.5 text-[13px] transition-colors ${
+                selected === undefined
+                  ? "bg-ink font-semibold text-surface"
+                  : "bg-surface-raised font-medium text-ink-secondary shadow-e1 hover:bg-surface-sunken"
+              }`}
+            >
+              Everyone
+            </Link>
+            {offices.map((office) => (
+              <Link
+                key={String(office.id)}
+                href={href({ office: office.id, page: 1 })}
+                aria-current={selected === office.id ? "true" : undefined}
+                className={`rounded-full px-4.5 py-2.5 text-[13px] transition-colors ${
+                  selected === office.id
+                    ? "bg-ink font-semibold text-surface"
+                    : "bg-surface-raised font-medium text-ink-secondary shadow-e1 hover:bg-surface-sunken"
+                }`}
+              >
+                {office.name}
+              </Link>
+            ))}
+          </nav>
+
+          <div
+            aria-hidden
+            className="hidden gap-6.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted sm:flex"
           >
-            {office.name}
-          </Link>
-        ))}
-      </nav>
+            <span className="w-11 text-right">APL</span>
+            <span className="w-11 text-right">APD</span>
+            <span className="w-11 text-right">RE</span>
+            <span className="w-[70px] text-right">Points</span>
+          </div>
+        </Rise>
 
-      {standings.length === 0 ? (
-        <p className="text-sm text-neutral-500">No members in scope yet.</p>
-      ) : (
-        <table className="w-full text-left text-sm">
-          <thead className="text-neutral-500">
-            <tr>
-              <th className="py-2">#</th>
-              <th>Member</th>
-              <th>LC</th>
-              <th className="text-right">APL</th>
-              <th className="text-right">APD</th>
-              <th className="text-right">RE</th>
-              <th className="text-right">Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {standings.map((standing) => {
-              const isSelf = standing.memberId === user.id;
-              return (
-                <tr
-                  key={String(standing.memberId)}
-                  className={`border-t ${isSelf ? "font-medium" : ""}`}
+        <ol className="flex flex-col gap-2">
+          {rows.map((standing) => {
+            const isSelf = standing.memberId === user.id;
+            return (
+              <Lift
+                as="li"
+                key={String(standing.memberId)}
+                lift={-2}
+                className={`flex items-center gap-5 rounded-2xl px-5.5 py-3 sm:gap-5 ${
+                  isSelf ? "bg-ink shadow-e2" : "bg-surface-raised shadow-e1"
+                }`}
+              >
+                <span
+                  className={`tabular w-8.5 text-xl font-bold ${
+                    isSelf ? "text-surface" : "text-ink-faint"
+                  }`}
                 >
-                  <td className="py-2 tabular-nums">{standing.rank}</td>
-                  <td>
+                  {standing.rank}
+                </span>
+                <CharacterAvatar
+                  name={standing.fullName}
+                  size={46}
+                  tone={isSelf ? "bg-[#2a2926]" : "bg-floor"}
+                />
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={`block text-[15px] font-semibold ${
+                      isSelf ? "text-surface" : "text-ink"
+                    }`}
+                  >
                     {standing.fullName}
-                    {isSelf ? " (you)" : ""}
-                  </td>
-                  <td className="text-neutral-500">{standing.officeName ?? "-"}</td>
-                  <td className="text-right tabular-nums">{standing.aplCount}</td>
-                  <td className="text-right tabular-nums">{standing.apdCount}</td>
-                  <td className="text-right tabular-nums">{standing.reCount}</td>
-                  <td className="text-right tabular-nums">{standing.points}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+                    {isSelf ? (
+                      <span className="ml-2 text-xs font-semibold text-apl-mid">you</span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={`block text-xs ${isSelf ? "text-ink-faint" : "text-ink-secondary"}`}
+                  >
+                    {standing.officeName ?? "No office"}
+                  </span>
+                </span>
 
-      <p className="text-sm text-neutral-500">
-        Ranked on points, then realizations, then approvals, then applications.
-      </p>
+                {[standing.aplCount, standing.apdCount, standing.reCount].map((count, index) => (
+                  <span
+                    key={index}
+                    className={`tabular hidden w-11 text-right text-base font-semibold sm:block ${
+                      isSelf ? "text-ink-faint" : "text-ink-secondary"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                ))}
+
+                <span
+                  className={`tabular w-[70px] text-right text-[22px] font-bold ${
+                    isSelf ? "text-surface" : "text-ink"
+                  }`}
+                >
+                  {standing.points}
+                </span>
+              </Lift>
+            );
+          })}
+        </ol>
+
+        {pageCount > 1 ? (
+          <div className="mt-4 flex items-center gap-2 px-1">
+            <span className="mr-auto font-mono text-[10px] text-ink-faint">
+              Ranks {(page - 1) * PER_PAGE + 4}–{Math.min(rest.length, page * PER_PAGE) + 3} of{" "}
+              {standings.length}
+            </span>
+            <PageLink href={href({ page: page - 1 })} disabled={page === 1}>
+              Prev
+            </PageLink>
+            <PageLink href={href({ page: page + 1 })} disabled={page === pageCount}>
+              Next
+            </PageLink>
+          </div>
+        ) : null}
+
+        <p className="mt-6 text-center text-xs text-ink-faint">
+          Ranked on points, then realizations, then approvals, then applications.
+        </p>
+      </div>
+
+      <div className="sticky bottom-7 z-20 flex justify-center px-6 pb-1">
+        <Dock />
+      </div>
     </main>
+  );
+}
+
+function PageLink({
+  href,
+  disabled,
+  children,
+}: {
+  href: string;
+  disabled: boolean;
+  children: React.ReactNode;
+}) {
+  const className =
+    "rounded-[9px] border border-line bg-surface-raised px-3.5 py-1.5 text-xs font-semibold text-ink";
+
+  if (disabled) {
+    return (
+      <span aria-disabled className={`${className} opacity-40`}>
+        {children}
+      </span>
+    );
+  }
+
+  return (
+    <Link href={href} className={`${className} transition-colors hover:bg-surface-sunken`}>
+      {children}
+    </Link>
   );
 }
