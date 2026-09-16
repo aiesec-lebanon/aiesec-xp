@@ -43,6 +43,35 @@ a colour in the name is a name that goes stale on first use. Each character is
 one mesh (`<name>-mesh`) and one armature (`<name>-rig`), normalised to 1.5m
 tall, scale 1, rotation 0, feet at the origin.
 
+### Rebuilding the avatars
+
+```
+characters_working.blend  ──  avatar-parts.py  ──▶  assets/source/avatar-*.glb
+                                                          │
+                              npm run assets:models        ▼
+                                                    public/models/avatar-*.glb
+                                                          │
+                              avatar-stills.py            ▼
+                                                    public/characters/avatar-*.png
+```
+
+```sh
+blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-parts.py -- .
+npm run assets:models
+blender -b -P scripts/assets/avatar-stills.py -- .
+blender -b -P scripts/assets/avatar-preview.py -- . <out-dir>   # check the result
+```
+
+`avatar-parts.py` is what makes the bodies recolourable; D-50 in `Context.md`
+says why it has to exist. It splits each mesh into one material per part,
+rewrites the baked texture as a per-part luminance map, poses the arms down and
+stands the body at the origin. Its reference colours are read off each
+character's own texture — if a character is re-authored, re-read them rather than
+guessing, or parts will land in the wrong slot.
+
+`avatar-stills.py` renders the **shipped `.glb`**, not the Blender scene, so the
+still and the live model cannot drift apart.
+
 Their licence is unresolved and stays that way by decision: the product is
 internal and undistributed, so D-49 accepts the open question rather than
 blocking on it. See the character section of `ATTRIBUTIONS.md` for what would

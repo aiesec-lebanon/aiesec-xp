@@ -24,12 +24,11 @@ list.
 
 ## Character renders — licence unconfirmed
 
-`public/characters/char-walk-blue.png`, `char-curly-front.png` and
-`char-hoodie-front.png` are flat renders of the same CGTrader characters
-described below, produced for the STUDIO comps and now shipped as the placeholder
-body every screen stands on until the 3D layer replaces them (D-47,
-`components/studio/character.tsx`). They inherit the same open licence question as
-the models they were rendered from.
+`public/characters/avatar-*.png` are renders of the four CGTrader characters
+described below, produced by `scripts/assets/avatar-stills.py` from the shipped
+`.glb` files and used on every screen that shows more than one body at a time
+(D-50, `components/studio/character.tsx`). They inherit the same open licence
+question as the models they were rendered from.
 
 ## Character models — licence unconfirmed
 
