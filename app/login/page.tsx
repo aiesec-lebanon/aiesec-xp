@@ -135,8 +135,10 @@ function CharacterGroup({ names, side }: { names: string[]; side: "left" | "righ
       <div className="-mr-10">
         <Character name={names[0]!} height={380} idle="small" />
       </div>
+      {/* Only the tall one in each group is a canvas: six would be six WebGL
+          contexts on a sign-in screen. */}
       <div className="relative z-10">
-        <Character name={names[1]!} height={520} />
+        <Character name={names[1]!} height={520} stage />
       </div>
       <div className="-ml-10">
         <Character name={names[2]!} height={380} idle="small" />

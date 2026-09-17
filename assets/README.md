@@ -63,16 +63,30 @@ blender -b -P scripts/assets/avatar-stills.py -- .
 blender -b -P scripts/assets/avatar-preview.py -- . <out-dir>   # check the result
 ```
 
-`avatar-export.py` keeps each character's authored materials (D-52). It bakes the
-A-pose into the mesh and drops the rig, so the exported geometry is the body in
-world coordinates — which is what makes every character come out the same size in
-the app. Animation will need this run again with `export_skins`; the rig is still
-in the .blend.
+`avatar-export.py` keeps each character's authored materials (D-52) and exports
+them rigged, with Mixamo's T-pose as the bind (D-53) — that is what the clips are
+authored against, and no screen shows it because a clip plays from the first
+frame. Every character is normalised to 1.5m with its feet on the floor and the
+transform frozen into the data, which is what makes them all come out the same
+size in the app. Juno comes from the Mixamo auto-rigger rather than the .blend,
+with her original texture re-linked over the one Mixamo re-encodes.
 
 `avatar-stills.py` renders two images per character from the **shipped `.glb`**,
 not the Blender scene, so they cannot drift from the model: a full body for the
 screens that show several at once, and a square portrait used as the member's
 profile picture.
+
+`avatar-animations.py` bakes the Mixamo downloads into one shared clip library
+(D-53). It drops the location keys Mixamo writes on every bone, subtracts the
+root drift from clips that were not exported in place, and decimates keyframes —
+without that the file is more than twice the size for no visible difference.
+
+```sh
+blender -b -P scripts/assets/avatar-animations.py -- . D:\Blender\mixamo\download
+```
+
+`avatar-to-mixamo.py` writes the unrigged, T-posed FBX the Mixamo auto-rigger
+wants, for a character that needs a skeleton it does not already have.
 
 `avatar-parts.py` is the parked per-part recolouring pipeline (D-52). It is kept
 because restoring recolouring means running it again, not rewriting it.

@@ -15,7 +15,7 @@ export function CharacterLab({
   name: string;
   initialCharacter: string;
 }) {
-  const { character, index, step, stepped } = useCharacterChoice(initialCharacter);
+  const { character, index, step, enterFrom } = useCharacterChoice(initialCharacter);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [pending, startTransition] = useTransition();
 
@@ -36,7 +36,7 @@ export function CharacterLab({
           step(by);
           setStatus({ kind: "idle" });
         }}
-        animate={stepped}
+        enterFrom={enterFrom}
       />
 
       <div className="flex w-full flex-none flex-col gap-6 border-surface-sunken bg-surface p-7 lg:w-70 lg:border-l">

@@ -86,10 +86,31 @@ def clear_models():
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
+# Arms down, the angles the clips settle into. Binding a real clip would be
+# truer, but a glTF action arrives slotted to the armature it was imported with
+# and re-slotting it onto another rig is fragile; a still only needs the body out
+# of its T-pose bind.
+A_POSE = {"leftarm": 0.95, "rightarm": 0.95, "leftforearm": 0.10, "rightforearm": 0.10}
+
+
+def pose_arms(name):
+    rig = bpy.context.scene.objects.get(f"{name}-rig")
+    if rig is None:
+        return
+    for bone in rig.pose.bones:
+        angle = A_POSE.get(bone.name.split(":")[-1].lower())
+        if angle is None:
+            continue
+        bone.rotation_mode = "XYZ"
+        bone.rotation_euler.x = angle
+    bpy.context.view_layer.update()
+
+
 def render_one(repo_root, name):
     clear_models()
     bpy.ops.import_scene.gltf(filepath=os.path.join(repo_root, "public", "models", f"{name}.glb"))
     bpy.context.view_layer.update()
+    pose_arms(name)
 
     # Posed vertices, not obj.bound_box, which still reports the authored T-pose.
     depsgraph = bpy.context.evaluated_depsgraph_get()

@@ -1,12 +1,13 @@
 "use client";
 
 import { m } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
 import { CHARACTERS } from "@/lib/design/character";
 
 import { CharacterStage } from "./character-stage";
+import { preloadCharacter } from "./character-model";
 import { ContactShadow } from "./character";
 
 export function useCharacterChoice(initialCharacter: string) {
@@ -16,16 +17,16 @@ export function useCharacterChoice(initialCharacter: string) {
       0,
     ),
   );
-  // Only a body the member has actually stepped to should animate in; the first
-  // one is just how the page opened.
-  const [stepped, setStepped] = useState(false);
+  // Which way the last step went, so the new body arrives from the side the
+  // member reached towards and the old one leaves the other way.
+  const [enterFrom, setEnterFrom] = useState<1 | -1>(1);
 
   const step = (by: number) => {
     setIndex((current) => (current + by + CHARACTERS.length) % CHARACTERS.length);
-    setStepped(true);
+    setEnterFrom(by > 0 ? 1 : -1);
   };
 
-  return { character: CHARACTERS[index]!, index, step, stepped };
+  return { character: CHARACTERS[index]!, index, step, enterFrom };
 }
 
 /** The set: a body on the cyclorama, an arrow either side, and its name. */
@@ -33,17 +34,23 @@ export function CharacterCarousel({
   memberName,
   index,
   step,
-  animate,
+  enterFrom,
   height = 430,
 }: {
   memberName: string;
   index: number;
   step: (by: number) => void;
-  animate: boolean;
+  enterFrom: 1 | -1;
   height?: number;
 }) {
   const reduceMotion = useReduceMotion();
   const character = CHARACTERS[index]!;
+
+  // Every body is one arrow press away, and a swap that has to fetch a .glb
+  // first would drop the outgoing walk on the floor.
+  useEffect(() => {
+    for (const option of CHARACTERS) preloadCharacter(option.id);
+  }, []);
 
   return (
     <div className="relative flex flex-1 items-end justify-center overflow-hidden">
@@ -66,7 +73,7 @@ export function CharacterCarousel({
           name={memberName}
           height={height}
           interactive
-          animate={animate}
+          enterFrom={enterFrom}
           eager
         />
         <ContactShadow width={210} height={20} className="-mt-1" />

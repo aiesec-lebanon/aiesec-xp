@@ -30,6 +30,17 @@ described below, produced by `scripts/assets/avatar-stills.py` from the shipped
 (D-52, `components/studio/character.tsx`). They inherit the same open licence
 question as the models they were rendered from.
 
+## Character animation — Mixamo
+
+The clips in `public/models/avatar-animations.glb` are from
+[Mixamo](https://www.mixamo.com) (Adobe), which grants royalty-free use of its
+animations, including commercially, to anyone with a free Adobe account. Juno's
+skeleton is also Mixamo's, from its auto-rigger.
+
+This is the first source in the product that is free but **account-gated rather
+than CC0** (D-47, D-53). Nothing is fetched from Adobe at runtime: the clips are
+baked into our own `.glb` and served from our origin like everything else.
+
 ## Character models — licence unconfirmed
 
 The four member-avatar characters — `avatar-hoodie-joggers`, `avatar-tee-shorts`,

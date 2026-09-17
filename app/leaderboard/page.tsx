@@ -32,15 +32,6 @@ export default async function LeaderboardPage({
     params.office && /^\d+$/.test(params.office) ? BigInt(params.office) : undefined;
   const standings = await individualStandings(selected);
 
-  // The podium always shows the top three of whatever is being looked at, so a
-  // filtered board still has a winner rather than three empty plinths.
-  const places: PodiumPlace[] = standings.slice(0, 3).map((standing) => ({
-    rank: standing.rank as 1 | 2 | 3,
-    name: standing.fullName,
-    office: standing.officeName,
-    points: standing.points,
-  }));
-
   const rest = standings.slice(3);
   const pageCount = Math.max(1, Math.ceil(rest.length / PER_PAGE));
   const page = Math.min(
@@ -49,11 +40,26 @@ export default async function LeaderboardPage({
   );
   const rows = rest.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // One query for the page of rows, so a leaderboard shows each member as the
-  // character they picked rather than the one their name happens to hash to.
+  // One query for the podium and the page of rows together, so a leaderboard
+  // shows each member as the character they picked rather than the one their
+  // name happens to hash to.
+  const top = standings.slice(0, 3);
   const characters = await memberAvatars(
-    rows.map((standing) => ({ id: standing.memberId, fullName: standing.fullName })),
+    [...top, ...rows].map((standing) => ({
+      id: standing.memberId,
+      fullName: standing.fullName,
+    })),
   );
+
+  // The podium always shows the top three of whatever is being looked at, so a
+  // filtered board still has a winner rather than three empty plinths.
+  const places: PodiumPlace[] = top.map((standing) => ({
+    rank: standing.rank as 1 | 2 | 3,
+    name: standing.fullName,
+    office: standing.officeName,
+    points: standing.points,
+    characterId: characters.get(standing.memberId)?.id,
+  }));
 
   const href = (next: { office?: bigint; page?: number }) => {
     const query = new URLSearchParams();

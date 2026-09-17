@@ -1,6 +1,11 @@
 import Image from "next/image";
 
-import { characterFor, characterPortraitPath, characterStillPath } from "@/lib/design/character";
+import {
+  characterFor,
+  characterPortraitPath,
+  characterStillPath,
+  type CharacterMood,
+} from "@/lib/design/character";
 
 import { CharacterStage } from "./character-stage";
 
@@ -20,6 +25,7 @@ export function Character({
   priority = false,
   className = "",
   stage = false,
+  mood,
   idOverride,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
@@ -31,13 +37,17 @@ export function Character({
   className?: string;
   /** Render the model live. Worth a canvas only where one body is shown. */
   stage?: boolean;
+  /** What the body does while it stands there. Only reaches the live stage. */
+  mood?: CharacterMood;
   /** The member's chosen character, instead of the one `name` hashes to. */
   idOverride?: string;
 }) {
   const id = idOverride ?? characterFor(name).id;
 
   if (stage) {
-    return <CharacterStage id={id} name={name} height={height} className={className} />;
+    return (
+      <CharacterStage id={id} name={name} height={height} mood={mood} className={className} />
+    );
   }
 
   // The still is rendered from the same .glb (D-52), so it is the same
