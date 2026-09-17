@@ -24,10 +24,10 @@ list.
 
 ## Character renders — licence unconfirmed
 
-`public/characters/avatar-*.png` are renders of the four CGTrader characters
+`public/characters/avatar-*.png` and `avatar-*-portrait.png` are renders of the four CGTrader characters
 described below, produced by `scripts/assets/avatar-stills.py` from the shipped
 `.glb` files and used on every screen that shows more than one body at a time
-(D-50, `components/studio/character.tsx`). They inherit the same open licence
+(D-52, `components/studio/character.tsx`). They inherit the same open licence
 question as the models they were rendered from.
 
 ## Character models — licence unconfirmed

@@ -1,106 +1,56 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { Box3, Color, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh, Vector3 } from "three";
-import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { useFrame } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
+import { Box3, Group, Mesh, Vector3 } from "three";
 
-import {
-  CHARACTER_PARTS,
-  characterModelPath,
-  type CharacterColours,
-  type CharacterPart,
-} from "@/lib/design/character";
+import { useReduceMotion } from "@/components/motion/motion-provider";
+import { characterModelPath } from "@/lib/design/character";
 import { preloadModel, useModel } from "@/lib/three/loaders";
 
-const PART_OF_MATERIAL = new Map<string, CharacterPart>();
-
-function partOf(materialName: string): CharacterPart | undefined {
-  const cached = PART_OF_MATERIAL.get(materialName);
-  if (cached) return cached;
-  const part = CHARACTER_PARTS.find((p) => materialName.endsWith(`-${p}`));
-  if (part) PART_OF_MATERIAL.set(materialName, part);
-  return part;
-}
-
-/**
- * The bounds of the body as it is actually posed.
- *
- * Box3.setFromObject reads a skinned mesh's geometry, which is still the bind
- * pose the rig was authored in -- it does not see the skeleton at all. Measuring
- * that way gave each character a different, wrong height, which is why they
- * rendered at inconsistent sizes.
- */
-function posedBounds(root: Object3D): Box3 {
-  const box = new Box3();
-  const point = new Vector3();
-  root.updateWorldMatrix(true, true);
-
-  let skinned = false;
-  root.traverse((node) => {
-    if (node instanceof SkinnedMesh) {
-      skinned = true;
-      const position = node.geometry.attributes.position;
-      for (let i = 0; i < position.count; i += 1) {
-        point.fromBufferAttribute(position, i);
-        node.applyBoneTransform(i, point);
-        box.expandByPoint(node.localToWorld(point));
-      }
-    } else if (node instanceof Mesh) {
-      box.expandByObject(node);
-    }
-  });
-
-  return skinned ? box : new Box3().setFromObject(root);
-}
+/** Seconds the body takes to turn and settle when it is swapped in. */
+const ENTRY_SECONDS = 0.5;
 
 export type CharacterModelProps = {
-  /** Which of the four bodies, from `characterFor(name)`. */
+  /** Which of the four bodies. */
   id: string;
-  colours?: CharacterColours;
   /** Rendered height in world units. Defaults to most of the frame. */
   height?: number;
-  /**
-   * The colour each part was authored with, reported once the body has loaded.
-   * Read off the materials rather than held in a table here, so the default a
-   * member is shown cannot drift from the .glb it came from.
-   */
-  onAuthoredColours?: (colours: Partial<Record<CharacterPart, string>>) => void;
+  /** Turn and settle on mount, for a body that has just been swapped in. */
+  animate?: boolean;
 };
 
 // What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back.
 // fov is vertical, so a body given a share of this fills that same share of the
 // canvas at any pixel size.
-const FRAME_HEIGHT = 2 * 6 * Math.tan((42 * Math.PI) / 360);
+export const FRAME_HEIGHT = 2 * 6 * Math.tan((42 * Math.PI) / 360);
 
 export function CharacterModel({
   id,
-  colours,
   height = FRAME_HEIGHT * 0.9,
-  onAuthoredColours,
+  animate = false,
 }: CharacterModelProps) {
   const { scene } = useModel(characterModelPath(id));
+  const reduceMotion = useReduceMotion();
+  const group = useRef<Group>(null);
+  const elapsed = useRef(0);
 
-  // A skinned mesh cannot be shared between two places in the graph, and its
-  // materials cannot be shared between two members wearing different colours.
   const body = useMemo(() => {
-    const clone = cloneSkinned(scene);
-    clone.traverse((node) => {
+    const copy = scene.clone(true);
+    copy.traverse((node) => {
       if (!(node instanceof Mesh)) return;
       node.castShadow = true;
       node.receiveShadow = true;
-      node.material = Array.isArray(node.material)
-        ? node.material.map((m) => m.clone())
-        : node.material.clone();
     });
-    return clone;
+    return copy;
   }, [scene]);
 
-  // Authoring offsets and proportions differ per character, so the body is
-  // measured rather than trusted to arrive at a known size. Its feet land just
-  // above the bottom of the frame, which is where the DOM draws the contact
-  // shadow; centring it instead left the body floating above its own shadow.
+  // The export bakes the pose into the geometry and stands the body at the
+  // origin (D-52), so these bounds are the body that gets drawn. They were not
+  // when the models shipped rigged: Box3 reads geometry, which was still the
+  // bind pose, and each character came out a different size.
   const fit = useMemo(() => {
-    const box = posedBounds(body);
+    const box = new Box3().setFromObject(body);
     const size = box.getSize(new Vector3());
     const centre = box.getCenter(new Vector3());
     const scale = size.y > 0 ? height / size.y : 1;
@@ -111,55 +61,26 @@ export function CharacterModel({
     };
   }, [body, height]);
 
-  // What each part was authored with, so clearing a choice puts it back -- and
-  // so the lab can show it as the default a member starts on.
-  const authored = useMemo(() => {
-    const byMaterial = new Map<string, Color>();
-    const byPart: Partial<Record<CharacterPart, string>> = {};
-    body.traverse((node) => {
-      if (!(node instanceof Mesh)) return;
-      for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-        if (!(material instanceof MeshStandardMaterial)) continue;
-        byMaterial.set(material.uuid, material.color.clone());
-        const part = partOf(material.name);
-        if (part) byPart[part] = `#${material.color.getHexString().toUpperCase()}`;
-      }
-    });
-    return { byMaterial, byPart };
-  }, [body]);
+  const playing = animate && !reduceMotion;
 
-  // Held in a ref, and reported only when the body changes: a caller passing an
-  // inline function would otherwise re-run this on every render, and the state
-  // it sets would render again.
-  const report = useRef(onAuthoredColours);
-  useEffect(() => {
-    report.current = onAuthoredColours;
-  }, [onAuthoredColours]);
-  useEffect(() => {
-    report.current?.(authored.byPart);
-  }, [authored]);
+  useFrame((_, delta) => {
+    const node = group.current;
+    if (!node || !playing || elapsed.current >= ENTRY_SECONDS) return;
 
-  useEffect(() => {
-    body.traverse((node) => {
-      if (!(node instanceof Mesh)) return;
-      for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-        if (!(material instanceof MeshStandardMaterial)) continue;
-        // A material with no part is `detail` -- eyes, a printed logo, a shoe's
-        // trim -- which keeps the colour it was painted with.
-        const part = partOf(material.name);
-        if (!part) continue;
-
-        const chosen = colours?.[part];
-        // set() converts from sRGB itself under three's colour management.
-        if (chosen) material.color.set(chosen);
-        else material.color.copy(authored.byMaterial.get(material.uuid) ?? material.color);
-        material.needsUpdate = true;
-      }
-    });
-  }, [authored, body, colours]);
+    elapsed.current = Math.min(ENTRY_SECONDS, elapsed.current + delta);
+    const t = elapsed.current / ENTRY_SECONDS;
+    const eased = 1 - (1 - t) ** 3;
+    node.rotation.y = (1 - eased) * -0.8;
+    node.scale.setScalar(fit.scale * (0.88 + 0.12 * eased));
+  });
 
   return (
-    <group position={fit.position} scale={fit.scale}>
+    <group
+      ref={group}
+      position={fit.position}
+      scale={playing ? fit.scale * 0.88 : fit.scale}
+      rotation={[0, playing ? -0.8 : 0, 0]}
+    >
       <primitive object={body} />
     </group>
   );
@@ -168,3 +89,64 @@ export function CharacterModel({
 export function preloadCharacter(id: string): void {
   preloadModel(characterModelPath(id));
 }
+
+/* ---------------------------------------------------------------------------
+ * Parked: per-part recolouring (D-52).
+ *
+ * The models ship with their authored materials -- one per character -- so
+ * there are no per-part slots to tint. This ran when `avatar-parts.py` split
+ * them, and needs that export back before it means anything again. It also
+ * needed SkeletonUtils.clone and the posed-bounds walk above, because the split
+ * models shipped rigged.
+ *
+ * const PART_OF_MATERIAL = new Map<string, CharacterPart>();
+ *
+ * function partOf(materialName: string): CharacterPart | undefined {
+ *   const cached = PART_OF_MATERIAL.get(materialName);
+ *   if (cached) return cached;
+ *   const part = CHARACTER_PARTS.find((p) => materialName.endsWith(`-${p}`));
+ *   if (part) PART_OF_MATERIAL.set(materialName, part);
+ *   return part;
+ * }
+ *
+ * // Materials cannot be shared between two members wearing different colours.
+ * node.material = Array.isArray(node.material)
+ *   ? node.material.map((m) => m.clone())
+ *   : node.material.clone();
+ *
+ * // What each part was authored with, so clearing a choice puts it back -- and
+ * // so the lab could show it as the default a member starts on.
+ * const authored = useMemo(() => {
+ *   const byMaterial = new Map<string, Color>();
+ *   const byPart: Partial<Record<CharacterPart, string>> = {};
+ *   body.traverse((node) => {
+ *     if (!(node instanceof Mesh)) return;
+ *     for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+ *       if (!(material instanceof MeshStandardMaterial)) continue;
+ *       byMaterial.set(material.uuid, material.color.clone());
+ *       const part = partOf(material.name);
+ *       if (part) byPart[part] = `#${material.color.getHexString().toUpperCase()}`;
+ *     }
+ *   });
+ *   return { byMaterial, byPart };
+ * }, [body]);
+ *
+ * useEffect(() => {
+ *   body.traverse((node) => {
+ *     if (!(node instanceof Mesh)) return;
+ *     for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+ *       if (!(material instanceof MeshStandardMaterial)) continue;
+ *       // A material with no part is `detail` -- eyes, a printed logo, a shoe's
+ *       // trim -- which keeps the colour it was painted with.
+ *       const part = partOf(material.name);
+ *       if (!part) continue;
+ *
+ *       const chosen = colours?.[part];
+ *       // set() converts from sRGB itself under three's colour management.
+ *       if (chosen) material.color.set(chosen);
+ *       else material.color.copy(authored.byMaterial.get(material.uuid) ?? material.color);
+ *       material.needsUpdate = true;
+ *     }
+ *   });
+ * }, [authored, body, colours]);
+ * ------------------------------------------------------------------------- */

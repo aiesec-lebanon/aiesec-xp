@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { individualStandings } from "@/lib/leaderboard";
 
 import { CharacterAvatar } from "@/components/studio/character";
+import { memberAvatars } from "@/lib/design/avatar";
 import { Dock } from "@/components/studio/dock";
 import { Lift, Rise } from "@/components/studio/motion";
 import { Podium, type PodiumPlace } from "@/components/studio/podium";
@@ -47,6 +48,12 @@ export default async function LeaderboardPage({
     Math.max(1, params.page && /^\d+$/.test(params.page) ? Number(params.page) : 1)
   );
   const rows = rest.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  // One query for the page of rows, so a leaderboard shows each member as the
+  // character they picked rather than the one their name happens to hash to.
+  const characters = await memberAvatars(
+    rows.map((standing) => ({ id: standing.memberId, fullName: standing.fullName })),
+  );
 
   const href = (next: { office?: bigint; page?: number }) => {
     const query = new URLSearchParams();
@@ -141,6 +148,7 @@ export default async function LeaderboardPage({
                 </span>
                 <CharacterAvatar
                   name={standing.fullName}
+                  idOverride={characters.get(standing.memberId)?.id}
                   size={46}
                   tone={isSelf ? "bg-[#2a2926]" : "bg-floor"}
                 />
