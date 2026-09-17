@@ -8,6 +8,7 @@ import { importAssignments } from "@/lib/import/run-import";
 import { CharacterAvatar } from "@/components/studio/character";
 import { Rise } from "@/components/studio/motion";
 
+import { AdminNav } from "../admin-nav";
 import { AliasForm, ImportButtons, OverrideForm } from "./controls";
 
 export const dynamic = "force-dynamic";
@@ -83,20 +84,7 @@ export default async function AssignmentsAdminPage({
             </p>
           </div>
 
-          {/* One tab today. Members and Rewards are in Architecture.md 8 but not
-              built, so they are named as what is coming rather than rendered as
-              controls that go nowhere. */}
-          <nav aria-label="Admin sections" className="flex gap-0.5 rounded-xl bg-surface-raised p-1">
-            <span className="rounded-[9px] bg-surface-sunken px-4 py-2 text-[13px] font-semibold text-ink">
-              Assignments
-            </span>
-            <span className="px-4 py-2 text-[13px] font-medium text-ink-faint" title="Not built yet">
-              Members
-            </span>
-            <span className="px-4 py-2 text-[13px] font-medium text-ink-faint" title="Not built yet">
-              Rewards
-            </span>
-          </nav>
+          <AdminNav active="assignments" />
         </header>
 
         <section className="flex flex-col gap-4 rounded-[22px] bg-surface-raised px-7 py-6.5">
