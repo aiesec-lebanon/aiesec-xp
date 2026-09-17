@@ -89,7 +89,7 @@ Two behavioural goals:
 | D-43 | **Nothing before the active display window is collected.** Sync is floored at `DisplayWindow.startsAt`, not at a lookback constant, so the system holds only what it scores. Moving the window later narrows collection immediately. |
 | D-44 | **Scope: rewards and ranking, nothing else.** EP-to-member assignment happens in the MC's Google Sheet and EP data is viewed in EXPA; this product does neither. It therefore has no EP directory, no assignment UI and no EP display surface. `ExchangeEvent` keeps only what the scoring engine reads — application, stage, date, EP id, product, direction, status — and the sync query requests only those fields. Supersedes D-18 and narrows option C in section 5. |
 | D-45 | Assignment is **imported** from the MC's sheets, and an admin may **correct** a row afterwards. A correction is marked `ADMIN` and survives re-import, because it is a deliberate decision about who earned something and the sheet must not quietly reverse it. Sheet labels are mapped to members through `ManagerAlias`, never guessed: suggestions are ranked for a human to confirm (O-10). This narrows D-44, which said the product does no assignment at all. |
-| D-46 | **Motion is on for everyone by default, and the operating system's `prefers-reduced-motion` is not consulted.** This product is a game; a system default set long ago for an unrelated reason should not silently mute the thing it exists to be. WCAG 2.2.2 is satisfied by a control instead: a "reduce motion" switch in the footer, reachable from every page including before sign-in, which the member sets themselves. The preference is a cookie so the root layout renders it server-side — reading it after hydration would show a burst of exactly the motion the member opted out of. One switch governs every animated surface: Motion, the three.js frame loop, the Rapier simulation, Recharts and the CSS backstop. This amends the `Architecture.md` 9 non-negotiable, which previously made the OS setting the trigger. |
+| D-46 | **Motion is on for everyone by default, and the operating system's `prefers-reduced-motion` is not consulted.** This product is a game; a system default set long ago for an unrelated reason should not silently mute the thing it exists to be. WCAG 2.2.2 is satisfied by a control instead in /me page. The preference is a cookie so the root layout renders it server-side — reading it after hydration would show a burst of exactly the motion the member opted out of. One switch governs every animated surface: Motion, the three.js frame loop, the Rapier simulation, Recharts and the CSS backstop. This amends the `Architecture.md` 9 non-negotiable, which previously made the OS setting the trigger. |
 | D-48 | **The design direction is STUDIO, and its type system is Fredoka / Figtree / Baloo 2 / Space Mono.** Four directions were comped — 1a STUDIO, 1b DESK, 1c PATH, 1d GALLERY — and STUDIO is built: a warm-paper cyclorama, the member's character centre-frame at full height, one large number and four chips that open when asked. The dark `D‑24` surface is gone, and so are the three unchosen type systems (Arena, Clay Arcade, Overworld) and the second, dark chart ramp; `lib/design/fonts.ts` now declares one set of faces rather than switching between three. The stage hues are unchanged — they are what carries the brand — and each gains a wash / mid / ink triple so an accent can be a background without failing contrast as text. Closes O-11. |
 | D-47 | **The game surface is React Three Fiber, and every asset is free-forever and self-hosted.** three.js + `@react-three/fiber` + `@react-three/drei` (MIT), physics by `@react-three/rapier` (MIT over Apache-2.0 Rapier); art from Poly Haven and Kenney (CC0) and Blender (GPL), compressed with glTF-Transform and Draco (MIT/Apache-2.0); icons from game-icons.net (CC BY 3.0, attribution required — `ATTRIBUTIONS.md`); typefaces from Google Fonts (OFL). Nothing is fetched from a CDN at runtime, which matters beyond principle: the CSP would block it. Each of drei's `Environment`, three's `DRACOLoader` and troika's font resolver defaults to a CDN, and each is overridden to a copy under `public/` synced from `node_modules` at install. Spline was evaluated and rejected: its free tier caps scenes and exports, so it is not free-forever by this project's own bar. |
 
@@ -237,12 +237,14 @@ already in the ledger.
   replaced from a CC0 source. Until then the models are prototype-only and D-47
   is not demonstrably satisfied. **Open.**
 - **O-14 — The character lab saves nothing.** The STUDIO `/me` screen ships the
-  appearance panel the comp specifies — six categories, one swatch row each —
-  and it is a live preview only: there is no avatar column on `Member`, no
-  action to write one, and the body is a flat render, so a chosen colour cannot
-  repaint the part it names. The panel is labelled as a preview rather than
-  dressed as a saved setting. Persisting it needs a schema field, an action, and
-  the per-part material split that arrives with the 3D bodies (O-12, D-47).
+  appearance panel the comp specifies — a body picker across the three flat
+  renders in `lib/design/character.ts`, plus six colour categories, one swatch
+  row each — and it is a live preview only: there is no avatar column on
+  `Member`, no action to write one, and the body is a flat render, so a chosen
+  colour cannot repaint the part it names or a chosen body outlive the page.
+  The panel is labelled as a preview rather than dressed as a saved setting.
+  Persisting it needs a schema field, an action, and the per-part material
+  split that arrives with the 3D bodies (O-12, D-47).
   **Open.**
 - **O-13 — Whose typeface carries the brand.** D-48 settles the direction but
   not this: D-24 says "AIESEC brand typography", and Fredoka / Figtree / Baloo 2

@@ -2,7 +2,6 @@ import { requireMemberPage } from "@/lib/auth/guards";
 import { individualStandings, officeStandings } from "@/lib/leaderboard";
 
 import { Character, ContactShadow } from "@/components/studio/character";
-import { BrandMark } from "@/components/studio/chrome";
 import { Dock } from "@/components/studio/dock";
 import { GhostNumber, Rise } from "@/components/studio/motion";
 import { Crown } from "@/components/studio/podium";
@@ -28,8 +27,7 @@ export default async function LcLeaderboardPage() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-wall">
-      <div className="flex items-center justify-between gap-4 px-6 pt-8 sm:px-11">
-        <BrandMark />
+      <div className="flex justify-end px-6 pt-8 sm:px-11">
         <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
           {standings.length} entit{standings.length === 1 ? "y" : "ies"} · {totalMembers} members
         </p>

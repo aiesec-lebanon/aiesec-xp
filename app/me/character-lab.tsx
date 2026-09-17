@@ -1,19 +1,22 @@
 "use client";
 
+import Image from "next/image";
 import { m } from "motion/react";
 import { useState } from "react";
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
 import { Character, ContactShadow } from "@/components/studio/character";
+import { CHARACTERS, characterFor } from "@/lib/design/character";
 
 // Appearance, as far as it can honestly go today.
 //
 // Nothing here persists: there is no avatar column in the schema and no action
-// to write one (O-13), and the body is a flat render, so a chosen colour cannot
+// to write one (O-14), and the body is a flat render, so a chosen colour cannot
 // repaint the part it names. What the panel does do is commit to the vocabulary
-// the real editor will use -- six categories, one swatch row each -- and preview
-// a choice as a tinted key light on the stage, which is exactly what the comp
-// shows. It is labelled as a preview rather than dressed up as a saved setting.
+// the real editor will use -- a body picker plus six colour categories, one
+// swatch row each -- and preview a choice as a tinted key light on the stage,
+// which is exactly what the comp shows. It is labelled as a preview rather
+// than dressed up as a saved setting.
 
 type Category = {
   key: string;
@@ -37,6 +40,9 @@ const INITIAL = Object.fromEntries(
 export function CharacterLab({ name }: { name: string }) {
   const [chosen, setChosen] = useState(INITIAL);
   const [glow, setGlow] = useState<string | null>(null);
+  const [bodyIndex, setBodyIndex] = useState(() =>
+    CHARACTERS.findIndex((src) => src === characterFor(name))
+  );
   const reduceMotion = useReduceMotion();
 
   return (
@@ -67,12 +73,60 @@ export function CharacterLab({ name }: { name: string }) {
         />
 
         <div className="relative z-10 flex flex-col items-center pb-9">
-          <Character name={name} height={430} />
+          <Character name={name} height={430} srcOverride={CHARACTERS[bodyIndex]} />
           <ContactShadow width={210} height={20} className="-mt-1" />
         </div>
       </div>
 
       <div className="flex w-full flex-none flex-col gap-5.5 border-surface-sunken bg-surface p-7 lg:w-70 lg:border-l">
+        <fieldset className="border-0 p-0">
+          <div className="mb-2.5 flex items-center justify-between">
+            <legend className="font-display text-base font-semibold text-ink">Character</legend>
+            <span className="text-[11px] text-ink-muted">
+              {bodyIndex + 1} of {CHARACTERS.length}
+            </span>
+          </div>
+
+          <div role="group" aria-label="Choose a character" className="flex gap-2.5">
+            {CHARACTERS.map((src, index) => {
+              const isChosen = index === bodyIndex;
+              return (
+                <m.button
+                  key={src}
+                  type="button"
+                  aria-label={`Character ${index + 1}`}
+                  aria-pressed={isChosen}
+                  whileHover={reduceMotion ? undefined : { scale: 1.06 }}
+                  whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 18 }}
+                  onClick={() => setBodyIndex(index)}
+                  className={`relative size-15 flex-none overflow-hidden rounded-2xl border-2 bg-floor ${
+                    isChosen ? "border-ink" : "border-transparent"
+                  }`}
+                >
+                  <Image
+                    src={src}
+                    alt=""
+                    width={60}
+                    height={60}
+                    style={{
+                      position: "absolute",
+                      top: "4%",
+                      left: 0,
+                      width: "100%",
+                      height: "92%",
+                      objectFit: "contain",
+                    }}
+                  />
+                </m.button>
+              );
+            })}
+          </div>
+          <p className="mt-2.5 text-[11px] text-ink-muted">
+            Tap a body to preview it. Nothing is saved yet.
+          </p>
+        </fieldset>
+
         <div>
           <p className="font-display text-base font-semibold text-ink">Colours</p>
           <p className="mt-0.5 text-[11px] text-ink-muted">

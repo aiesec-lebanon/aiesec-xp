@@ -13,7 +13,6 @@ const TABS = [
   { href: "/", label: "You" },
   { href: "/leaderboard", label: "Members" },
   { href: "/leaderboard/lcs", label: "LCs" },
-  { href: "/me", label: "History" },
 ] as const;
 
 export function Dock() {

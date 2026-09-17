@@ -6,7 +6,6 @@ import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, stageColour } from "@/lib/design/tokens";
 
 import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
-import { BrandMark, MemberPill } from "@/components/studio/chrome";
 import { Dock } from "@/components/studio/dock";
 import { GrowBar, Rise } from "@/components/studio/motion";
 
@@ -49,12 +48,7 @@ export default async function MePage({
 
   return (
     <main className="flex min-h-dvh flex-col bg-wall pb-10">
-      <div className="flex items-center justify-between gap-4 px-6 pt-8 sm:px-11">
-        <BrandMark />
-        <MemberPill name={user.fullName} />
-      </div>
-
-      <div className="px-6 pt-7 sm:px-16">
+      <div className="px-6 pt-8 sm:px-16">
         <h1 className="font-display text-[30px] font-semibold text-ink">Your history</h1>
         <p className="mt-1.5 text-sm text-ink-secondary">
           Every point explained — nothing here happens without a row below it.
@@ -174,7 +168,7 @@ export default async function MePage({
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 className="font-display text-xl font-semibold text-ink">Character lab</h2>
           <span className="text-xs text-ink-faint">
-            items stay fixed for now — only colour, and nothing is saved yet
+            pick a body and preview colours — nothing is saved yet
           </span>
         </div>
         <CharacterLab name={user.fullName} />

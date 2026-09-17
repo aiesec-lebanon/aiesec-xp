@@ -6,7 +6,6 @@ import { expaManagersByEp } from "@/lib/gis/expa-managers";
 import { importAssignments } from "@/lib/import/run-import";
 
 import { CharacterAvatar } from "@/components/studio/character";
-import { BrandMark } from "@/components/studio/chrome";
 import { Rise } from "@/components/studio/motion";
 
 import { AliasForm, ImportButtons, OverrideForm } from "./controls";
@@ -65,8 +64,7 @@ export default async function AssignmentsAdminPage({
 
   return (
     <main className="min-h-dvh bg-wall px-6 py-8 sm:px-11">
-      <div className="mb-7 flex items-center justify-between gap-4">
-        <BrandMark />
+      <div className="mb-7 flex items-center justify-end gap-4">
         <Link
           href="/"
           className="rounded-full bg-surface-raised px-4 py-2.5 text-[13px] font-medium text-ink-secondary shadow-e1 transition-colors hover:bg-surface-sunken"

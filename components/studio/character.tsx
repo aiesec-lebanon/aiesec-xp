@@ -27,6 +27,7 @@ export function Character({
   idle = "bob",
   priority = false,
   className = "",
+  srcOverride,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
@@ -35,11 +36,13 @@ export function Character({
   idle?: Idle;
   priority?: boolean;
   className?: string;
+  /** Renders this variant instead of the one `name` hashes to -- the character lab's preview carousel is the only caller. */
+  srcOverride?: string;
 }) {
   return (
     <Image
       data-model-slot="character"
-      src={characterFor(name)}
+      src={srcOverride ?? characterFor(name)}
       alt={`${name}'s character`}
       width={Math.round(height * 0.72)}
       height={height}

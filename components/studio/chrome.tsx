@@ -1,6 +1,8 @@
 import Link from "next/link";
 
-import { CharacterAvatar } from "./character";
+import type { CurrentUser } from "@/lib/auth/current-user";
+
+import { ProfileMenu } from "./profile-menu";
 
 export function BrandMark({ size = 30, type = 19 }: { size?: number; type?: number }) {
   return (
@@ -25,7 +27,7 @@ export function SignOutButton({ full = false }: { full?: boolean }) {
         className={
           full
             ? "w-full rounded-2xl bg-stage-apl px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-apl-ink"
-            : "rounded-full bg-surface-raised px-4 py-2.5 text-[13px] font-medium text-ink-secondary shadow-e1 transition-colors hover:bg-ink hover:text-surface"
+            : "rounded-full bg-surface-raised px-4 py-2.5 text-[13px] font-medium text-ink-secondary shadow-e1 transition-colors hover:bg-stage-apl hover:text-white"
         }
       >
         Sign out
@@ -34,49 +36,31 @@ export function SignOutButton({ full = false }: { full?: boolean }) {
   );
 }
 
-export function MemberPill({ name, short }: { name: string; short?: string }) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-full bg-surface-raised py-1.5 pl-2 pr-4 shadow-e1">
-      <CharacterAvatar name={name} size={26} rounded="rounded-full" tone="bg-re-wash" />
-      <span className="text-[13px] font-semibold text-ink">{short ?? name}</span>
-    </div>
-  );
-}
+/**
+ * The bar every member-facing screen opens with: the logo, the member's own
+ * console (history, and admin where it applies) behind the profile pill, and
+ * sign out. Rendered once from the root layout rather than per page, so it is
+ * never missing and never drifts between screens.
+ *
+ * Absent for a visitor with no session and for `DENIED`: neither has a
+ * console to open, and each of those screens carries its own sign-in or
+ * sign-out affordance already.
+ */
+export function Header({ user }: { user: CurrentUser | null }) {
+  if (!user || user.role === "DENIED") return null;
 
-/** The bar every member-facing screen opens with. */
-export function TopBar({
-  name,
-  short,
-  isAdmin = false,
-  aside,
-}: {
-  name?: string;
-  short?: string;
-  isAdmin?: boolean;
-  /** Replaces the member pill where a screen reports a count instead. */
-  aside?: React.ReactNode;
-}) {
   return (
-    <div className="z-10 flex items-center justify-between gap-4">
+    <header className="relative z-30 flex items-center justify-between gap-4 px-6 pt-8 sm:px-11">
       <BrandMark />
-      {aside ?? (
-        <div className="flex items-center gap-2.5">
-          {/* The dock carries the four member-facing sections and nothing else,
-              so the admin console hangs off the chrome instead of widening it
-              for a link most members would never see. */}
-          {isAdmin ? (
-            <Link
-              href="/admin/assignments"
-              className="rounded-full bg-surface-raised px-4 py-2.5 text-[13px] font-medium text-ink-secondary shadow-e1 transition-colors hover:bg-surface-sunken"
-            >
-              Admin
-            </Link>
-          ) : null}
-          {name ? <MemberPill name={name} short={short} /> : null}
-          <SignOutButton />
-        </div>
-      )}
-    </div>
+      <div className="flex items-center gap-2.5">
+        <ProfileMenu
+          name={user.fullName}
+          short={user.fullName.split(" ")[0] ?? user.fullName}
+          isAdmin={user.role === "ADMIN"}
+        />
+        <SignOutButton />
+      </div>
+    </header>
   );
 }
 
