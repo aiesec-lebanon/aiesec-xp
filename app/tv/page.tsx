@@ -72,7 +72,7 @@ export default async function TvPage() {
 
       <div className="grid min-h-0 flex-1 gap-[clamp(1rem,1.6vw,2rem)] px-[clamp(1.5rem,3vw,3.5rem)] pb-[clamp(1rem,2vh,2.25rem)] lg:grid-cols-[1fr_auto]">
         <section className="flex min-h-0 flex-col">
-          <h2 className="mb-[clamp(0.5rem,1vh,1.25rem)] shrink-0 text-[15px] font-bold uppercase tracking-[0.1em] text-ink">
+          <h2 className="mb-[clamp(0.5rem,1vh,1rem)] shrink-0 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
             Entities
           </h2>
           <ol className="flex min-h-0 flex-[3] flex-col gap-[clamp(0.4rem,0.9vh,0.875rem)]">
