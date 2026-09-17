@@ -5,7 +5,6 @@ import { db } from "@/lib/db";
 import { individualStandings } from "@/lib/leaderboard";
 
 import { CharacterAvatar } from "@/components/studio/character";
-import { BrandMark } from "@/components/studio/chrome";
 import { Dock } from "@/components/studio/dock";
 import { Lift, Rise } from "@/components/studio/motion";
 import { Podium, type PodiumPlace } from "@/components/studio/podium";
@@ -61,8 +60,7 @@ export default async function LeaderboardPage({
   return (
     <main className="relative flex min-h-dvh flex-col bg-wall">
       <div className="bg-surface pb-12">
-        <div className="flex items-center justify-between gap-4 px-6 pt-8 sm:px-11">
-          <BrandMark />
+        <div className="flex justify-end px-6 pt-8 sm:px-11">
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
             {standings.length} member{standings.length === 1 ? "" : "s"} · live
           </p>

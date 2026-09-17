@@ -6,7 +6,7 @@ import { STAGE, STAGE_TINT, TEXT } from "@/lib/design/tokens";
 import { Character, CharacterAvatar, ContactShadow } from "@/components/studio/character";
 import { Cyclorama } from "@/components/studio/cyclorama";
 import { Dock } from "@/components/studio/dock";
-import { TopBar, WindowLabel } from "@/components/studio/chrome";
+import { WindowLabel } from "@/components/studio/chrome";
 import { GhostNumber, Rise } from "@/components/studio/motion";
 import { StatChips, type Chip, type ChipEvent } from "@/components/studio/stat-chips";
 
@@ -144,12 +144,6 @@ export default async function HomePage() {
   return (
     <Cyclorama floor="30%" className="flex min-h-dvh flex-col">
       <div className="flex flex-1 flex-col gap-8 px-6 pb-8 pt-8 sm:px-11">
-        <TopBar
-          name={user.fullName}
-          short={firstName(user.fullName)}
-          isAdmin={user.role === "ADMIN"}
-        />
-
         {window ? (
           <Rise className="flex justify-center" delay={0.05}>
             <WindowLabel>

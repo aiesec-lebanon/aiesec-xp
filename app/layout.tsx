@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
+import { currentUser } from "@/lib/auth/current-user";
 import { MotionProvider } from "@/components/motion/motion-provider";
 import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
+import { Header } from "@/components/studio/chrome";
 import { typeSystem } from "@/lib/design/fonts";
 import { readReduceMotion } from "@/lib/design/motion-preference";
 
@@ -13,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const reduceMotion = await readReduceMotion();
+  const [reduceMotion, user] = await Promise.all([readReduceMotion(), currentUser()]);
 
   return (
     <html
@@ -24,28 +26,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-surface">
         <MotionProvider reduceMotion={reduceMotion}>
+          <Header user={user} />
           <div className="flex min-h-full flex-1 flex-col">{children}</div>
-          {/*
-            D-46 asks for this control on every page, including before sign-in,
-            so it lives in the root layout rather than on a settings screen. It
-            is pinned to the corner opposite the dock: /me states the same switch
-            at full size in the designed row, and both read one cookie, so a
-            member who finds either finds the setting.
-          */}
-          <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col items-end gap-1.5">
+          {/* <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col items-end gap-1.5">
             <div className="pointer-events-auto rounded-full bg-surface-raised px-3.5 py-2 shadow-e1">
               <ReduceMotionToggle />
             </div>
-            {/*
-              Game Icons ships under CC BY 3.0, which requires the credit to be
-              reachable from the product rather than only from ATTRIBUTIONS.md.
-              Now that the stage icons render on member-facing screens and not
-              just /lab, this line is the thing that satisfies it.
-            */}
             <p className="pointer-events-auto text-[10px] text-ink-faint">
               Icons by game-icons.net, CC BY 3.0
             </p>
-          </div>
+          </div> */}
         </MotionProvider>
       </body>
     </html>
