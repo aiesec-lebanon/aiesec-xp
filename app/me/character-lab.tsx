@@ -1,7 +1,7 @@
 "use client";
 
 import { m } from "motion/react";
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
 import { ContactShadow } from "@/components/studio/character";
@@ -35,10 +35,19 @@ export function CharacterLab({
       0,
     ),
   );
+  // The colour each part is drawn with, reported by the model once it loads.
+  // It is the default a member starts on, so nobody has to pick anything to end
+  // up with a body that looks right.
+  const [authored, setAuthored] = useState<Partial<Record<CharacterPart, string>>>({});
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [pending, startTransition] = useTransition();
   const reduceMotion = useReduceMotion();
   const character = CHARACTERS[bodyIndex]!;
+
+  const onAuthoredColours = useCallback(
+    (next: Partial<Record<CharacterPart, string>>) => setAuthored(next),
+    [],
+  );
 
   const step = (by: number) => {
     setBodyIndex((current) => (current + by + CHARACTERS.length) % CHARACTERS.length);
@@ -86,7 +95,14 @@ export function CharacterLab({
         <StepButton side="right" onClick={() => step(1)} reduceMotion={reduceMotion} />
 
         <div className="relative z-10 flex flex-col items-center pb-9">
-          <CharacterStage id={character.id} name={name} height={430} colours={colours} eager />
+          <CharacterStage
+            id={character.id}
+            name={name}
+            height={430}
+            colours={colours}
+            onAuthoredColours={onAuthoredColours}
+            eager
+          />
           <ContactShadow width={210} height={20} className="-mt-1" />
         </div>
 
@@ -110,33 +126,51 @@ export function CharacterLab({
         <div>
           <p className="font-display text-base font-semibold text-ink">Colours</p>
           <p className="mt-0.5 text-[11px] text-ink-muted">
-            Tap a swatch to repaint that part. Tap it again to put it back.
+            Each part starts on the colour it was drawn with. Tap a swatch to
+            change it, or the first one to go back.
           </p>
         </div>
 
         {CHARACTER_PARTS.map((part) => {
           const chosen = colours[part];
+          const original = authored[part];
+          const showing = chosen ?? original;
           return (
             <fieldset key={part} className="border-0 p-0">
               <div className="mb-2.5 flex items-center justify-between">
                 <legend className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-muted">
                   {PART_LABELS[part]}
                 </legend>
-                {chosen ? (
+                {showing ? (
                   <span
                     aria-hidden
                     className="size-4 rounded-full transition-all duration-250"
                     style={{
-                      background: chosen,
-                      boxShadow: `0 0 0 2px var(--surface-base), 0 0 0 3px ${chosen}`,
+                      background: showing,
+                      boxShadow: `0 0 0 2px var(--surface-base), 0 0 0 3px ${showing}`,
                     }}
                   />
-                ) : (
-                  <span className="text-[10px] text-ink-faint">As drawn</span>
-                )}
+                ) : null}
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
+                {original ? (
+                  <m.button
+                    type="button"
+                    aria-label={`${PART_LABELS[part]}: original`}
+                    aria-pressed={chosen === undefined}
+                    title="The colour this character was drawn with"
+                    whileHover={reduceMotion ? undefined : { scale: 1.18 }}
+                    whileTap={reduceMotion ? undefined : { scale: 0.92 }}
+                    transition={{ type: "spring", stiffness: 520, damping: 18 }}
+                    onClick={() => choose(part, undefined)}
+                    className={`size-6.5 rounded-full border-2 ${
+                      chosen === undefined ? "border-ink" : "border-transparent"
+                    }`}
+                    style={{ background: original, boxShadow: "inset 0 0 0 1px var(--surface-line)" }}
+                  />
+                ) : null}
+
                 {PART_SWATCHES[part].map((colour) => {
                   const isChosen = chosen?.toUpperCase() === colour.toUpperCase();
                   return (
