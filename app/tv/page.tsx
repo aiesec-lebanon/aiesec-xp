@@ -37,6 +37,8 @@ export default async function TvPage() {
   return (
     <main className="flex min-h-dvh flex-col bg-wall">
       <header className="flex items-center justify-between gap-6 px-14 py-7">
+        {/* Already a link home, which is the only way off this screen now that
+            it carries no chrome. */}
         <BrandMark size={38} type={26} />
         <div className="flex items-center gap-3.5">
           <span
