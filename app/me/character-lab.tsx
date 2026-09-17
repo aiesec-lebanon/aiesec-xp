@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { CharacterAvatar } from "@/components/studio/character";
 import { CharacterCarousel, useCharacterChoice } from "@/components/studio/character-picker";
 import { saveCharacter } from "@/lib/design/avatar-actions";
+import type { CharacterBeat } from "@/lib/design/character";
 
 type Status = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
 
@@ -19,11 +20,21 @@ export function CharacterLab({
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [pending, startTransition] = useTransition();
 
+  const [beat, setBeat] = useState<CharacterBeat | null>(null);
+
+  // Back to null, so saving a second time is a second nod rather than nothing.
+  useEffect(() => {
+    if (!beat) return;
+    const timer = setTimeout(() => setBeat(null), 2600);
+    return () => clearTimeout(timer);
+  }, [beat]);
+
   const save = () => {
     setStatus({ kind: "saving" });
     startTransition(async () => {
       const result = await saveCharacter({ character: character.id });
       setStatus(result.ok ? { kind: "saved" } : { kind: "error", message: result.error });
+      if (result.ok) setBeat("acknowledge");
     });
   };
 
@@ -35,8 +46,10 @@ export function CharacterLab({
         step={(by) => {
           step(by);
           setStatus({ kind: "idle" });
+          setBeat(null);
         }}
         walkDirection={walkDirection}
+        beat={beat}
       />
 
       <div className="flex w-full flex-none flex-col gap-6 border-surface-sunken bg-surface p-7 lg:w-70 lg:border-l">

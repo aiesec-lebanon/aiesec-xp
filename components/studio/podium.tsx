@@ -1,4 +1,7 @@
+"use client";
+
 import { Character, ContactShadow } from "./character";
+import { beatFor, facingFor, useGroupExchange } from "./group-exchange";
 import { Rise } from "./motion";
 
 // The top three, standing rather than listed. Height is the ranking: the winner
@@ -34,7 +37,14 @@ export function Crown() {
   );
 }
 
+// Where each rank stands on screen, which is not the order the data arrives in:
+// second is laid out to the left of first, third to its right.
+const COLUMN: Record<1 | 2 | 3, number> = { 1: 0, 2: -1, 3: 1 };
+
 export function Podium({ places }: { places: PodiumPlace[] }) {
+  const exchange = useGroupExchange(places.length);
+  const columnOf = (index: number) => COLUMN[places[index]!.rank];
+
   return (
     <ol className="flex flex-wrap items-end justify-center gap-8 sm:gap-16">
       {places.map((place, index) => {
@@ -59,7 +69,13 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
                 idle={first ? "bob" : "small"}
                 idOverride={place.characterId}
                 stage
+                social
                 mood="celebrate"
+                // Second and third turn in towards the winner rather than all
+                // three standing square to camera -- and towards whoever is
+                // talking to them when the group has something to say.
+                facing={facingFor(exchange, index, columnOf)}
+                beat={beatFor(exchange, index)}
               />
             </div>
 

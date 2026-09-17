@@ -10,6 +10,7 @@ import {
   LoopOnce,
   LoopRepeat,
   Mesh,
+  MathUtils,
   Vector3,
   type AnimationAction,
 } from "three";
@@ -19,6 +20,7 @@ import { useReduceMotion } from "@/components/motion/motion-provider";
 import {
   ANIMATION_LIBRARY,
   CLIPS,
+  SOCIAL_LIBRARY,
   characterModelPath,
   type CharacterMood,
 } from "@/lib/design/character";
@@ -30,16 +32,20 @@ export type CharacterModelProps = {
   id: string;
   mood?: CharacterMood;
   phase?: CharacterPhase;
-  /** Which way the walk heads: the side of the arrow the member pressed. */
   direction?: 1 | -1;
-  /** How far off-centre the frame edge is, in world units. */
   exitDistance?: number;
-  /** Seconds the walk across the frame gets. */
   travelSeconds?: number;
-  /** Share of the frame's height the body fills. */
   heightFraction?: number;
-  /** Where the floor sits, as a share of the frame's height from its bottom. */
   floorFraction?: number;
+  /** Radians of yaw while standing, so a group can face inwards. */
+  facing?: number;
+  /** Load the social clips too. Only the surfaces that use them pay for them. */
+  social?: boolean;
+  /**
+   * A clip to play once because something happened. Changing this is the whole
+   * trigger, so a surface bumps it rather than calling into the body.
+   */
+  beat?: string | null;
 };
 
 // What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back. fov
@@ -48,20 +54,28 @@ export const FRAME_HEIGHT = 2 * 6 * Math.tan((42 * Math.PI) / 360);
 
 const CROSSFADE = 0.35;
 const DWELL = { min: 5, max: 11 };
-/** How often an idle change is a wave instead of another idle. */
 const GREET_CHANCE = 0.25;
+/** Seconds the walk takes to get going, and to come to a halt. */
+const START = 0.42;
+const STOP = 0.5;
 
 function pick<T>(from: readonly T[], not?: T): T {
   const options = from.length > 1 && not !== undefined ? from.filter((v) => v !== not) : from;
   return options[Math.floor(Math.random() * options.length)]!;
 }
 
+function poolFor(mood: CharacterMood): readonly string[] {
+  if (mood === "celebrate") return CLIPS.celebrate;
+  if (mood === "empty") return CLIPS.idleEmpty;
+  if (mood === "calm") return CLIPS.idleCalm;
+  return CLIPS.idle;
+}
+
 /**
  * Drop tracks that address a bone this character does not have.
  *
  * Juno was auto-rigged onto the 33-bone skeleton, which is the 65-bone one minus
- * fingers, so the clips carry finger tracks she has no target for. three warns
- * once per track per clip otherwise, which is hundreds of lines.
+ * fingers, so the clips carry finger tracks she has no target for.
  */
 function bindable(clip: AnimationClip, names: Set<string>): AnimationClip {
   const tracks = clip.tracks.filter((track) => names.has(track.name.split(".")[0] ?? ""));
@@ -80,9 +94,13 @@ export function CharacterModel({
   travelSeconds = 0.9,
   heightFraction = 0.9,
   floorFraction = 0.02,
+  facing = 0,
+  social = false,
+  beat = null,
 }: CharacterModelProps) {
   const { scene } = useModel(characterModelPath(id));
-  const library = useModel(characterModelPath(ANIMATION_LIBRARY));
+  const core = useModel(characterModelPath(ANIMATION_LIBRARY));
+  const extra = useModel(characterModelPath(social ? SOCIAL_LIBRARY : ANIMATION_LIBRARY));
   const reduceMotion = useReduceMotion();
   const invalidate = useThree((state) => state.invalidate);
 
@@ -92,6 +110,7 @@ export function CharacterModel({
   const active = useRef<AnimationAction | null>(null);
   const nextChange = useRef(0);
   const elapsed = useRef(0);
+  const legPhase = useRef<"start" | "cruise" | "stop">("start");
 
   const body = useMemo(() => {
     const copy = cloneSkinned(scene);
@@ -103,9 +122,6 @@ export function CharacterModel({
     return copy;
   }, [scene]);
 
-  // The export normalises every character to 1.5m with its feet on the floor and
-  // freezes the transform into the data (D-53), so the bind pose measures the
-  // same for all four and this scale is stable.
   const fit = useMemo(() => {
     const box = new Box3().setFromObject(body);
     const size = box.getSize(new Vector3());
@@ -124,7 +140,8 @@ export function CharacterModel({
 
     const next = new AnimationMixer(body);
     const table = new Map<string, AnimationAction>();
-    for (const clip of library.animations as AnimationClip[]) {
+    for (const clip of [...core.animations, ...extra.animations] as AnimationClip[]) {
+      if (table.has(clip.name)) continue;
       table.set(clip.name, next.clipAction(bindable(clip, bones)));
     }
     mixer.current = next;
@@ -134,9 +151,12 @@ export function CharacterModel({
       next.stopAllAction();
       mixer.current = null;
     };
-  }, [body, library]);
+  }, [body, core, extra]);
 
-  const play = (name: string, { once = false, fade = CROSSFADE, speed = 1 } = {}) => {
+  const play = (
+    name: string,
+    { once = false, fade = CROSSFADE, speed = 1, offset = 0 } = {},
+  ) => {
     const action = actions.current.get(name);
     if (!action || action === active.current) return;
 
@@ -144,33 +164,59 @@ export function CharacterModel({
     action.setEffectiveTimeScale(speed);
     action.setLoop(once ? LoopOnce : LoopRepeat, once ? 1 : Infinity);
     action.clampWhenFinished = once;
+    // Starting part-way in is what stops a row of characters moving as one body:
+    // three identical clips begun on the same frame stay locked together forever.
+    if (offset) action.time = offset % action.getClip().duration;
     if (active.current) action.crossFadeFrom(active.current, fade, true);
     action.play();
     active.current = action;
+  };
+
+  const settle = (fade = 0.3) => {
+    const clip = pick(poolFor(mood));
+    const duration = actions.current.get(clip)?.getClip().duration ?? 4;
+    play(clip, { fade, offset: Math.random() * duration, speed: 0.94 + Math.random() * 0.12 });
+    // A random first interval too, or every body in a group changes on the same beat.
+    nextChange.current = Math.random() * DWELL.max;
   };
 
   useEffect(() => {
     if (!mixer.current) return;
     elapsed.current = 0;
 
-    if (phase !== "settled") {
-      play(CLIPS.walk, { fade: 0.2 });
+    if (phase === "leaving") {
+      legPhase.current = "start";
+      const start = actions.current.get(CLIPS.walkStart);
+      play(CLIPS.walkStart, {
+        once: true,
+        fade: 0.18,
+        speed: start ? start.getClip().duration / START : 1,
+      });
+      return;
+    }
+    if (phase === "arriving") {
+      legPhase.current = "cruise";
+      play(CLIPS.walk, { fade: 0.12 });
       return;
     }
 
-    const pool = mood === "celebrate" ? CLIPS.celebrate : CLIPS.idle;
-    play(pick(pool), { fade: 0.25 });
-    nextChange.current = DWELL.min + Math.random() * (DWELL.max - DWELL.min);
-  }, [phase, direction, mood, body, library]);
+    settle(0.25);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, direction, mood, body, core, extra]);
 
-  // A member who asked for less motion puts the canvas on `demand`, where
-  // useFrame never runs -- so the pose has to be written once here, or the body
-  // renders in the T-pose it was bound in.
+  useEffect(() => {
+    if (!beat || !mixer.current || phase !== "settled" || reduceMotion) return;
+    play(beat, { once: true, fade: 0.2 });
+    // Hold the idle picker off until the beat has played out, or the next frame
+    // whose dwell has expired cuts it short.
+    nextChange.current = actions.current.get(beat)?.getClip().duration ?? 2;
+  }, [beat, phase, reduceMotion, body, core, extra]);
+
   useEffect(() => {
     if (!reduceMotion || !mixer.current) return;
     mixer.current.update(0);
     invalidate();
-  }, [reduceMotion, invalidate, phase, mood, body, library]);
+  }, [reduceMotion, invalidate, phase, mood, body, core, extra]);
 
   useFrame((_, delta) => {
     const node = group.current;
@@ -183,11 +229,13 @@ export function CharacterModel({
     mixer.current.update(delta);
 
     if (phase === "settled") {
+      node.rotation.y = MathUtils.damp(node.rotation.y, facing, 3.2, delta);
       nextChange.current -= delta;
       if (nextChange.current <= 0) {
-        const pool = mood === "celebrate" ? CLIPS.celebrate : CLIPS.idle;
-        const greet = mood === "idle" && Math.random() < GREET_CHANCE;
-        const name = greet ? pick(CLIPS.greet) : pick(pool, active.current?.getClip().name);
+        const greet = (mood === "idle" || mood === "calm") && Math.random() < GREET_CHANCE;
+        const name = greet
+          ? pick(CLIPS.greet)
+          : pick(poolFor(mood), active.current?.getClip().name);
         play(name, { once: greet });
         nextChange.current = greet
           ? (actions.current.get(name)?.getClip().duration ?? 2)
@@ -196,18 +244,39 @@ export function CharacterModel({
       return;
     }
 
-    // Linear on both legs: a walk that eases is a walk that slows down for no
-    // reason. Leaving runs centre to edge, arriving runs the far edge to centre,
-    // both heading the same way, so the two read as one body passing through.
-    elapsed.current = Math.min(1, elapsed.current + delta / travelSeconds);
-    const travelled = phase === "leaving" ? elapsed.current : elapsed.current - 1;
-    node.position.x = fit.position[0] + direction * exitDistance * travelled;
+    elapsed.current += delta;
+    const t = Math.min(1, elapsed.current / travelSeconds);
+
+    if (phase === "leaving") {
+      if (legPhase.current === "start" && elapsed.current >= START) {
+        legPhase.current = "cruise";
+        play(CLIPS.walk, { fade: 0.22 });
+      }
+      // Eased out of standing, then a constant pace: a walk that eases the whole
+      // way is a walk that never commits.
+      const eased = t < 0.3 ? (t / 0.3) ** 2 * 0.3 : t;
+      node.position.x = fit.position[0] + direction * exitDistance * eased;
+      return;
+    }
+
+    const remaining = travelSeconds - elapsed.current;
+    if (legPhase.current === "cruise" && remaining <= STOP) {
+      legPhase.current = "stop";
+      const stop = actions.current.get(CLIPS.walkStop);
+      play(CLIPS.walkStop, {
+        once: true,
+        fade: 0.18,
+        speed: stop ? stop.getClip().duration / STOP : 1,
+      });
+    }
+    const eased = t > 0.7 ? 0.7 + (1 - (1 - (t - 0.7) / 0.3) ** 2) * 0.3 : t;
+    node.position.x = fit.position[0] + direction * exitDistance * (eased - 1);
   });
 
   const walking = phase !== "settled" && !reduceMotion;
   // The bodies are exported facing +Z, so a quarter turn puts them in profile,
   // walking the way they are travelling.
-  const facing = walking ? (direction * Math.PI) / 2 : 0;
+  const heading = walking ? (direction * Math.PI) / 2 : facing;
   const start = phase === "arriving" && walking ? -direction * exitDistance : 0;
 
   return (
@@ -215,7 +284,7 @@ export function CharacterModel({
       ref={group}
       position={[fit.position[0] + start, fit.position[1], fit.position[2]]}
       scale={fit.scale}
-      rotation={[0, facing, 0]}
+      rotation={[0, heading, 0]}
     >
       <primitive object={body} />
     </group>
