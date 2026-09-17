@@ -83,7 +83,11 @@ export const CLIPS = {
   greet: ["wave"],
   /** For a leaderboard, where every body on screen has something to celebrate. */
   celebrate: ["cheer", "cheer-2", "clap", "rally", "victory"],
-  /** Carries a character on and off when the member steps through them. */
+  /**
+   * In the library but unplayed. The picker used to walk a character off the
+   * frame while the next walked in; choosing a character is not a journey, and
+   * a swap caught mid-stride left the body stranded at the edge of the canvas.
+   */
   walk: "walk",
   walkStart: "walk-start",
   walkStop: "walk-stop",

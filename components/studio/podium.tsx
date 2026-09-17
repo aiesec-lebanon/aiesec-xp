@@ -18,10 +18,14 @@ export type PodiumPlace = {
 };
 
 const FORM = {
-  1: { body: 280, frame: 310, card: 200, shadow: 220, order: "order-1 sm:order-2" },
-  2: { body: 230, frame: 250, card: 170, shadow: 190, order: "order-2 sm:order-1" },
-  3: { body: 212, frame: 230, card: 170, shadow: 180, order: "order-3" },
+  1: { body: 350, frame: 360, card: 200, shadow: 220, order: "order-1 sm:order-2" },
+  2: { body: 288, frame: 296, card: 170, shadow: 190, order: "order-2 sm:order-1" },
+  3: { body: 265, frame: 273, card: 170, shadow: 180, order: "order-3" },
 } as const;
+
+// A cheer puts the hands a long way above standing height, and the fit measures
+// the bind pose -- at 0.9 the winner was photographed with her head cropped off.
+const BODY_IN_FRAME = 0.72;
 
 export function Crown() {
   return (
@@ -70,6 +74,7 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
                 idOverride={place.characterId}
                 stage
                 social
+                heightFraction={BODY_IN_FRAME}
                 mood="celebrate"
                 // Second and third turn in towards the winner rather than all
                 // three standing square to camera -- and towards whoever is
