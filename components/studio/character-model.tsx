@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { Box3, Color, Mesh, MeshStandardMaterial, Vector3 } from "three";
+import { Box3, Color, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh, Vector3 } from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 import {
@@ -22,15 +22,55 @@ function partOf(materialName: string): CharacterPart | undefined {
   return part;
 }
 
+/**
+ * The bounds of the body as it is actually posed.
+ *
+ * Box3.setFromObject reads a skinned mesh's geometry, which is still the bind
+ * pose the rig was authored in -- it does not see the skeleton at all. Measuring
+ * that way gave each character a different, wrong height, which is why they
+ * rendered at inconsistent sizes.
+ */
+function posedBounds(root: Object3D): Box3 {
+  const box = new Box3();
+  const point = new Vector3();
+  root.updateWorldMatrix(true, true);
+
+  let skinned = false;
+  root.traverse((node) => {
+    if (node instanceof SkinnedMesh) {
+      skinned = true;
+      const position = node.geometry.attributes.position;
+      for (let i = 0; i < position.count; i += 1) {
+        point.fromBufferAttribute(position, i);
+        node.applyBoneTransform(i, point);
+        box.expandByPoint(node.localToWorld(point));
+      }
+    } else if (node instanceof Mesh) {
+      box.expandByObject(node);
+    }
+  });
+
+  return skinned ? box : new Box3().setFromObject(root);
+}
+
 export type CharacterModelProps = {
   /** Which of the four bodies, from `characterFor(name)`. */
   id: string;
   colours?: CharacterColours;
-  /** Rendered height in world units; the model's own proportions set the width. */
+  /** Rendered height in world units. Defaults to most of the frame. */
   height?: number;
 };
 
-export function CharacterModel({ id, colours, height = 2.4 }: CharacterModelProps) {
+// What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back.
+// fov is vertical, so a body given a share of this fills that same share of the
+// canvas at any pixel size.
+const FRAME_HEIGHT = 2 * 6 * Math.tan((42 * Math.PI) / 360);
+
+export function CharacterModel({
+  id,
+  colours,
+  height = FRAME_HEIGHT * 0.9,
+}: CharacterModelProps) {
   const { scene } = useModel(characterModelPath(id));
 
   // A skinned mesh cannot be shared between two places in the graph, and its
@@ -49,15 +89,18 @@ export function CharacterModel({ id, colours, height = 2.4 }: CharacterModelProp
   }, [scene]);
 
   // Authoring offsets and proportions differ per character, so the body is
-  // measured rather than trusted to arrive at a known size.
+  // measured rather than trusted to arrive at a known size. Its feet land just
+  // above the bottom of the frame, which is where the DOM draws the contact
+  // shadow; centring it instead left the body floating above its own shadow.
   const fit = useMemo(() => {
-    const box = new Box3().setFromObject(body);
+    const box = posedBounds(body);
     const size = box.getSize(new Vector3());
     const centre = box.getCenter(new Vector3());
     const scale = size.y > 0 ? height / size.y : 1;
+    const floor = -FRAME_HEIGHT / 2 + FRAME_HEIGHT * 0.02;
     return {
       scale,
-      position: [-centre.x * scale, -centre.y * scale, -centre.z * scale] as const,
+      position: [-centre.x * scale, floor - box.min.y * scale, -centre.z * scale] as const,
     };
   }, [body, height]);
 

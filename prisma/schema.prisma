@@ -48,8 +48,31 @@ model Member {
   managerAliases ManagerAlias[]
   ledgerEntries ScoreLedgerEntry[]
   rewardGrants  RewardGrant[]
+  avatar        MemberAvatar?
 
   @@index([scoringOfficeId])
+}
+
+// The member's chosen body and its colours (D-50, closes O-14).
+//
+// A table of its own rather than columns on Member, because Member is the GIS
+// sync projection: its `lastSyncedAt` is `@updatedAt` and means "when GIS last
+// confirmed this person", so saving an avatar there would keep reporting a sync
+// that never happened.
+//
+// A null colour means the part keeps the colour it was authored with, which is
+// not the same as any hex a member could pick.
+model MemberAvatar {
+  memberId  BigInt   @id
+  character String
+  skin      String?
+  hair      String?
+  shirt     String?
+  trouser   String?
+  shoe      String?
+  updatedAt DateTime @updatedAt
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 }
 
 model Position {

@@ -4,6 +4,7 @@ import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, TEXT } from "@/lib/design/tokens";
 
 import { Character, CharacterAvatar, ContactShadow } from "@/components/studio/character";
+import { memberAvatar } from "@/lib/design/avatar";
 import { Cyclorama } from "@/components/studio/cyclorama";
 import { Dock } from "@/components/studio/dock";
 import { WindowLabel } from "@/components/studio/chrome";
@@ -43,7 +44,11 @@ function firstName(full: string): string {
 
 export default async function HomePage() {
   const user = await requireMemberPage("/");
-  const [progress, window] = await Promise.all([personalProgress(user.id), activeWindow()]);
+  const [progress, window, avatar] = await Promise.all([
+    personalProgress(user.id),
+    activeWindow(),
+    memberAvatar(user.id, user.fullName),
+  ]);
 
   const standing = progress.standing;
   const points = standing?.points ?? 0;
@@ -183,7 +188,14 @@ export default async function HomePage() {
             </Rise>
 
             <div className="relative order-first flex flex-col items-center lg:order-none">
-              <Character name={user.fullName} height={440} priority stage />
+              <Character
+                name={user.fullName}
+                height={440}
+                priority
+                stage
+                idOverride={avatar.character}
+                colours={avatar.colours}
+              />
               <ContactShadow width={300} height={52} className="-mt-3.5" />
             </div>
 
