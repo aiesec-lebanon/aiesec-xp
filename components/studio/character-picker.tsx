@@ -16,16 +16,16 @@ export function useCharacterChoice(initialCharacter: string) {
       0,
     ),
   );
-  // Which way the last step went, so the new body arrives from the side the
-  // member reached towards and the old one leaves the other way.
-  const [enterFrom, setEnterFrom] = useState<1 | -1>(1);
+  // The arrow the member pressed is the way the walk goes: the one on stage
+  // leaves that way, and the next follows it in from the far side.
+  const [walkDirection, setWalkDirection] = useState<1 | -1>(1);
 
   const step = (by: number) => {
     setIndex((current) => (current + by + CHARACTERS.length) % CHARACTERS.length);
-    setEnterFrom(by > 0 ? 1 : -1);
+    setWalkDirection(by > 0 ? 1 : -1);
   };
 
-  return { character: CHARACTERS[index]!, index, step, enterFrom };
+  return { character: CHARACTERS[index]!, index, step, walkDirection };
 }
 
 /** The set: a body on the cyclorama, an arrow either side, and its name. */
@@ -33,13 +33,13 @@ export function CharacterCarousel({
   memberName,
   index,
   step,
-  enterFrom,
+  walkDirection,
   height = 430,
 }: {
   memberName: string;
   index: number;
   step: (by: number) => void;
-  enterFrom: 1 | -1;
+  walkDirection: 1 | -1;
   height?: number;
 }) {
   const reduceMotion = useReduceMotion();
@@ -74,7 +74,7 @@ export function CharacterCarousel({
         name={memberName}
         height={height}
         interactive
-        enterFrom={enterFrom}
+        walkDirection={walkDirection}
         fill
         heightFraction={0.62}
         floorFraction={0.2}

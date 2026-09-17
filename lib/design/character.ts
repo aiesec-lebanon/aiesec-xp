@@ -69,9 +69,8 @@ export const CLIPS = {
   greet: ["wave"],
   /** For a leaderboard, where every body on screen has something to celebrate. */
   celebrate: ["cheer", "cheer-2", "clap", "rally", "victory"],
-  walkLeft: "walk-left",
-  walkRight: "walk-right",
-  jump: "jump",
+  /** Carries a character on and off when the member steps through them. */
+  walk: "walk",
 } as const;
 
 export type CharacterMood = "idle" | "celebrate";

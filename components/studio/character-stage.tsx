@@ -12,11 +12,9 @@ import { characterStillPath, type CharacterMood } from "@/lib/design/character";
 
 import { CharacterModel } from "./character-model";
 
-/** How fast a body walks off, in world units a second. */
+/** How fast a body walks, in world units a second. */
 const WALK_SPEED = 4.2;
 const WALK_BOUNDS = { min: 0.7, max: 1.7 };
-/** Seconds the next body gets to land. The jump clip is stretched to fit it. */
-const LAND = 1.2;
 
 export type CharacterStageProps = {
   id: string;
@@ -27,8 +25,8 @@ export type CharacterStageProps = {
   eager?: boolean;
   /** Let the member turn the body. For the lab, not for a dashboard. */
   interactive?: boolean;
-  /** Which side the walk-off heads for. */
-  enterFrom?: 1 | -1;
+  /** Which way the walk heads: the side of the arrow the member pressed. */
+  walkDirection?: 1 | -1;
   /**
    * Fill the parent instead of a portrait box. A character that walks off has to
    * leave *the frame the member can see*, and a 310px box inside a wide panel
@@ -47,7 +45,7 @@ export function CharacterStage({
   mood = "idle",
   eager = false,
   interactive = false,
-  enterFrom = 1,
+  walkDirection = 1,
   fill = false,
   heightFraction,
   floorFraction,
@@ -86,7 +84,7 @@ export function CharacterStage({
         <Swap
           id={id}
           mood={mood}
-          enterFrom={enterFrom}
+          walkDirection={walkDirection}
           heightFraction={heightFraction}
           floorFraction={floorFraction}
         />
@@ -114,8 +112,8 @@ type Stage =
   | { kind: "arriving"; id: string };
 
 /**
- * One body on stage at a time: the outgoing character walks clear of the frame,
- * and only then does the next land in its place.
+ * One body on stage at a time: the outgoing character walks clear of the frame
+ * the way the arrow pointed, and the next walks in from the far side after it.
  *
  * Overlapping the two read as a collision, and it also meant both models were
  * mounted at once -- so a character whose file had not finished loading took the
@@ -124,13 +122,13 @@ type Stage =
 function Swap({
   id,
   mood,
-  enterFrom,
+  walkDirection,
   heightFraction,
   floorFraction,
 }: {
   id: string;
   mood: CharacterMood;
-  enterFrom: 1 | -1;
+  walkDirection: 1 | -1;
   heightFraction?: number;
   floorFraction?: number;
 }) {
@@ -160,7 +158,7 @@ function Swap({
 
   useEffect(() => {
     if (stage.kind === "settled") return;
-    const hold = stage.kind === "leaving" ? walkSeconds : LAND;
+    const hold = walkSeconds;
     const timer = setTimeout(
       () =>
         setStage((current) =>
@@ -179,9 +177,9 @@ function Swap({
       id={stage.id}
       mood={mood}
       phase={stage.kind}
-      direction={(-enterFrom) as 1 | -1}
+      direction={walkDirection}
       exitDistance={exitDistance}
-      travelSeconds={stage.kind === "leaving" ? walkSeconds : LAND}
+      travelSeconds={walkSeconds}
       heightFraction={heightFraction}
       floorFraction={floorFraction}
     />

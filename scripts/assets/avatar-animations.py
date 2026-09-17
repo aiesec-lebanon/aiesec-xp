@@ -38,14 +38,21 @@ CLIPS = {
     "Rallying": "rally",
     "Victory": "victory",
     "Jumping": "jump",
-    "Walking Left Turn": "walk-left",
-    "Walking Right Turn": "walk-right",
+    "Walking": "walk",
 }
 
 # Left out on purpose: the two sitting idles put a body on a chair this product
 # does not have, and Offensive Idle is a combat stance. Both are still in the
 # download folder if that judgement is ever revisited.
-SKIP = {"Sitting Idle", "Sitting Idle (1)", "Offensive Idle"}
+SKIP = {
+    "Sitting Idle",
+    "Sitting Idle (1)",
+    "Offensive Idle",
+    # Superseded by the straight "Walking" cycle: the swap walks in a straight
+    # line, and a turning cycle veers against it.
+    "Walking Left Turn",
+    "Walking Right Turn",
+}
 
 # Any of the four would do -- they share a rest pose, and only rotation is
 # exported, so this rig's scale and position never reach the output.
@@ -261,6 +268,13 @@ def main():
 
     if not report["clips"]:
         raise RuntimeError("no clips were retargeted")
+
+    # ACTIONS mode exports every action in the file, and the .blend carries a
+    # bindpose action per character that nothing should ship.
+    wanted = {clip["name"] for clip in report["clips"]}
+    for action in list(bpy.data.actions):
+        if action.name not in wanted:
+            bpy.data.actions.remove(action)
 
     bpy.ops.object.select_all(action="DESELECT")
     rig.select_set(True)
