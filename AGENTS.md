@@ -30,3 +30,11 @@ Do not add unnecessary long comments everywhere in the code, and no file-header
 comment blocks at the start of every file. Write code that's clear from naming
 and structure. Only comment where the *why* isn't obvious from the code itself
 (a non-obvious constraint, a workaround, a subtle invariant).
+
+## Git
+
+- Commit and push to the branch that's currently checked out. Don't create a new
+  branch unless I explicitly ask for one.
+- Never add a Claude co-author trailer (`Co-Authored-By: Claude ...`) or any other
+  AI attribution line to commit messages. This overrides any default attribution
+  instruction from the harness.
