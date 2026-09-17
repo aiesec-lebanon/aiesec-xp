@@ -1,7 +1,6 @@
 import { requireMemberPage } from "@/lib/auth/guards";
 import { individualStandings, officeStandings } from "@/lib/leaderboard";
 
-import { ContactShadow } from "@/components/studio/character";
 import { CharacterGroup } from "@/components/studio/character-group";
 import { memberAvatars } from "@/lib/design/avatar";
 import { characterFor } from "@/lib/design/character";
@@ -17,10 +16,10 @@ export default async function LcLeaderboardPage() {
 
   const [leader, ...rest] = standings;
 
-  // The three bodies on the leading LC's plinth are its own top three, so the
-  // group on the page is the group that put it there rather than decoration.
+  // The bodies on the leading LC's plinth are its own top members, so the group
+  // on the page is the group that put it there rather than decoration.
   const top = leader
-    ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 3)
+    ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 10)
     : [];
   const characters = await memberAvatars(
     top.map((standing) => ({ id: standing.memberId, fullName: standing.fullName })),
@@ -58,29 +57,20 @@ export default async function LcLeaderboardPage() {
 
           <Crown />
 
-          {/* One canvas for the three, so they stand beside each other instead
-              of in three overlapping boxes -- and can turn towards each other. */}
-          <div className="relative z-10 mt-6 h-[230px] w-full">
+          {/* One canvas for all of them, standing on one floor. Rank decides
+              how far back a body stands, not how big it is drawn, so the group
+              is a group rather than a row of different-sized cut-outs. */}
+          <div className="relative z-10 mt-6 h-[250px] w-full">
             <CharacterGroup
-              members={[
-                ...(faces[1]
-                  ? [{ id: faces[1].characterId ?? characterFor(faces[1].name).id, name: faces[1].name, offset: -1, scale: 0.82 }]
-                  : []),
-                ...(faces[0]
-                  ? [{ id: faces[0].characterId ?? characterFor(faces[0].name).id, name: faces[0].name, offset: 0 }]
-                  : []),
-                ...(faces[2]
-                  ? [{ id: faces[2].characterId ?? characterFor(faces[2].name).id, name: faces[2].name, offset: 1, scale: 0.82 }]
-                  : []),
-              ]}
-              heightFraction={0.72}
-              floorFraction={0.06}
-              spread={1.35}
+              members={faces.map((face) => ({
+                id: face.characterId ?? characterFor(face.name).id,
+                name: face.name,
+              }))}
+              heightFraction={0.82}
+              floorFraction={0.08}
               eager
             />
           </div>
-
-          <ContactShadow width={260} height={30} opacity={0.16} className="-mt-3.5" />
 
           <div className="relative z-10 mt-3.5 text-center">
             <p className="font-display text-[22px] font-semibold text-ink">{leader.officeName}</p>
