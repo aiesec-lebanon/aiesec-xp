@@ -94,6 +94,7 @@ Two behavioural goals:
 | D-47 | **The game surface is React Three Fiber, and every asset is free-forever and self-hosted.** three.js + `@react-three/fiber` + `@react-three/drei` (MIT), physics by `@react-three/rapier` (MIT over Apache-2.0 Rapier); art from Poly Haven and Kenney (CC0) and Blender (GPL), compressed with glTF-Transform and Draco (MIT/Apache-2.0); icons from game-icons.net (CC BY 3.0, credited in `ATTRIBUTIONS.md` rather than in the UI — D-49); typefaces from Google Fonts (OFL). Nothing is fetched from a CDN at runtime, which matters beyond principle: the CSP would block it. Each of drei's `Environment`, three's `DRACOLoader` and troika's font resolver defaults to a CDN, and each is overridden to a copy under `public/` synced from `node_modules` at install. Spline was evaluated and rejected: its free tier caps scenes and exports, so it is not free-forever by this project's own bar. |
 | D-49 | **Licence obligations are met in the repository, never in the UI.** AIESEC XP is an internal tool behind AIESEC OAuth2: every viewer is a logged-in member of office 182 or a descendant (D-16, D-31), there is no public surface and nothing is distributed outside the MC. Attribution therefore lives in `ATTRIBUTIONS.md` and `assets/README.md`, which are reachable to everyone who can reach the product's source, and **no credits line, licence notice or about-page attribution ships in the product**. The footer credits line D-47 implied is removed. Asset choice still prefers CC0 and free-forever sources, but an unconfirmed licence is no longer a release blocker: it is a note in `ATTRIBUTIONS.md` to settle if this product ever leaves the member wall. Closes O-12 and amends D-47. |
 
+| D-50 | **A member's colours are per-part materials on the model, not a shader.** The four characters arrive as one welded mesh with one baked 2048px texture each, so every colour is painted into pixels and none of it can change at runtime. `scripts/assets/avatar-parts.py` labels each triangle with the part it belongs to -- from the body region its heaviest bone implies, plus how close its texel sits to that character's own cluster colours -- splits the mesh into one material per part, and rewrites the baked texture as a luminance map normalised per part. A part then recolours by writing `material.color`, which three multiplies with that luminance, so the shading survives and no custom shader is needed. Two consequences are deliberate. A triangle no reference colour claims becomes `detail`, which keeps the original colour texture and is never tinted -- eyes, a printed logo, a shoe's red flashes and the pink bow all look as drawn, and being over-inclusive there is safe, because `detail` only ever means "leave this alone". And a garment's secondary hue is left unreferenced on purpose, so a swatch repaints the shoe and leaves its trim. The bodies export standing at the origin, 1.5m tall, in an A-pose rather than the authoring T-pose. `scripts/assets/avatar-stills.py` renders a still per character from the shipped `.glb`, replacing the three placeholder PNGs: a live canvas is spent only where one body is shown and can change -- the dashboard hero and the character lab -- while the login crowd, the podium and every leaderboard row use the still, which is also the DOM fallback when there is no GPU, so the two are never different characters. |
 ---
 
 ## 4. Identity: what exists in GIS and what does not
@@ -227,16 +228,25 @@ already in the ledger.
 
 ## 8. Open items
 
-- **O-14 — The character lab saves nothing.** The STUDIO `/me` screen ships the
-  appearance panel the comp specifies — a body picker across the three flat
-  renders in `lib/design/character.ts`, plus six colour categories, one swatch
-  row each — and it is a live preview only: there is no avatar column on
-  `Member`, no action to write one, and the body is a flat render, so a chosen
-  colour cannot repaint the part it names or a chosen body outlive the page.
-  The panel is labelled as a preview rather than dressed as a saved setting.
-  Persisting it needs a schema field, an action, and the per-part material
-  split that arrives with the 3D bodies (D-47).
-  **Open.**
+- **O-14 — The character lab saves nothing.** The `/me` appearance panel now
+  drives the real body: picking a character loads that `.glb` and picking a
+  colour repaints the part it names (D-50). What it still cannot do is remember.
+  There is no avatar column on `Member` and no action to write one, so a choice
+  lives as long as the page does, and the panel says so rather than dressing
+  itself up as a saved setting. What remains is a schema field — the chosen
+  character id plus a colour per part — and an action to write it. The per-part
+  material split this was waiting on has landed. **Open.**
+- **O-15 — Eye colour is not offered.** D-50's classifier splits a character's
+  mesh by body region and texel colour, and the iris defeats both: it is a few
+  dozen triangles inside the head region, and its colour sits between the skin
+  and hair surrounding it. It therefore falls to the `detail` slot, which keeps
+  its authored colour and is never tinted — the eyes always look right, but they
+  cannot be changed. The appearance panel offers five colour categories rather
+  than the six the comp drew, because a sixth swatch that repainted the whole
+  face would be worse than not offering one. Closing this needs the iris
+  identified as geometry rather than inferred from colour — a UV-island or
+  material selection made once per character in Blender and recorded in
+  `scripts/assets/avatar-parts.py` — not a better classifier. **Open.**
 - **O-13 — Whose typeface carries the brand.** D-48 settles the direction but
   not this: D-24 says "AIESEC brand typography", and Fredoka / Figtree / Baloo 2
   is not AIESEC's brand typeface. A display face distinct from EXPA is exactly
