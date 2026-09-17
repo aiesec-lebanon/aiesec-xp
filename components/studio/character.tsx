@@ -32,6 +32,7 @@ export function Character({
   social,
   beat,
   greetKey,
+  heightFraction,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
@@ -54,6 +55,11 @@ export function Character({
   beat?: CharacterBeat | null;
   /** Greet once per browser session, keyed per surface. */
   greetKey?: string;
+  /**
+   * Share of the canvas the body fills. Lower it where a clip raises the arms
+   * well above standing height, or the pose is cropped by its own frame.
+   */
+  heightFraction?: number;
 }) {
   const id = idOverride ?? characterFor(name).id;
 
@@ -68,6 +74,7 @@ export function Character({
         social={social}
         beat={beat}
         greetKey={greetKey}
+        heightFraction={heightFraction}
         className={className}
       />
     );

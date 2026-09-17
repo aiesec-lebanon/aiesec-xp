@@ -3,7 +3,7 @@ import { activeWindow, recentActivity, topMembers } from "@/lib/dashboard";
 import { officeStandings } from "@/lib/leaderboard";
 
 import { AutoRefresh } from "@/components/studio/auto-refresh";
-import { CharacterAvatar } from "@/components/studio/character";
+import { Character, CharacterAvatar, ContactShadow } from "@/components/studio/character";
 import { memberAvatars } from "@/lib/design/avatar";
 import { BrandMark } from "@/components/studio/chrome";
 import { Lift } from "@/components/studio/motion";
@@ -37,6 +37,8 @@ export default async function TvPage() {
     [...top, ...activity].map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
   );
 
+  const leader = top[0];
+
   return (
     <main className="flex min-h-dvh flex-col bg-wall">
       <AutoRefresh seconds={60} />
@@ -62,7 +64,7 @@ export default async function TvPage() {
       </header>
 
       <div className="grid flex-1 gap-8 px-14 pb-10 xl:grid-cols-[1fr_auto]">
-        <section>
+        <section className="flex flex-col">
           <h2 className="mb-5 text-[15px] font-bold uppercase tracking-[0.1em] text-ink">
             Entities
           </h2>
@@ -92,6 +94,39 @@ export default async function TvPage() {
               </Lift>
             ))}
           </ol>
+
+          {/* The leader, at the size a room can read. This column ran out of
+              rows halfway down and the screen people actually watch had no body
+              on it at all. */}
+          {leader ? (
+            <div className="mt-6 flex flex-1 items-end justify-center gap-9">
+              <div className="relative flex items-end">
+                <Character
+                  name={leader.fullName}
+                  height={310}
+                  stage
+                  social
+                  mood="celebrate"
+                  // A cheer puts the hands well above standing height, which the
+                  // default fraction crops.
+                  heightFraction={0.68}
+                  idOverride={characters.get(leader.memberId)?.id}
+                />
+                <ContactShadow width={215} height={34} className="absolute inset-x-0 bottom-0" />
+              </div>
+              <div className="pb-6">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
+                  Out in front
+                </p>
+                <p className="mt-1 font-display text-3xl font-semibold text-ink">
+                  {leader.fullName}
+                </p>
+                <p className="tabular mt-1 text-5xl font-bold text-re-ink">
+                  <RollingNumber value={leader.points} />
+                </p>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="xl:w-[620px]">
