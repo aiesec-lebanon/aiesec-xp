@@ -3,11 +3,12 @@
 import { LazyMotion, MotionConfig } from "motion/react";
 import { createContext, useContext, type ReactNode } from "react";
 
-// Only the DOM animation features are loaded, and only after first paint, which
-// keeps the animation runtime out of the initial bundle on a leaderboard most
-// members open on a phone. `strict` makes the trade-off enforceable: it throws
-// on a `motion.*` component, so the saving cannot be silently undone later.
-const loadDomFeatures = () => import("motion/react").then((mod) => mod.domAnimation);
+// The full DOM feature set -- including layout animation, which the FLIP rank
+// transitions need -- is loaded, but only after first paint, which keeps the
+// animation runtime out of the initial bundle on a leaderboard most members
+// open on a phone. `strict` makes the trade-off enforceable: it throws on a
+// `motion.*` component, so the saving cannot be silently undone later.
+const loadDomFeatures = () => import("motion/react").then((mod) => mod.domMax);
 
 const ReduceMotionContext = createContext(false);
 
