@@ -4,7 +4,7 @@ import { m } from "motion/react";
 import { useEffect, useState } from "react";
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
-import { CHARACTERS } from "@/lib/design/character";
+import { CHARACTERS, type CharacterBeat } from "@/lib/design/character";
 
 import { CharacterStage } from "./character-stage";
 import { preloadCharacter } from "./character-model";
@@ -34,12 +34,15 @@ export function CharacterCarousel({
   index,
   step,
   walkDirection,
+  beat = null,
   height = 430,
 }: {
   memberName: string;
   index: number;
   step: (by: number) => void;
   walkDirection: 1 | -1;
+  /** What the body does about something the member just did. */
+  beat?: CharacterBeat | null;
   height?: number;
 }) {
   const reduceMotion = useReduceMotion();
@@ -78,6 +81,8 @@ export function CharacterCarousel({
         fill
         heightFraction={0.62}
         floorFraction={0.2}
+        social
+        beat={beat}
         eager
       />
 

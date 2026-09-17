@@ -69,6 +69,12 @@ export const CLIPS = {
   ],
   /** Calm and forward-facing, for a hero shot where a wandering gaze reads as distracted. */
   idleCalm: ["idle-breathing", "idle-happy"],
+  /**
+   * Nothing has scored yet. Cheerful idles on an empty board read as the product
+   * not knowing what state it is in. `idle-bored` is in the social library, so a
+   * surface using this mood has to ask for it.
+   */
+  idleEmpty: ["idle-bored", "idle-look-around", "idle-stretch"],
   /** Played once now and then, between idles. */
   greet: ["wave"],
   /** For a leaderboard, where every body on screen has something to celebrate. */
@@ -95,7 +101,45 @@ export const CLIPS = {
   },
 } as const;
 
-export type CharacterMood = "idle" | "celebrate";
+export type CharacterMood = "idle" | "celebrate" | "empty";
+
+/** A one-shot clip a surface asks for because something happened. */
+export type CharacterBeat =
+  | "greet"
+  | "acknowledge"
+  | "thumbsUp"
+  | "point"
+  | "disappointed"
+  | "celebrate"
+  | "talk"
+  | "talkAgain"
+  | "agree"
+  | "glance";
+
+export function beatClip(beat: CharacterBeat): string {
+  switch (beat) {
+    case "greet":
+      return CLIPS.greet[0];
+    case "acknowledge":
+      return CLIPS.social.acknowledge;
+    case "thumbsUp":
+      return CLIPS.social.thumbsUp;
+    case "point":
+      return CLIPS.social.point;
+    case "disappointed":
+      return CLIPS.social.disappointed;
+    case "celebrate":
+      return "victory";
+    case "talk":
+      return CLIPS.social.talk[0];
+    case "talkAgain":
+      return CLIPS.social.talk[1];
+    case "agree":
+      return CLIPS.social.agree;
+    case "glance":
+      return CLIPS.social.glance;
+  }
+}
 
 /** Head and shoulders, for a profile picture. */
 export function characterPortraitPath(id: string): string {
