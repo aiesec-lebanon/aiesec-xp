@@ -4,9 +4,10 @@ import Image from "next/image";
 
 import { SceneEnvironment } from "@/components/three/environment";
 import { Scene } from "@/components/three/scene";
-import { characterStillPath, type CharacterMood } from "@/lib/design/character";
+import { beatClip, characterStillPath, type CharacterMood } from "@/lib/design/character";
 
 import { CharacterModel } from "./character-model";
+import { beatFor, facingFor, useGroupExchange } from "./group-exchange";
 
 export type GroupMember = {
   id: string;
@@ -43,6 +44,8 @@ export function CharacterGroup({
   spread?: number;
   eager?: boolean;
 }) {
+  const exchange = useGroupExchange(members.length);
+
   if (members.length === 0) return null;
 
   return (
@@ -71,20 +74,22 @@ export function CharacterGroup({
         <directionalLight position={[3, 5, 4]} intensity={1.6} />
         <directionalLight position={[-4, 2, -3]} intensity={0.4} />
 
-        {members.map((member) => (
+        {members.map((member, index) => {
+          const beat = beatFor(exchange, index);
+          return (
           <group key={`${member.id}-${member.offset}`} position={[member.offset * spread, 0, 0]}>
             <CharacterModel
               id={member.id}
               mood={mood}
-              // Turned a little towards the middle of the group rather than all
-              // square to camera, which is what made three bodies look posed.
-              facing={member.offset === 0 ? 0 : -Math.sign(member.offset) * 0.42}
+              facing={facingFor(exchange, index, (at) => members[at]!.offset)}
+              beat={beat ? beatClip(beat) : null}
               heightFraction={heightFraction * (member.scale ?? 1)}
               floorFraction={floorFraction}
               social
             />
           </group>
-        ))}
+          );
+        })}
       </Scene>
     </div>
   );

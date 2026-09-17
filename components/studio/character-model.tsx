@@ -41,6 +41,11 @@ export type CharacterModelProps = {
   facing?: number;
   /** Load the social clips too. Only the surfaces that use them pay for them. */
   social?: boolean;
+  /**
+   * A clip to play once because something happened. Changing this is the whole
+   * trigger, so a surface bumps it rather than calling into the body.
+   */
+  beat?: string | null;
 };
 
 // What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back. fov
@@ -57,6 +62,12 @@ const STOP = 0.5;
 function pick<T>(from: readonly T[], not?: T): T {
   const options = from.length > 1 && not !== undefined ? from.filter((v) => v !== not) : from;
   return options[Math.floor(Math.random() * options.length)]!;
+}
+
+function poolFor(mood: CharacterMood): readonly string[] {
+  if (mood === "celebrate") return CLIPS.celebrate;
+  if (mood === "empty") return CLIPS.idleEmpty;
+  return CLIPS.idle;
 }
 
 /**
@@ -84,6 +95,7 @@ export function CharacterModel({
   floorFraction = 0.02,
   facing = 0,
   social = false,
+  beat = null,
 }: CharacterModelProps) {
   const { scene } = useModel(characterModelPath(id));
   const core = useModel(characterModelPath(ANIMATION_LIBRARY));
@@ -160,8 +172,7 @@ export function CharacterModel({
   };
 
   const settle = (fade = 0.3) => {
-    const pool = mood === "celebrate" ? CLIPS.celebrate : CLIPS.idle;
-    const clip = pick(pool);
+    const clip = pick(poolFor(mood));
     const duration = actions.current.get(clip)?.getClip().duration ?? 4;
     play(clip, { fade, offset: Math.random() * duration, speed: 0.94 + Math.random() * 0.12 });
     // A random first interval too, or every body in a group changes on the same beat.
@@ -193,6 +204,14 @@ export function CharacterModel({
   }, [phase, direction, mood, body, core, extra]);
 
   useEffect(() => {
+    if (!beat || !mixer.current || phase !== "settled" || reduceMotion) return;
+    play(beat, { once: true, fade: 0.2 });
+    // Hold the idle picker off until the beat has played out, or the next frame
+    // whose dwell has expired cuts it short.
+    nextChange.current = actions.current.get(beat)?.getClip().duration ?? 2;
+  }, [beat, phase, reduceMotion, body, core, extra]);
+
+  useEffect(() => {
     if (!reduceMotion || !mixer.current) return;
     mixer.current.update(0);
     invalidate();
@@ -212,9 +231,10 @@ export function CharacterModel({
       node.rotation.y = MathUtils.damp(node.rotation.y, facing, 3.2, delta);
       nextChange.current -= delta;
       if (nextChange.current <= 0) {
-        const pool = mood === "celebrate" ? CLIPS.celebrate : CLIPS.idle;
         const greet = mood === "idle" && Math.random() < GREET_CHANCE;
-        const name = greet ? pick(CLIPS.greet) : pick(pool, active.current?.getClip().name);
+        const name = greet
+          ? pick(CLIPS.greet)
+          : pick(poolFor(mood), active.current?.getClip().name);
         play(name, { once: greet });
         nextChange.current = greet
           ? (actions.current.get(name)?.getClip().duration ?? 2)

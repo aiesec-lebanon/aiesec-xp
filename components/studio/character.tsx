@@ -4,6 +4,7 @@ import {
   characterFor,
   characterPortraitPath,
   characterStillPath,
+  type CharacterBeat,
   type CharacterMood,
 } from "@/lib/design/character";
 
@@ -28,6 +29,9 @@ export function Character({
   mood,
   facing,
   idOverride,
+  social,
+  beat,
+  greetKey,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
@@ -44,6 +48,12 @@ export function Character({
   facing?: number;
   /** The member's chosen character, instead of the one `name` hashes to. */
   idOverride?: string;
+  /** Load the social clips. Needed by the `empty` mood and by most beats. */
+  social?: boolean;
+  /** A one-shot played because something happened on this surface. */
+  beat?: CharacterBeat | null;
+  /** Greet once per browser session, keyed per surface. */
+  greetKey?: string;
 }) {
   const id = idOverride ?? characterFor(name).id;
 
@@ -55,6 +65,9 @@ export function Character({
         height={height}
         mood={mood}
         facing={facing}
+        social={social}
+        beat={beat}
+        greetKey={greetKey}
         className={className}
       />
     );
