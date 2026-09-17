@@ -6,7 +6,7 @@ import { SceneEnvironment } from "@/components/three/environment";
 import { Scene } from "@/components/three/scene";
 import { characterStillPath, type CharacterColours } from "@/lib/design/character";
 
-import { CharacterModel } from "./character-model";
+import { CharacterModel, type CharacterModelProps } from "./character-model";
 
 export type CharacterStageProps = {
   id: string;
@@ -17,6 +17,8 @@ export type CharacterStageProps = {
   colours?: CharacterColours;
   eager?: boolean;
   className?: string;
+  /** The colour each part was authored with, once the body has loaded. */
+  onAuthoredColours?: CharacterModelProps["onAuthoredColours"];
 };
 
 export function CharacterStage({
@@ -25,6 +27,7 @@ export function CharacterStage({
   height,
   colours,
   eager = false,
+  onAuthoredColours,
   className = "",
 }: CharacterStageProps) {
   const width = Math.round(height * 0.72);
@@ -52,7 +55,7 @@ export function CharacterStage({
         <SceneEnvironment environment="studio" />
         <directionalLight position={[3, 5, 4]} intensity={1.6} />
         <directionalLight position={[-4, 2, -3]} intensity={0.4} />
-        <CharacterModel id={id} colours={colours} />
+        <CharacterModel id={id} colours={colours} onAuthoredColours={onAuthoredColours} />
       </Scene>
     </div>
   );
