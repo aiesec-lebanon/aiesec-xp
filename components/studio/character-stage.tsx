@@ -16,7 +16,7 @@ export type CharacterStageProps = {
   /** Rendered height in pixels; the canvas is sized to it. */
   height: number;
   eager?: boolean;
-  /** Let the member turn and zoom the body. For the lab, not for a dashboard. */
+  /** Let the member turn the body. For the lab, not for a dashboard. */
   interactive?: boolean;
   /** Play the entry animation when the body changes. */
   animate?: boolean;
@@ -64,11 +64,13 @@ export function CharacterStage({
           <OrbitControls
             makeDefault
             enablePan={false}
+            // Turning is the whole interaction. Zoom took the body off its floor
+            // and out of the frame it was composed for, and scrolling over a
+            // canvas mid-page stole the page's own scroll.
+            enableZoom={false}
             // Aimed at the chest rather than the origin, which sits near the feet
             // once the body is stood on the floor of the frame.
             target={[0, -0.2, 0]}
-            minDistance={3.2}
-            maxDistance={9}
             // Stops short of the poles: from directly overhead or below, a body
             // standing on a floor reads as a mistake.
             minPolarAngle={0.7}
