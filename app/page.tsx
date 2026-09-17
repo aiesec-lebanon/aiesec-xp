@@ -183,7 +183,7 @@ export default async function HomePage() {
             </Rise>
 
             <div className="relative order-first flex flex-col items-center lg:order-none">
-              <Character name={user.fullName} height={440} priority />
+              <Character name={user.fullName} height={440} priority stage />
               <ContactShadow width={300} height={52} className="-mt-3.5" />
             </div>
 

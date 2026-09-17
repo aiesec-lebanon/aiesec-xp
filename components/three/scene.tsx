@@ -34,6 +34,8 @@ export type SceneProps = {
   decorative?: boolean;
   /** Mount without waiting for the viewport, for a scene above the fold. */
   eager?: boolean;
+  /** Composite over the DOM instead of painting the canvas. */
+  transparent?: boolean;
   className?: string;
 };
 
@@ -43,6 +45,7 @@ export function Scene({
   label,
   decorative = false,
   eager = false,
+  transparent = false,
   className = "",
 }: SceneProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -71,7 +74,13 @@ export function Scene({
   return (
     <div ref={container} className={`relative ${className}`}>
       {webgl && visible ? (
-        <XpCanvas fallback={fallback} aria-hidden tabIndex={-1} role="presentation">
+        <XpCanvas
+          fallback={fallback}
+          transparent={transparent}
+          aria-hidden
+          tabIndex={-1}
+          role="presentation"
+        >
           {children}
         </XpCanvas>
       ) : (
