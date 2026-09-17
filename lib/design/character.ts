@@ -49,11 +49,15 @@ export function characterStillPath(id: string): string {
   return `/characters/${id}.png`;
 }
 
-/** The shared clip library every character is driven by (D-53). */
+/** Loaded wherever a body stands (D-53). */
 export const ANIMATION_LIBRARY = "avatar-animations";
 
-// Mixamo clips, renamed for what they are used for. All four characters carry
-// the same skeleton, so any clip drives any of them.
+/**
+ * Loaded only where a body does more than stand: talking, pointing, dancing.
+ * Kept out of the core so the 600kB is not paid on every screen.
+ */
+export const SOCIAL_LIBRARY = "avatar-animations-social";
+
 export const CLIPS = {
   /** Cycled at random wherever a body is just standing there. */
   idle: [
@@ -61,16 +65,34 @@ export const CLIPS = {
     "idle-happy",
     "idle-happy-2",
     "idle-look-around",
-    "idle-looking-around",
     "idle-stretch",
-    "idle-twist",
   ],
+  /** Calm and forward-facing, for a hero shot where a wandering gaze reads as distracted. */
+  idleCalm: ["idle-breathing", "idle-happy"],
   /** Played once now and then, between idles. */
   greet: ["wave"],
   /** For a leaderboard, where every body on screen has something to celebrate. */
   celebrate: ["cheer", "cheer-2", "clap", "rally", "victory"],
   /** Carries a character on and off when the member steps through them. */
   walk: "walk",
+  walkStart: "walk-start",
+  walkStop: "walk-stop",
+  turnLeft: "turn-left",
+  turnRight: "turn-right",
+  /** Social library: a body reacting to the member, or to the body beside it. */
+  social: {
+    bored: "idle-bored",
+    acknowledge: "acknowledge",
+    thumbsUp: "thumbs-up",
+    salute: "salute",
+    disappointed: "disappointed",
+    point: "point",
+    talk: ["talk", "talk-2"],
+    agree: "agree",
+    glance: "glance",
+    secret: "secret",
+    dance: "dance",
+  },
 } as const;
 
 export type CharacterMood = "idle" | "celebrate";

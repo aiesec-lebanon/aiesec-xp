@@ -26,6 +26,7 @@ export function Character({
   className = "",
   stage = false,
   mood,
+  facing,
   idOverride,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
@@ -39,6 +40,8 @@ export function Character({
   stage?: boolean;
   /** What the body does while it stands there. Only reaches the live stage. */
   mood?: CharacterMood;
+  /** Radians of yaw, so bodies either side of a group angle inwards. */
+  facing?: number;
   /** The member's chosen character, instead of the one `name` hashes to. */
   idOverride?: string;
 }) {
@@ -46,7 +49,14 @@ export function Character({
 
   if (stage) {
     return (
-      <CharacterStage id={id} name={name} height={height} mood={mood} className={className} />
+      <CharacterStage
+        id={id}
+        name={name}
+        height={height}
+        mood={mood}
+        facing={facing}
+        className={className}
+      />
     );
   }
 
