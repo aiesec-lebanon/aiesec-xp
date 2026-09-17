@@ -32,9 +32,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <div className="pointer-events-auto rounded-full bg-surface-raised px-3.5 py-2 shadow-e1">
               <ReduceMotionToggle />
             </div>
-            <p className="pointer-events-auto text-[10px] text-ink-faint">
-              Icons by game-icons.net, CC BY 3.0
-            </p>
           </div> */}
         </MotionProvider>
       </body>

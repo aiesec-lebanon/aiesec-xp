@@ -43,19 +43,22 @@ a colour in the name is a name that goes stale on first use. Each character is
 one mesh (`<name>-mesh`) and one armature (`<name>-rig`), normalised to 1.5m
 tall, scale 1, rotation 0, feet at the origin.
 
-Their licence is unresolved and they are prototype-only until it is: see O-12 in
-`Context.md` and the character section of `ATTRIBUTIONS.md`.
+Their licence is unresolved and stays that way by decision: the product is
+internal and undistributed, so D-49 accepts the open question rather than
+blocking on it. See the character section of `ATTRIBUTIONS.md` for what would
+have to be answered before any external release.
 
 ## Where free assets come from
 
-All of these are free forever, not free-tier. Licence obligations are recorded in
-`ATTRIBUTIONS.md` at the repo root.
+All of these are free forever, not free-tier. Credit is recorded in
+`ATTRIBUTIONS.md` at the repo root and nowhere else — per D-49 no attribution is
+rendered in the UI, because this is an internal tool behind the member wall.
 
 | Source | Licence | Use |
 |---|---|---|
-| [Poly Haven](https://polyhaven.com) | CC0 | HDRIs, textures, models — no attribution required |
-| [Kenney](https://kenney.nl) | CC0 | Game asset packs, isometric tiles, UI — no attribution required |
-| [Game Icons](https://game-icons.net) | CC BY 3.0 | Icons, via `react-icons/gi` — **attribution required** |
+| [Poly Haven](https://polyhaven.com) | CC0 | HDRIs, textures, models |
+| [Kenney](https://kenney.nl) | CC0 | Game asset packs, isometric tiles, UI |
+| [Game Icons](https://game-icons.net) | CC BY 3.0 | Icons, via `react-icons/gi` — credited in `ATTRIBUTIONS.md` |
 | [Google Fonts](https://fonts.google.com) | OFL | Typefaces, self-hosted by `next/font` |
 | [Blender](https://blender.org) | GPL | Authoring; exports glTF for the pipeline above |
 

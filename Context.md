@@ -91,7 +91,8 @@ Two behavioural goals:
 | D-45 | Assignment is **imported** from the MC's sheets, and an admin may **correct** a row afterwards. A correction is marked `ADMIN` and survives re-import, because it is a deliberate decision about who earned something and the sheet must not quietly reverse it. Sheet labels are mapped to members through `ManagerAlias`, never guessed: suggestions are ranked for a human to confirm (O-10). This narrows D-44, which said the product does no assignment at all. |
 | D-46 | **Motion is on for everyone by default, and the operating system's `prefers-reduced-motion` is not consulted.** This product is a game; a system default set long ago for an unrelated reason should not silently mute the thing it exists to be. WCAG 2.2.2 is satisfied by a control instead in /me page. The preference is a cookie so the root layout renders it server-side — reading it after hydration would show a burst of exactly the motion the member opted out of. One switch governs every animated surface: Motion, the three.js frame loop, the Rapier simulation, Recharts and the CSS backstop. This amends the `Architecture.md` 9 non-negotiable, which previously made the OS setting the trigger. |
 | D-48 | **The design direction is STUDIO, and its type system is Fredoka / Figtree / Baloo 2 / Space Mono.** Four directions were comped — 1a STUDIO, 1b DESK, 1c PATH, 1d GALLERY — and STUDIO is built: a warm-paper cyclorama, the member's character centre-frame at full height, one large number and four chips that open when asked. The dark `D‑24` surface is gone, and so are the three unchosen type systems (Arena, Clay Arcade, Overworld) and the second, dark chart ramp; `lib/design/fonts.ts` now declares one set of faces rather than switching between three. The stage hues are unchanged — they are what carries the brand — and each gains a wash / mid / ink triple so an accent can be a background without failing contrast as text. Closes O-11. |
-| D-47 | **The game surface is React Three Fiber, and every asset is free-forever and self-hosted.** three.js + `@react-three/fiber` + `@react-three/drei` (MIT), physics by `@react-three/rapier` (MIT over Apache-2.0 Rapier); art from Poly Haven and Kenney (CC0) and Blender (GPL), compressed with glTF-Transform and Draco (MIT/Apache-2.0); icons from game-icons.net (CC BY 3.0, attribution required — `ATTRIBUTIONS.md`); typefaces from Google Fonts (OFL). Nothing is fetched from a CDN at runtime, which matters beyond principle: the CSP would block it. Each of drei's `Environment`, three's `DRACOLoader` and troika's font resolver defaults to a CDN, and each is overridden to a copy under `public/` synced from `node_modules` at install. Spline was evaluated and rejected: its free tier caps scenes and exports, so it is not free-forever by this project's own bar. |
+| D-47 | **The game surface is React Three Fiber, and every asset is free-forever and self-hosted.** three.js + `@react-three/fiber` + `@react-three/drei` (MIT), physics by `@react-three/rapier` (MIT over Apache-2.0 Rapier); art from Poly Haven and Kenney (CC0) and Blender (GPL), compressed with glTF-Transform and Draco (MIT/Apache-2.0); icons from game-icons.net (CC BY 3.0, credited in `ATTRIBUTIONS.md` rather than in the UI — D-49); typefaces from Google Fonts (OFL). Nothing is fetched from a CDN at runtime, which matters beyond principle: the CSP would block it. Each of drei's `Environment`, three's `DRACOLoader` and troika's font resolver defaults to a CDN, and each is overridden to a copy under `public/` synced from `node_modules` at install. Spline was evaluated and rejected: its free tier caps scenes and exports, so it is not free-forever by this project's own bar. |
+| D-49 | **Licence obligations are met in the repository, never in the UI.** AIESEC XP is an internal tool behind AIESEC OAuth2: every viewer is a logged-in member of office 182 or a descendant (D-16, D-31), there is no public surface and nothing is distributed outside the MC. Attribution therefore lives in `ATTRIBUTIONS.md` and `assets/README.md`, which are reachable to everyone who can reach the product's source, and **no credits line, licence notice or about-page attribution ships in the product**. The footer credits line D-47 implied is removed. Asset choice still prefers CC0 and free-forever sources, but an unconfirmed licence is no longer a release blocker: it is a note in `ATTRIBUTIONS.md` to settle if this product ever leaves the member wall. Closes O-12 and amends D-47. |
 
 ---
 
@@ -226,16 +227,6 @@ already in the ledger.
 
 ## 8. Open items
 
-- **O-12 — Licence of the member-avatar character models.** Four stylized child
-  characters were downloaded free from CGTrader for the avatar surface. D-47
-  requires every asset to be free-forever and self-hosted, and names CC0 sources
-  only; CGTrader free downloads are not CC0 and ship under either Royalty-Free
-  terms (which permit embedding in an application) or Editorial terms (which
-  forbid it). Which applies cannot be read off the downloaded files. Each
-  model's source URL, author and granted licence must be recorded in
-  `ATTRIBUTIONS.md` before the avatars ship; if any is Editorial, that model is
-  replaced from a CC0 source. Until then the models are prototype-only and D-47
-  is not demonstrably satisfied. **Open.**
 - **O-14 — The character lab saves nothing.** The STUDIO `/me` screen ships the
   appearance panel the comp specifies — a body picker across the three flat
   renders in `lib/design/character.ts`, plus six colour categories, one swatch
@@ -244,7 +235,7 @@ already in the ledger.
   colour cannot repaint the part it names or a chosen body outlive the page.
   The panel is labelled as a preview rather than dressed as a saved setting.
   Persisting it needs a schema field, an action, and the per-part material
-  split that arrives with the 3D bodies (O-12, D-47).
+  split that arrives with the 3D bodies (D-47).
   **Open.**
 - **O-13 — Whose typeface carries the brand.** D-48 settles the direction but
   not this: D-24 says "AIESEC brand typography", and Fredoka / Figtree / Baloo 2
@@ -266,6 +257,11 @@ already in the ledger.
 
 Closed:
 
+- **O-12** — closed by D-49. The CGTrader character models' licence is still
+  unconfirmed, and that is accepted rather than resolved: the product is
+  internal, behind the member wall, and is not distributed. The models ship. The
+  unanswered question is recorded in `ATTRIBUTIONS.md` and has to be settled
+  before any public or external release.
 - **O-11** — closed by D-48. STUDIO is the direction; the three unchosen type
   systems are deleted rather than left switchable. The typeface question that
   sat underneath it is not settled and continues as O-13.

@@ -1,6 +1,6 @@
 // Game Icons (game-icons.net), CC BY 3.0, delivered through react-icons as
-// tree-shaken SVG components -- no sprite sheet, no CDN, no emoji. The licence
-// requires attribution; see ATTRIBUTIONS.md.
+// tree-shaken SVG components -- no sprite sheet, no CDN, no emoji. Credit lives
+// in ATTRIBUTIONS.md and not in the UI; see D-49.
 //
 // Only the icons the product actually names live here. Reaching into
 // react-icons/gi directly is fine for one-offs, but anything that stands for a
