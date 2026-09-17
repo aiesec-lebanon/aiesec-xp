@@ -64,7 +64,7 @@ JavaScript.
 | 3D | three.js + `@react-three/fiber` + `@react-three/drei`, physics by `@react-three/rapier` (D-47) | The game surface the product is named for. Every scene mounts through `components/three/scene.tsx`, which is client-only, viewport-gated and falls back to DOM when there is no GPU |
 | 3D assets | Poly Haven / Kenney (CC0) and Blender, compressed by glTF-Transform with Draco | All free-forever, all self-hosted. `npm run assets:models` is the pipeline; `assets/README.md` is the workflow |
 | Charts | Recharts | Trend and pace views, on the validated ordinal ramp in `components/charts/chart-theme.ts` |
-| Icons | Game Icons (CC BY 3.0) via `react-icons/gi` | 4000+ tree-shaken SVG components, no sprite sheet and no emoji. Domain concepts are mapped once in `components/icons` so a stage has one picture everywhere. Attribution is required: `ATTRIBUTIONS.md` |
+| Icons | Game Icons (CC BY 3.0) via `react-icons/gi` | 4000+ tree-shaken SVG components, no sprite sheet and no emoji. Domain concepts are mapped once in `components/icons` so a stage has one picture everywhere. Credited in `ATTRIBUTIONS.md`, not in the UI (D-49) |
 | Typography | Google Fonts (OFL), self-hosted by `next/font` | Three switchable type systems in `lib/design/type/`; only the active one is imported, so the unchosen faces are never downloaded (O-11) |
 | Auth | AIESEC OAuth2 directly, following the `auth-template` project (D-38) | AIESEC auth is not OIDC-discoverable and GIS wants the raw token as `Authorization` with no `Bearer` prefix. A hand-rolled Authorization Code flow is less machinery than bending Auth.js around both. Identity only |
 | DB | PostgreSQL (Neon or Supabase) | Relational, transactional, cheap |
