@@ -26,15 +26,9 @@ import {
 } from "@/lib/design/character";
 import { preloadModel, useModel } from "@/lib/three/loaders";
 
-export type CharacterPhase = "settled" | "leaving" | "arriving";
-
 export type CharacterModelProps = {
   id: string;
   mood?: CharacterMood;
-  phase?: CharacterPhase;
-  direction?: 1 | -1;
-  exitDistance?: number;
-  travelSeconds?: number;
   heightFraction?: number;
   floorFraction?: number;
   /** Radians of yaw while standing, so a group can face inwards. */
@@ -55,9 +49,6 @@ export const FRAME_HEIGHT = 2 * 6 * Math.tan((42 * Math.PI) / 360);
 const CROSSFADE = 0.35;
 const DWELL = { min: 5, max: 11 };
 const GREET_CHANCE = 0.25;
-/** Seconds the walk takes to get going, and to come to a halt. */
-const START = 0.42;
-const STOP = 0.5;
 
 function pick<T>(from: readonly T[], not?: T): T {
   const options = from.length > 1 && not !== undefined ? from.filter((v) => v !== not) : from;
@@ -88,10 +79,6 @@ function bindable(clip: AnimationClip, names: Set<string>): AnimationClip {
 export function CharacterModel({
   id,
   mood = "idle",
-  phase = "settled",
-  direction = 1,
-  exitDistance = 4,
-  travelSeconds = 0.9,
   heightFraction = 0.9,
   floorFraction = 0.02,
   facing = 0,
@@ -109,8 +96,6 @@ export function CharacterModel({
   const actions = useRef(new Map<string, AnimationAction>());
   const active = useRef<AnimationAction | null>(null);
   const nextChange = useRef(0);
-  const elapsed = useRef(0);
-  const legPhase = useRef<"start" | "cruise" | "stop">("start");
 
   const body = useMemo(() => {
     const copy = cloneSkinned(scene);
@@ -118,21 +103,41 @@ export function CharacterModel({
       if (!(node instanceof Mesh)) return;
       node.castShadow = true;
       node.receiveShadow = true;
+      // three culls on a bounding sphere it derives from the skin, and these
+      // rigs put that sphere about twenty units behind the camera -- so a body
+      // standing in plain sight was judged off-screen and never drawn. It is
+      // the same bad measurement the fit below refuses to trust, and with a
+      // handful of bodies on screen culling was never buying anything.
+      node.frustumCulled = false;
     });
     return copy;
   }, [scene]);
 
-  const fit = useMemo(() => {
-    const box = new Box3().setFromObject(body);
-    const size = box.getSize(new Vector3());
-    const centre = box.getCenter(new Vector3());
-    const scale = size.y > 0 ? (FRAME_HEIGHT * heightFraction) / size.y : 1;
-    const floor = -FRAME_HEIGHT / 2 + FRAME_HEIGHT * floorFraction;
+  // Measured on the loader's template, which is never added to a scene, rather
+  // than on the copy this component mounts. `Box3.setFromObject` reports world
+  // space, so measuring the mounted copy folds its own parent group -- and the
+  // scale this very memo produced -- back into the next measurement. It only
+  // ever recomputes after mount, which is why a group whose size depends on the
+  // canvas width (unknown for the first frame) sent bodies to z = -21.
+  // Measured on the loader's template, which is never added to a scene. Box3
+  // reports world space, so measuring the mounted copy would fold this
+  // component's own group -- and the scale this memo produced -- back into the
+  // next measurement.
+  const bounds = useMemo(() => {
+    const box = new Box3().setFromObject(scene);
     return {
-      scale,
-      position: [-centre.x * scale, floor - box.min.y * scale, -centre.z * scale] as const,
+      height: box.max.y - box.min.y,
+      centre: box.getCenter(new Vector3()),
+      lowest: box.min.y,
     };
-  }, [body, heightFraction, floorFraction]);
+  }, [scene]);
+
+  const fit = useMemo(() => {
+    const scale = bounds.height > 0 ? (FRAME_HEIGHT * heightFraction) / bounds.height : 1;
+    const floor = -FRAME_HEIGHT / 2 + FRAME_HEIGHT * floorFraction;
+    // In model units, because this offset is applied inside the scaled group.
+    return { scale, floor, offset: [-bounds.centre.x, -bounds.lowest, -bounds.centre.z] as const };
+  }, [bounds, heightFraction, floorFraction]);
 
   useEffect(() => {
     const bones = new Set<string>();
@@ -182,41 +187,23 @@ export function CharacterModel({
 
   useEffect(() => {
     if (!mixer.current) return;
-    elapsed.current = 0;
-
-    if (phase === "leaving") {
-      legPhase.current = "start";
-      const start = actions.current.get(CLIPS.walkStart);
-      play(CLIPS.walkStart, {
-        once: true,
-        fade: 0.18,
-        speed: start ? start.getClip().duration / START : 1,
-      });
-      return;
-    }
-    if (phase === "arriving") {
-      legPhase.current = "cruise";
-      play(CLIPS.walk, { fade: 0.12 });
-      return;
-    }
-
     settle(0.25);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, direction, mood, body, core, extra]);
+  }, [mood, body, core, extra]);
 
   useEffect(() => {
-    if (!beat || !mixer.current || phase !== "settled" || reduceMotion) return;
+    if (!beat || !mixer.current || reduceMotion) return;
     play(beat, { once: true, fade: 0.2 });
     // Hold the idle picker off until the beat has played out, or the next frame
     // whose dwell has expired cuts it short.
     nextChange.current = actions.current.get(beat)?.getClip().duration ?? 2;
-  }, [beat, phase, reduceMotion, body, core, extra]);
+  }, [beat, reduceMotion, body, core, extra]);
 
   useEffect(() => {
     if (!reduceMotion || !mixer.current) return;
     mixer.current.update(0);
     invalidate();
-  }, [reduceMotion, invalidate, phase, mood, body, core, extra]);
+  }, [reduceMotion, invalidate, mood, body, core, extra]);
 
   useFrame((_, delta) => {
     const node = group.current;
@@ -228,65 +215,34 @@ export function CharacterModel({
     }
     mixer.current.update(delta);
 
-    if (phase === "settled") {
-      node.rotation.y = MathUtils.damp(node.rotation.y, facing, 3.2, delta);
-      nextChange.current -= delta;
-      if (nextChange.current <= 0) {
-        const greet = (mood === "idle" || mood === "calm") && Math.random() < GREET_CHANCE;
-        const name = greet
-          ? pick(CLIPS.greet)
-          : pick(poolFor(mood), active.current?.getClip().name);
-        play(name, { once: greet });
-        nextChange.current = greet
-          ? (actions.current.get(name)?.getClip().duration ?? 2)
-          : DWELL.min + Math.random() * (DWELL.max - DWELL.min);
-      }
-      return;
+    node.rotation.y = MathUtils.damp(node.rotation.y, facing, 3.2, delta);
+    nextChange.current -= delta;
+    if (nextChange.current <= 0) {
+      const greet = (mood === "idle" || mood === "calm") && Math.random() < GREET_CHANCE;
+      const name = greet
+        ? pick(CLIPS.greet)
+        : pick(poolFor(mood), active.current?.getClip().name);
+      play(name, { once: greet });
+      nextChange.current = greet
+        ? (actions.current.get(name)?.getClip().duration ?? 2)
+        : DWELL.min + Math.random() * (DWELL.max - DWELL.min);
     }
-
-    elapsed.current += delta;
-    const t = Math.min(1, elapsed.current / travelSeconds);
-
-    if (phase === "leaving") {
-      if (legPhase.current === "start" && elapsed.current >= START) {
-        legPhase.current = "cruise";
-        play(CLIPS.walk, { fade: 0.22 });
-      }
-      // Eased out of standing, then a constant pace: a walk that eases the whole
-      // way is a walk that never commits.
-      const eased = t < 0.3 ? (t / 0.3) ** 2 * 0.3 : t;
-      node.position.x = fit.position[0] + direction * exitDistance * eased;
-      return;
-    }
-
-    const remaining = travelSeconds - elapsed.current;
-    if (legPhase.current === "cruise" && remaining <= STOP) {
-      legPhase.current = "stop";
-      const stop = actions.current.get(CLIPS.walkStop);
-      play(CLIPS.walkStop, {
-        once: true,
-        fade: 0.18,
-        speed: stop ? stop.getClip().duration / STOP : 1,
-      });
-    }
-    const eased = t > 0.7 ? 0.7 + (1 - (1 - (t - 0.7) / 0.3) ** 2) * 0.3 : t;
-    node.position.x = fit.position[0] + direction * exitDistance * (eased - 1);
   });
 
-  const walking = phase !== "settled" && !reduceMotion;
-  // The bodies are exported facing +Z, so a quarter turn puts them in profile,
-  // walking the way they are travelling.
-  const heading = walking ? (direction * Math.PI) / 2 : facing;
-  const start = phase === "arriving" && walking ? -direction * exitDistance : 0;
-
+  // Two groups, because the pivot has to be the body.
+  //
+  // Three of the four models carry their vertices metres in front of their own
+  // origin -- the bounding sphere of one sits 8.7 units out on z. Turning the
+  // group they hang from therefore swung the body through an arc nine units
+  // wide, which is what threw a row of characters into a heap and, at a wide
+  // enough angle, put one behind the camera. The outer group carries the scale,
+  // the turn and where the body stands; the inner one brings the body's centre
+  // line and the soles of its feet onto that origin first.
   return (
-    <group
-      ref={group}
-      position={[fit.position[0] + start, fit.position[1], fit.position[2]]}
-      scale={fit.scale}
-      rotation={[0, heading, 0]}
-    >
-      <primitive object={body} />
+    <group ref={group} position={[0, fit.floor, 0]} scale={fit.scale} rotation={[0, facing, 0]}>
+      <group position={fit.offset}>
+        <primitive object={body} />
+      </group>
     </group>
   );
 }
