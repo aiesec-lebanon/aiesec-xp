@@ -27,7 +27,7 @@ export function SignOutButton({ full = false }: { full?: boolean }) {
         className={
           full
             ? "w-full rounded-2xl bg-stage-apl px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-apl-ink"
-            : "rounded-full bg-surface-raised px-4 py-2.5 text-[13px] font-medium text-ink-secondary shadow-e1 transition-colors hover:bg-stage-apl hover:text-white"
+            : "control-surface rounded-full bg-surface-raised px-4 py-2.5 text-[13px] font-medium text-ink-secondary shadow-e1 hover:text-ink"
         }
       >
         Sign out

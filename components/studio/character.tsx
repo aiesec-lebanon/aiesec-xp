@@ -4,6 +4,7 @@ import {
   characterFor,
   characterPortraitPath,
   characterStillPath,
+  type CharacterBeat,
   type CharacterMood,
 } from "@/lib/design/character";
 
@@ -26,7 +27,12 @@ export function Character({
   className = "",
   stage = false,
   mood,
+  facing,
   idOverride,
+  social,
+  beat,
+  greetKey,
+  heightFraction,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
@@ -39,14 +45,38 @@ export function Character({
   stage?: boolean;
   /** What the body does while it stands there. Only reaches the live stage. */
   mood?: CharacterMood;
+  /** Radians of yaw, so bodies either side of a group angle inwards. */
+  facing?: number;
   /** The member's chosen character, instead of the one `name` hashes to. */
   idOverride?: string;
+  /** Load the social clips. Needed by the `empty` mood and by most beats. */
+  social?: boolean;
+  /** A one-shot played because something happened on this surface. */
+  beat?: CharacterBeat | null;
+  /** Greet once per browser session, keyed per surface. */
+  greetKey?: string;
+  /**
+   * Share of the canvas the body fills. Lower it where a clip raises the arms
+   * well above standing height, or the pose is cropped by its own frame.
+   */
+  heightFraction?: number;
 }) {
   const id = idOverride ?? characterFor(name).id;
 
   if (stage) {
     return (
-      <CharacterStage id={id} name={name} height={height} mood={mood} className={className} />
+      <CharacterStage
+        id={id}
+        name={name}
+        height={height}
+        mood={mood}
+        facing={facing}
+        social={social}
+        beat={beat}
+        greetKey={greetKey}
+        heightFraction={heightFraction}
+        className={className}
+      />
     );
   }
 

@@ -1,8 +1,10 @@
 import { requireMemberPage } from "@/lib/auth/guards";
 import { individualStandings, officeStandings } from "@/lib/leaderboard";
 
-import { Character, ContactShadow } from "@/components/studio/character";
+import { ContactShadow } from "@/components/studio/character";
+import { CharacterGroup } from "@/components/studio/character-group";
 import { memberAvatars } from "@/lib/design/avatar";
+import { characterFor } from "@/lib/design/character";
 import { Dock } from "@/components/studio/dock";
 import { GhostNumber, Rise } from "@/components/studio/motion";
 import { Crown } from "@/components/studio/podium";
@@ -48,7 +50,7 @@ export default async function LcLeaderboardPage() {
       {leader ? (
         <Rise
           delay={0.08}
-          className="relative mx-6 mt-7 flex flex-col items-center overflow-hidden rounded-3xl bg-surface px-10 pb-8 pt-11 sm:mx-16"
+          className="relative mx-6 mt-7 flex flex-col items-center overflow-hidden rounded-3xl bg-surface-raised px-10 pb-8 pt-11 shadow-e2 sm:mx-16"
         >
           <div className="absolute inset-x-0 top-[-18px]">
             <GhostNumber>{Math.round(leader.points)}</GhostNumber>
@@ -56,40 +58,26 @@ export default async function LcLeaderboardPage() {
 
           <Crown />
 
-          <div className="relative z-10 mt-6 flex items-end">
-            {faces[1] ? (
-              <div className="-mr-5.5">
-                <Character
-                  name={faces[1].name}
-                  idOverride={faces[1].characterId}
-                  height={150}
-                  idle="small"
-                  stage
-                  mood="celebrate"
-                />
-              </div>
-            ) : null}
-            <div className="relative z-10">
-              <Character
-                name={faces[0]?.name ?? leader.officeName}
-                idOverride={faces[0]?.characterId}
-                height={196}
-                stage
-                mood="celebrate"
-              />
-            </div>
-            {faces[2] ? (
-              <div className="-ml-5.5">
-                <Character
-                  name={faces[2].name}
-                  idOverride={faces[2].characterId}
-                  height={150}
-                  idle="small"
-                  stage
-                  mood="celebrate"
-                />
-              </div>
-            ) : null}
+          {/* One canvas for the three, so they stand beside each other instead
+              of in three overlapping boxes -- and can turn towards each other. */}
+          <div className="relative z-10 mt-6 h-[230px] w-full">
+            <CharacterGroup
+              members={[
+                ...(faces[1]
+                  ? [{ id: faces[1].characterId ?? characterFor(faces[1].name).id, name: faces[1].name, offset: -1, scale: 0.82 }]
+                  : []),
+                ...(faces[0]
+                  ? [{ id: faces[0].characterId ?? characterFor(faces[0].name).id, name: faces[0].name, offset: 0 }]
+                  : []),
+                ...(faces[2]
+                  ? [{ id: faces[2].characterId ?? characterFor(faces[2].name).id, name: faces[2].name, offset: 1, scale: 0.82 }]
+                  : []),
+              ]}
+              heightFraction={0.72}
+              floorFraction={0.06}
+              spread={1.35}
+              eager
+            />
           </div>
 
           <ContactShadow width={260} height={30} opacity={0.16} className="-mt-3.5" />

@@ -8,7 +8,12 @@ import { useEffect, useState } from "react";
 import { useReduceMotion } from "@/components/motion/motion-provider";
 import { SceneEnvironment } from "@/components/three/environment";
 import { Scene } from "@/components/three/scene";
-import { characterStillPath, type CharacterMood } from "@/lib/design/character";
+import {
+  beatClip,
+  characterStillPath,
+  type CharacterBeat,
+  type CharacterMood,
+} from "@/lib/design/character";
 
 import { CharacterModel } from "./character-model";
 
@@ -35,6 +40,14 @@ export type CharacterStageProps = {
   fill?: boolean;
   heightFraction?: number;
   floorFraction?: number;
+  /** Radians of yaw while standing, so bodies either side of a group angle inwards. */
+  facing?: number;
+  /** Load the social clips. Needed by `empty` and by every beat but `greet`. */
+  social?: boolean;
+  /** A one-shot played because something happened. Changing it is the trigger. */
+  beat?: CharacterBeat | null;
+  /** Greet once per browser session, so returning to the page is not a fanfare. */
+  greetKey?: string;
   className?: string;
 };
 
@@ -49,9 +62,14 @@ export function CharacterStage({
   fill = false,
   heightFraction,
   floorFraction,
+  facing = 0,
+  social = false,
+  beat = null,
+  greetKey,
   className = "",
 }: CharacterStageProps) {
   const width = Math.round(height * 0.72);
+  const greeting = useSessionGreeting(greetKey);
 
   return (
     <div
@@ -87,6 +105,9 @@ export function CharacterStage({
           walkDirection={walkDirection}
           heightFraction={heightFraction}
           floorFraction={floorFraction}
+          facing={facing}
+          social={social}
+          beat={greeting ?? (beat ? beatClip(beat) : null)}
         />
         {interactive ? (
           <OrbitControls
@@ -125,12 +146,18 @@ function Swap({
   walkDirection,
   heightFraction,
   floorFraction,
+  facing,
+  social,
+  beat,
 }: {
   id: string;
   mood: CharacterMood;
   walkDirection: 1 | -1;
   heightFraction?: number;
   floorFraction?: number;
+  facing?: number;
+  social?: boolean;
+  beat?: string | null;
 }) {
   const viewport = useThree((state) => state.viewport);
   const reduceMotion = useReduceMotion();
@@ -182,6 +209,40 @@ function Swap({
       travelSeconds={walkSeconds}
       heightFraction={heightFraction}
       floorFraction={floorFraction}
+      facing={facing}
+      social={social}
+      beat={beat}
     />
   );
+}
+
+/**
+ * The greeting fires on the first view of a surface in a browser session.
+ *
+ * A wave on every render is not a greeting, it is a tic -- and the thing being
+ * greeted is the member arriving, which happens once.
+ */
+function useSessionGreeting(key: string | undefined): string | null {
+  const reduceMotion = useReduceMotion();
+  const [greeting, setGreeting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!key || reduceMotion) return;
+    const storageKey = `xp:greeted:${key}`;
+    try {
+      if (sessionStorage.getItem(storageKey)) return;
+      sessionStorage.setItem(storageKey, "1");
+    } catch {
+      // Private mode, or storage refused. A missed greeting is not worth a throw.
+      return;
+    }
+    const enter = setTimeout(() => setGreeting(beatClip("greet")), 700);
+    const clear = setTimeout(() => setGreeting(null), 4200);
+    return () => {
+      clearTimeout(enter);
+      clearTimeout(clear);
+    };
+  }, [key, reduceMotion]);
+
+  return greeting;
 }

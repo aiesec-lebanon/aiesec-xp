@@ -50,19 +50,27 @@ export function Lift({
   className,
   lift = -4,
   as: Tag = "div",
+  layout = false,
 }: {
   children: ReactNode;
   className?: string;
   lift?: number;
   as?: "div" | "li";
+  /** Travel to a new position when the list reorders. Needs domMax. */
+  layout?: boolean;
 }) {
   const reduceMotion = useReduceMotion();
   const Component = Tag === "li" ? m.li : m.div;
 
   return (
     <Component
+      layout={layout && !reduceMotion ? "position" : false}
       whileHover={reduceMotion ? undefined : { y: lift, boxShadow: "var(--elevation-2)" }}
-      transition={{ duration: 0.3, ease: EASE }}
+      transition={{
+        duration: 0.3,
+        ease: EASE,
+        layout: { type: "spring", stiffness: 380, damping: 34 },
+      }}
       className={className}
     >
       {children}
