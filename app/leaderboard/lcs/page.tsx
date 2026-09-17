@@ -64,6 +64,8 @@ export default async function LcLeaderboardPage() {
                   idOverride={faces[1].characterId}
                   height={150}
                   idle="small"
+                  stage
+                  mood="celebrate"
                 />
               </div>
             ) : null}
@@ -72,6 +74,8 @@ export default async function LcLeaderboardPage() {
                 name={faces[0]?.name ?? leader.officeName}
                 idOverride={faces[0]?.characterId}
                 height={196}
+                stage
+                mood="celebrate"
               />
             </div>
             {faces[2] ? (
@@ -81,6 +85,8 @@ export default async function LcLeaderboardPage() {
                   idOverride={faces[2].characterId}
                   height={150}
                   idle="small"
+                  stage
+                  mood="celebrate"
                 />
               </div>
             ) : null}
