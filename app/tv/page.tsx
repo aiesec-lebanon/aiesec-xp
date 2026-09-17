@@ -3,6 +3,7 @@ import { activeWindow, recentActivity, topMembers } from "@/lib/dashboard";
 import { officeStandings } from "@/lib/leaderboard";
 
 import { CharacterAvatar } from "@/components/studio/character";
+import { memberAvatars } from "@/lib/design/avatar";
 import { BrandMark } from "@/components/studio/chrome";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,12 @@ export default async function TvPage() {
     activeWindow(),
     recentActivity(8),
   ]);
+
+  // The board and the ticker both show people, so both show the character each
+  // of them picked.
+  const characters = await memberAvatars(
+    [...top, ...activity].map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
+  );
 
   return (
     <main className="flex min-h-dvh flex-col bg-wall">
@@ -99,7 +106,12 @@ export default async function TvPage() {
                   >
                     {standing.rank}
                   </span>
-                  <CharacterAvatar name={standing.fullName} size={36} rounded="rounded-[11px]" />
+                  <CharacterAvatar
+                    name={standing.fullName}
+                    idOverride={characters.get(standing.memberId)?.id}
+                    size={36}
+                    rounded="rounded-[11px]"
+                  />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
                     {standing.fullName}
                   </span>
@@ -121,6 +133,7 @@ export default async function TvPage() {
                 <div key={`${copy}-${index}`} className="flex items-center gap-3.5">
                   <CharacterAvatar
                     name={item.fullName}
+                    idOverride={characters.get(item.memberId)?.id}
                     size={40}
                     rounded="rounded-xl"
                     tone="bg-[#2a2926]"

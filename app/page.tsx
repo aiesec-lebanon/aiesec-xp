@@ -6,7 +6,7 @@ import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, TEXT } from "@/lib/design/tokens";
 
 import { Character, CharacterAvatar, ContactShadow } from "@/components/studio/character";
-import { memberAvatar } from "@/lib/design/avatar";
+import { memberAvatar, memberAvatars } from "@/lib/design/avatar";
 import { Cyclorama } from "@/components/studio/cyclorama";
 import { Dock } from "@/components/studio/dock";
 import { WindowLabel } from "@/components/studio/chrome";
@@ -64,6 +64,16 @@ export default async function HomePage() {
     ? Math.round((progress.nextUp.points - points) * 10_000) / 10_000
     : 0;
   const nudge = progress.nextUp ? await closingMove(gap) : null;
+
+  // The member just ahead wears their own character too, not the one their name
+  // happens to hash to.
+  const chasing = progress.nextUp
+    ? (
+        await memberAvatars([
+          { id: progress.nextUp.memberId, fullName: progress.nextUp.fullName },
+        ])
+      ).get(progress.nextUp.memberId)
+    : undefined;
 
   const eventsFor = (prefix: string): ChipEvent[] =>
     progress.trail
@@ -231,6 +241,7 @@ export default async function HomePage() {
                 <div className="mt-4 inline-flex items-center gap-3 rounded-[18px] bg-surface-raised px-4 py-3 text-left shadow-e2">
                   <CharacterAvatar
                     name={progress.nextUp.fullName}
+                    idOverride={chasing?.id}
                     size={38}
                     rounded="rounded-xl"
                     tone="bg-surface-sunken"

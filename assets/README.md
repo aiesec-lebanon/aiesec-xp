@@ -77,12 +77,18 @@ screens that show several at once, and a square portrait used as the member's
 profile picture.
 
 `avatar-animations.py` bakes the Mixamo downloads into one shared clip library
-(D-53). It drops the location keys Mixamo writes on every bone, subtracts the
-root drift from clips that were not exported in place, and decimates keyframes —
-without that the file is more than twice the size for no visible difference.
+(D-53). It **retargets** each clip onto one of the characters' own rigs first —
+a glTF rotation channel replaces a node's local rotation rather than adding to
+it, so a clip only means what it should against the rest pose it was authored
+on, and Mixamo's download rig rests differently from the rigs in the .blend. It
+then strips every translation channel, which is authored in the clip skeleton's
+units, and decimates keyframes — without that the file is twice the size for no
+visible difference.
+
+It needs the .blend, because that is where the reference rig lives:
 
 ```sh
-blender -b -P scripts/assets/avatar-animations.py -- . D:\Blender\mixamo\download
+blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-animations.py -- . D:\Blender\mixamo\download
 ```
 
 `avatar-to-mixamo.py` writes the unrigged, T-posed FBX the Mixamo auto-rigger
