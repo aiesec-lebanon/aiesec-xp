@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 // except the idle breath and what you touch.
 
 const TABS = [
-  { href: "/", label: "You" },
+  { href: "/", label: "Home" },
   { href: "/leaderboard", label: "Members" },
   { href: "/leaderboard/lcs", label: "LCs" },
 ] as const;
