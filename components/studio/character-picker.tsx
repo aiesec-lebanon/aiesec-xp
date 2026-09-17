@@ -8,7 +8,6 @@ import { CHARACTERS } from "@/lib/design/character";
 
 import { CharacterStage } from "./character-stage";
 import { preloadCharacter } from "./character-model";
-import { ContactShadow } from "./character";
 
 export function useCharacterChoice(initialCharacter: string) {
   const [index, setIndex] = useState(() =>
@@ -67,17 +66,20 @@ export function CharacterCarousel({
       <StepButton side="left" onClick={() => step(-1)} reduceMotion={reduceMotion} />
       <StepButton side="right" onClick={() => step(1)} reduceMotion={reduceMotion} />
 
-      <div className="relative z-10 flex flex-col items-center pb-9">
-        <CharacterStage
-          id={character.id}
-          name={memberName}
-          height={height}
-          interactive
-          enterFrom={enterFrom}
-          eager
-        />
-        <ContactShadow width={210} height={20} className="-mt-1" />
-      </div>
+      {/* The canvas spans the whole set, so a body that walks off leaves the
+          frame the member can see rather than the edge of a narrow box sitting
+          in the middle of it. floorFraction lands its feet on the horizon. */}
+      <CharacterStage
+        id={character.id}
+        name={memberName}
+        height={height}
+        interactive
+        enterFrom={enterFrom}
+        fill
+        heightFraction={0.62}
+        floorFraction={0.2}
+        eager
+      />
 
       <div className="absolute inset-x-0 bottom-6 z-10 flex flex-col items-center gap-1.5">
         <p className="font-display text-lg font-semibold text-ink">{character.name}</p>

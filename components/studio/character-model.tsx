@@ -28,19 +28,22 @@ export type CharacterPhase = "settled" | "leaving" | "arriving";
 
 export type CharacterModelProps = {
   id: string;
-  height?: number;
   mood?: CharacterMood;
-  /** Where the body is in a swap: walking off, jumping on, or just standing. */
   phase?: CharacterPhase;
-  /** Which way it walks off, and which side it jumps in from. */
+  /** Which way it walks off. */
   direction?: 1 | -1;
   /** How far off-centre the frame edge is, in world units. */
   exitDistance?: number;
-  /** Seconds the walk-off or jump-in gets. */
+  /** Seconds the walk-off or the landing gets. */
   travelSeconds?: number;
+  /** Share of the frame's height the body fills. */
+  heightFraction?: number;
+  /** Where the floor sits, as a share of the frame's height from its bottom. */
+  floorFraction?: number;
 };
 
-// What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back.
+// What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back. fov
+// is vertical, so a share of this is the same share of the canvas at any size.
 export const FRAME_HEIGHT = 2 * 6 * Math.tan((42 * Math.PI) / 360);
 
 const CROSSFADE = 0.35;
@@ -70,12 +73,13 @@ function bindable(clip: AnimationClip, names: Set<string>): AnimationClip {
 
 export function CharacterModel({
   id,
-  height = FRAME_HEIGHT * 0.9,
   mood = "idle",
   phase = "settled",
   direction = 1,
   exitDistance = 4,
-  travelSeconds = 0.8,
+  travelSeconds = 0.9,
+  heightFraction = 0.9,
+  floorFraction = 0.02,
 }: CharacterModelProps) {
   const { scene } = useModel(characterModelPath(id));
   const library = useModel(characterModelPath(ANIMATION_LIBRARY));
@@ -87,10 +91,8 @@ export function CharacterModel({
   const actions = useRef(new Map<string, AnimationAction>());
   const active = useRef<AnimationAction | null>(null);
   const nextChange = useRef(0);
-  const travelled = useRef(0);
+  const elapsed = useRef(0);
 
-  // A skinned mesh cannot be shared between two places in the graph, and each
-  // mount needs its own skeleton for its own mixer to drive.
   const body = useMemo(() => {
     const copy = cloneSkinned(scene);
     copy.traverse((node) => {
@@ -108,13 +110,13 @@ export function CharacterModel({
     const box = new Box3().setFromObject(body);
     const size = box.getSize(new Vector3());
     const centre = box.getCenter(new Vector3());
-    const scale = size.y > 0 ? height / size.y : 1;
-    const floor = -FRAME_HEIGHT / 2 + FRAME_HEIGHT * 0.02;
+    const scale = size.y > 0 ? (FRAME_HEIGHT * heightFraction) / size.y : 1;
+    const floor = -FRAME_HEIGHT / 2 + FRAME_HEIGHT * floorFraction;
     return {
       scale,
       position: [-centre.x * scale, floor - box.min.y * scale, -centre.z * scale] as const,
     };
-  }, [body, height]);
+  }, [body, heightFraction, floorFraction]);
 
   useEffect(() => {
     const bones = new Set<string>();
@@ -147,22 +149,20 @@ export function CharacterModel({
     active.current = action;
   };
 
-  // The pose a body holds while it is walking off or jumping on is decided by
-  // the phase, not by the idle cycle.
   useEffect(() => {
     if (!mixer.current) return;
-    travelled.current = 0;
+    elapsed.current = 0;
 
     if (phase === "leaving") {
       play(direction > 0 ? CLIPS.walkRight : CLIPS.walkLeft, { fade: 0.2 });
       return;
     }
     if (phase === "arriving") {
+      // Stretched to the landing exactly once, so the body does not bounce
+      // through three jumps on the way in.
       const jump = actions.current.get(CLIPS.jump);
-      // Fit the jump to the time it has to cross, rather than the other way
-      // round: the frame width decides how long the trip is.
-      const speed = jump ? Math.max(0.6, jump.getClip().duration / travelSeconds) : 1;
-      play(CLIPS.jump, { once: true, fade: 0.15, speed });
+      const speed = jump ? jump.getClip().duration / travelSeconds : 1;
+      play(CLIPS.jump, { once: true, fade: 0, speed });
       return;
     }
 
@@ -185,56 +185,50 @@ export function CharacterModel({
     const node = group.current;
     if (!node || !mixer.current) return;
 
-    // A member who asked for less motion gets the first frame of the clip and
-    // nothing after it (D-46); the canvas is on `demand` for them anyway.
     if (reduceMotion) {
       mixer.current.update(0);
-      node.position.x = fit.position[0];
       return;
     }
-
     mixer.current.update(delta);
 
     if (phase === "settled") {
-      node.position.x = fit.position[0];
       nextChange.current -= delta;
       if (nextChange.current <= 0) {
         const pool = mood === "celebrate" ? CLIPS.celebrate : CLIPS.idle;
         const greet = mood === "idle" && Math.random() < GREET_CHANCE;
         const name = greet ? pick(CLIPS.greet) : pick(pool, active.current?.getClip().name);
         play(name, { once: greet });
-        const hold = greet
+        nextChange.current = greet
           ? (actions.current.get(name)?.getClip().duration ?? 2)
           : DWELL.min + Math.random() * (DWELL.max - DWELL.min);
-        nextChange.current = hold;
       }
       return;
     }
 
-    travelled.current = Math.min(1, travelled.current + delta / travelSeconds);
-    const t = travelled.current;
+    elapsed.current = Math.min(1, elapsed.current + delta / travelSeconds);
+    const t = elapsed.current;
+
     if (phase === "leaving") {
-      // Linear on the way out: a walk that eases is a walk that slows down for
-      // no reason.
+      // Linear: a walk that eases is a walk that slows down for no reason.
       node.position.x = fit.position[0] + direction * exitDistance * t;
-    } else {
-      const eased = 1 - (1 - t) ** 3;
-      node.position.x = fit.position[0] + direction * exitDistance * (1 - eased);
+      return;
     }
+
+    // Arriving happens on the spot -- the body lands where it will stand, rather
+    // than sliding in from the wing the last one left through.
+    const eased = 1 - (1 - t) ** 3;
+    node.scale.setScalar(fit.scale * (0.86 + 0.14 * eased));
+    node.rotation.y = (1 - eased) * -0.5;
   });
 
-  const facing = phase === "leaving" ? direction * 1.3 : 0;
+  const arriving = phase === "arriving" && !reduceMotion;
 
   return (
     <group
       ref={group}
-      position={[
-        fit.position[0] + (phase === "arriving" ? direction * exitDistance : 0),
-        fit.position[1],
-        fit.position[2],
-      ]}
-      rotation={[0, facing, 0]}
-      scale={fit.scale}
+      position={fit.position}
+      scale={arriving ? fit.scale * 0.86 : fit.scale}
+      rotation={[0, arriving ? -0.5 : 0, 0]}
     >
       <primitive object={body} />
     </group>

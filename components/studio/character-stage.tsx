@@ -12,19 +12,31 @@ import { characterStillPath, type CharacterMood } from "@/lib/design/character";
 
 import { CharacterModel } from "./character-model";
 
-/** Seconds a body gets to walk off, and the next to jump on. */
-const TRAVEL = 0.85;
+/** How fast a body walks off, in world units a second. */
+const WALK_SPEED = 4.2;
+const WALK_BOUNDS = { min: 0.7, max: 1.7 };
+/** Seconds the next body gets to land. The jump clip is stretched to fit it. */
+const LAND = 1.2;
 
 export type CharacterStageProps = {
   id: string;
   name: string;
+  /** Rendered height in pixels. Ignored when `fill` is set. */
   height: number;
   mood?: CharacterMood;
   eager?: boolean;
   /** Let the member turn the body. For the lab, not for a dashboard. */
   interactive?: boolean;
-  /** Which side a new character arrives from; the old one leaves the other way. */
+  /** Which side the walk-off heads for. */
   enterFrom?: 1 | -1;
+  /**
+   * Fill the parent instead of a portrait box. A character that walks off has to
+   * leave *the frame the member can see*, and a 310px box inside a wide panel
+   * puts the edge of the canvas in the middle of the screen.
+   */
+  fill?: boolean;
+  heightFraction?: number;
+  floorFraction?: number;
   className?: string;
 };
 
@@ -36,12 +48,22 @@ export function CharacterStage({
   eager = false,
   interactive = false,
   enterFrom = 1,
+  fill = false,
+  heightFraction,
+  floorFraction,
   className = "",
 }: CharacterStageProps) {
   const width = Math.round(height * 0.72);
 
   return (
-    <div style={{ width, height }} className={`flex items-end justify-center ${className}`}>
+    <div
+      style={fill ? undefined : { width, height }}
+      className={
+        fill
+          ? `absolute inset-0 ${className}`
+          : `flex items-end justify-center ${className}`
+      }
+    >
       <Scene
         eager={eager}
         transparent
@@ -61,7 +83,13 @@ export function CharacterStage({
         <SceneEnvironment environment="studio" />
         <directionalLight position={[3, 5, 4]} intensity={1.6} />
         <directionalLight position={[-4, 2, -3]} intensity={0.4} />
-        <Swap id={id} mood={mood} enterFrom={enterFrom} />
+        <Swap
+          id={id}
+          mood={mood}
+          enterFrom={enterFrom}
+          heightFraction={heightFraction}
+          floorFraction={floorFraction}
+        />
         {interactive ? (
           <OrbitControls
             makeDefault
@@ -80,64 +108,82 @@ export function CharacterStage({
   );
 }
 
+type Stage =
+  | { kind: "settled"; id: string }
+  | { kind: "leaving"; id: string; next: string }
+  | { kind: "arriving"; id: string };
+
 /**
- * Keeps the outgoing body on stage while the new one arrives.
+ * One body on stage at a time: the outgoing character walks clear of the frame,
+ * and only then does the next land in its place.
  *
- * The exit distance comes from the viewport rather than a constant: the canvas
- * is a different number of world units wide on a phone and on the TV, and a body
- * has to clear the edge of whichever it is on before it stops walking.
+ * Overlapping the two read as a collision, and it also meant both models were
+ * mounted at once -- so a character whose file had not finished loading took the
+ * whole Suspense boundary down with it and the one walking off vanished.
  */
 function Swap({
   id,
   mood,
   enterFrom,
+  heightFraction,
+  floorFraction,
 }: {
   id: string;
   mood: CharacterMood;
   enterFrom: 1 | -1;
+  heightFraction?: number;
+  floorFraction?: number;
 }) {
   const viewport = useThree((state) => state.viewport);
   const reduceMotion = useReduceMotion();
-  const [swap, setSwap] = useState<{ id: string; leaving: string | null }>({ id, leaving: null });
+  const [stage, setStage] = useState<Stage>({ kind: "settled", id });
 
-  // Adjusted during render rather than in an effect: an effect commits a frame
-  // later, and in that frame the new body would stand at centre before jumping
-  // in from the edge.
-  if (swap.id !== id) {
-    setSwap({ id, leaving: reduceMotion ? null : swap.id });
+  // Adjusted during render rather than in an effect, which commits a frame later
+  // -- long enough for the new body to be seen standing where the old one was.
+  if (stage.kind === "settled" && stage.id !== id) {
+    setStage(reduceMotion ? { kind: "settled", id } : { kind: "leaving", id: stage.id, next: id });
+  } else if (stage.kind === "leaving" && stage.next !== id) {
+    setStage({ kind: "leaving", id: stage.id, next: id });
+  } else if (stage.kind === "arriving" && stage.id !== id) {
+    setStage(reduceMotion ? { kind: "settled", id } : { kind: "arriving", id });
   }
 
-  const leaving = swap.leaving;
-  useEffect(() => {
-    if (!leaving) return;
-    const timer = setTimeout(() => setSwap((current) => ({ ...current, leaving: null })), TRAVEL * 1000);
-    return () => clearTimeout(timer);
-  }, [leaving]);
+  // The frame the member can actually see, not a guess: the canvas is a
+  // different number of world units wide on a phone and on the TV.
+  const exitDistance = viewport.width / 2 + 1.2;
+  // Timed from the distance rather than fixed, so the walk holds one pace
+  // whatever the canvas is: a fixed duration makes a wide frame a sprint.
+  const walkSeconds = Math.min(
+    WALK_BOUNDS.max,
+    Math.max(WALK_BOUNDS.min, exitDistance / WALK_SPEED),
+  );
 
-  const exitDistance = viewport.width / 2 + 1.1;
+  useEffect(() => {
+    if (stage.kind === "settled") return;
+    const hold = stage.kind === "leaving" ? walkSeconds : LAND;
+    const timer = setTimeout(
+      () =>
+        setStage((current) =>
+          current.kind === "leaving"
+            ? { kind: "arriving", id: current.next }
+            : { kind: "settled", id: current.id },
+        ),
+      hold * 1000,
+    );
+    return () => clearTimeout(timer);
+  }, [stage, walkSeconds]);
 
   return (
-    <>
-      {leaving ? (
-        <CharacterModel
-          key={`leaving-${leaving}`}
-          id={leaving}
-          mood={mood}
-          phase="leaving"
-          direction={(-enterFrom) as 1 | -1}
-          exitDistance={exitDistance}
-          travelSeconds={TRAVEL}
-        />
-      ) : null}
-      <CharacterModel
-        key={id}
-        id={id}
-        mood={mood}
-        phase={leaving ? "arriving" : "settled"}
-        direction={enterFrom}
-        exitDistance={exitDistance}
-        travelSeconds={TRAVEL}
-      />
-    </>
+    <CharacterModel
+      key={`${stage.id}-${stage.kind}`}
+      id={stage.id}
+      mood={mood}
+      phase={stage.kind}
+      direction={(-enterFrom) as 1 | -1}
+      exitDistance={exitDistance}
+      travelSeconds={stage.kind === "leaving" ? walkSeconds : LAND}
+      heightFraction={heightFraction}
+      floorFraction={floorFraction}
+    />
   );
 }
