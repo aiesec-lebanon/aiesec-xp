@@ -4,7 +4,7 @@ import { currentUser } from "@/lib/auth/current-user";
 import { memberAvatar } from "@/lib/design/avatar";
 import { MotionProvider } from "@/components/motion/motion-provider";
 import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
-import { Header } from "@/components/studio/chrome";
+import { HeaderSlot } from "@/components/studio/header-slot";
 import { typeSystem } from "@/lib/design/fonts";
 import { readReduceMotion } from "@/lib/design/motion-preference";
 
@@ -31,7 +31,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-surface">
         <MotionProvider reduceMotion={reduceMotion}>
-          <Header user={user} characterId={avatar?.character.id} />
+          <HeaderSlot user={user} characterId={avatar?.character.id} />
           <div className="flex min-h-full flex-1 flex-col">{children}</div>
           {/* <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col items-end gap-1.5">
             <div className="pointer-events-auto rounded-full bg-surface-raised px-3.5 py-2 shadow-e1">

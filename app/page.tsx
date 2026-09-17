@@ -262,7 +262,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <Rise delay={0.24}>
+        <Rise delay={0.24} className="pb-20">
           <StatChips chips={chips} />
         </Rise>
       </div>

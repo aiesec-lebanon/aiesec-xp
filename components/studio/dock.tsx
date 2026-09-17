@@ -22,7 +22,13 @@ export function Dock() {
     (pathname === "/" ? "/" : null);
 
   return (
-    <nav aria-label="Sections" className="flex gap-1 rounded-full bg-surface-raised p-1.5 shadow-e2">
+    <nav
+      aria-label="Sections"
+      // Translucent with a blur: the dock floats over a scrolling page, and a
+      // solid pill let the text underneath read through it as if it were part
+      // of the same line.
+      className="flex gap-1 rounded-full bg-surface-raised/85 p-1.5 shadow-e2 ring-1 ring-surface-sunken backdrop-blur-md"
+    >
       {TABS.map((tab) => {
         const isActive = tab.href === active;
         return (
@@ -30,7 +36,7 @@ export function Dock() {
             key={tab.href}
             href={tab.href}
             aria-current={isActive ? "page" : undefined}
-            className={`rounded-full px-4.5 py-2.5 text-[13px] transition-colors duration-300 ${
+            className={`rounded-full px-4.5 py-2.5 text-[13px] transition-[background-color,color] duration-[var(--motion-ui)] ease-[var(--motion-ease)] ${
               isActive
                 ? "bg-ink font-semibold text-surface"
                 : "font-medium text-ink-secondary hover:bg-surface-sunken"
