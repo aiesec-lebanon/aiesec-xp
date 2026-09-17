@@ -16,16 +16,11 @@ export function useCharacterChoice(initialCharacter: string) {
       0,
     ),
   );
-  // The arrow the member pressed is the way the walk goes: the one on stage
-  // leaves that way, and the next follows it in from the far side.
-  const [walkDirection, setWalkDirection] = useState<1 | -1>(1);
-
   const step = (by: number) => {
     setIndex((current) => (current + by + CHARACTERS.length) % CHARACTERS.length);
-    setWalkDirection(by > 0 ? 1 : -1);
   };
 
-  return { character: CHARACTERS[index]!, index, step, walkDirection };
+  return { character: CHARACTERS[index]!, index, step };
 }
 
 /** The set: a body on the cyclorama, an arrow either side, and its name. */
@@ -33,14 +28,12 @@ export function CharacterCarousel({
   memberName,
   index,
   step,
-  walkDirection,
   beat = null,
   height = 430,
 }: {
   memberName: string;
   index: number;
   step: (by: number) => void;
-  walkDirection: 1 | -1;
   /** What the body does about something the member just did. */
   beat?: CharacterBeat | null;
   height?: number;
@@ -48,8 +41,8 @@ export function CharacterCarousel({
   const reduceMotion = useReduceMotion();
   const character = CHARACTERS[index]!;
 
-  // Every body is one arrow press away, and a swap that has to fetch a .glb
-  // first would drop the outgoing walk on the floor.
+  // Every body is one arrow press away, so none of them should arrive as a
+  // Suspense fallback the first time it is asked for.
   useEffect(() => {
     for (const option of CHARACTERS) preloadCharacter(option.id);
   }, []);
@@ -69,15 +62,13 @@ export function CharacterCarousel({
       <StepButton side="left" onClick={() => step(-1)} reduceMotion={reduceMotion} />
       <StepButton side="right" onClick={() => step(1)} reduceMotion={reduceMotion} />
 
-      {/* The canvas spans the whole set, so a body that walks off leaves the
-          frame the member can see rather than the edge of a narrow box sitting
-          in the middle of it. floorFraction lands its feet on the horizon. */}
+      {/* The canvas spans the whole set rather than sitting in a narrow box in
+          the middle of it. floorFraction lands the feet on the horizon. */}
       <CharacterStage
         id={character.id}
         name={memberName}
         height={height}
         interactive
-        walkDirection={walkDirection}
         fill
         heightFraction={0.62}
         floorFraction={0.2}
