@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, weeklyPoints } from "@/lib/dashboard";
@@ -40,6 +41,10 @@ export default async function MePage({
     activeWindow(),
     memberAvatar(user.id, user.fullName),
   ]);
+
+
+  // First run: a member picks their character before anything else (D-52).
+  if (!avatar.chosen) redirect("/welcome");
 
   const weeks = weeklyPoints(progress.trail, window);
   const tallest = weeks.reduce((most, week) => Math.max(most, week.points), 0);
@@ -174,14 +179,10 @@ export default async function MePage({
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 className="font-display text-xl font-semibold text-ink">Character lab</h2>
           <span className="text-xs text-ink-faint">
-            pick a body and its colours — this is how you appear across AIESEC XP
+            this is who you appear as across AIESEC XP
           </span>
         </div>
-        <CharacterLab
-          name={user.fullName}
-          initialCharacter={avatar.character}
-          initialColours={avatar.colours}
-        />
+        <CharacterLab name={user.fullName} initialCharacter={avatar.character.id} />
       </Rise>
 
       <div className="mx-6 mt-6 flex items-center justify-between gap-6 rounded-[22px] bg-surface-raised px-7 py-6 shadow-e2 sm:mx-16">

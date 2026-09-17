@@ -20,6 +20,12 @@ WIDTH = 560
 HEIGHT = 780
 MARGIN = 1.10
 
+# The profile picture, as a share of body height. These characters are drawn
+# with large heads, so the top fifth is already face.
+PORTRAIT = 320
+PORTRAIT_SPAN = 0.36
+PORTRAIT_DROP = 0.17
+
 
 def stage():
     scene = bpy.context.scene
@@ -105,15 +111,33 @@ def render_one(repo_root, name):
     mid_z = (min(c.z for c in corners) + max(c.z for c in corners)) / 2
     height = max(c.z for c in corners) - min(c.z for c in corners)
 
-    cam = bpy.context.scene.camera
-    cam.location = (mid_x, min(c.y for c in corners) - 6.0, mid_z)
+    scene = bpy.context.scene
+    cam = scene.camera
+    depth = min(c.y for c in corners) - 6.0
+
+    scene.render.resolution_x = WIDTH
+    scene.render.resolution_y = HEIGHT
+    cam.location = (mid_x, depth, mid_z)
     # ortho_scale covers the render's larger dimension, which here is the height.
     cam.data.ortho_scale = height * MARGIN
 
     out = os.path.join(repo_root, "public", "characters", f"{name}.png")
-    bpy.context.scene.render.filepath = out
+    scene.render.filepath = out
     bpy.ops.render.render(write_still=True)
     print(f"STILL {name} {os.path.getsize(out)}")
+
+    # The profile picture: head and a little shoulder, square, so it can be
+    # cropped to a circle anywhere without losing the face.
+    top = max(c.z for c in corners)
+    scene.render.resolution_x = PORTRAIT
+    scene.render.resolution_y = PORTRAIT
+    cam.location = (mid_x, depth, top - height * PORTRAIT_DROP)
+    cam.data.ortho_scale = height * PORTRAIT_SPAN
+
+    out = os.path.join(repo_root, "public", "characters", f"{name}-portrait.png")
+    scene.render.filepath = out
+    bpy.ops.render.render(write_still=True)
+    print(f"PORTRAIT {name} {os.path.getsize(out)}")
 
 
 def main():

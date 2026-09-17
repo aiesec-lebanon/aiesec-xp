@@ -14,10 +14,12 @@ export function ProfileMenu({
   name,
   short,
   isAdmin = false,
+  characterId,
 }: {
   name: string;
   short?: string;
   isAdmin?: boolean;
+  characterId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -49,7 +51,13 @@ export function ProfileMenu({
         onClick={() => setOpen((current) => !current)}
         className="flex items-center gap-2.5 rounded-full bg-surface-raised py-1.5 pl-2 pr-3.5 shadow-e1 transition-colors hover:bg-surface-sunken"
       >
-        <CharacterAvatar name={name} size={26} rounded="rounded-full" tone="bg-re-wash" />
+        <CharacterAvatar
+          name={name}
+          idOverride={characterId}
+          size={26}
+          rounded="rounded-full"
+          tone="bg-re-wash"
+        />
         <span className="text-[13px] font-semibold text-ink">{short ?? name}</span>
         <svg
           aria-hidden

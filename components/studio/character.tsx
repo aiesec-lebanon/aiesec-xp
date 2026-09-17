@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { characterFor, characterStillPath, type CharacterColours } from "@/lib/design/character";
+import { characterFor, characterPortraitPath, characterStillPath } from "@/lib/design/character";
 
 import { CharacterStage } from "./character-stage";
 
@@ -21,7 +21,6 @@ export function Character({
   className = "",
   stage = false,
   idOverride,
-  colours,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
@@ -30,22 +29,18 @@ export function Character({
   idle?: Idle;
   priority?: boolean;
   className?: string;
-  /** Render the rigged model live. Worth a canvas only where one body is shown and can change. */
+  /** Render the model live. Worth a canvas only where one body is shown. */
   stage?: boolean;
-  /** Renders this character instead of the one `name` hashes to, for a member with a saved avatar. */
+  /** The member's chosen character, instead of the one `name` hashes to. */
   idOverride?: string;
-  /** The member's saved colours. Reaches the live stage only; a still is already rendered. */
-  colours?: CharacterColours;
 }) {
   const id = idOverride ?? characterFor(name).id;
 
   if (stage) {
-    return (
-      <CharacterStage id={id} name={name} height={height} colours={colours} className={className} />
-    );
+    return <CharacterStage id={id} name={name} height={height} className={className} />;
   }
 
-  // The still is rendered from the same .glb (D-50), so it is the same
+  // The still is rendered from the same .glb (D-52), so it is the same
   // character in the same pose as the live stage.
   return (
     <Image
@@ -61,40 +56,35 @@ export function Character({
   );
 }
 
-/** The same body cropped into a circle or a rounded tile, for rows and pills. */
+/** The member's profile picture: their character's face, for rows and pills. */
 export function CharacterAvatar({
   name,
+  idOverride,
   size = 46,
   rounded = "rounded-[14px]",
   tone = "bg-floor",
 }: {
   name: string;
+  idOverride?: string;
   size?: number;
   rounded?: string;
   tone?: string;
 }) {
+  const id = idOverride ?? characterFor(name).id;
+
   return (
     <div
       style={{ width: size, height: size }}
       className={`relative shrink-0 overflow-hidden ${rounded} ${tone}`}
     >
-      {/* Inset rather than `fill`: the renders carry headroom above and a floor
-          line below, so the body is nudged up inside its own frame. */}
       <Image
         data-model-slot="character"
-        src={characterStillPath(characterFor(name).id)}
+        src={characterPortraitPath(id)}
         alt=""
         width={size}
         height={size}
         sizes={`${size}px`}
-        style={{
-          position: "absolute",
-          top: "8%",
-          left: 0,
-          width: "100%",
-          height: "88%",
-          objectFit: "contain",
-        }}
+        className="size-full object-cover"
       />
     </div>
   );
