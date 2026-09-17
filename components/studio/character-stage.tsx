@@ -35,6 +35,8 @@ export type CharacterStageProps = {
   fill?: boolean;
   heightFraction?: number;
   floorFraction?: number;
+  /** Radians of yaw while standing, so bodies either side of a group angle inwards. */
+  facing?: number;
   className?: string;
 };
 
@@ -49,6 +51,7 @@ export function CharacterStage({
   fill = false,
   heightFraction,
   floorFraction,
+  facing = 0,
   className = "",
 }: CharacterStageProps) {
   const width = Math.round(height * 0.72);
@@ -87,6 +90,7 @@ export function CharacterStage({
           walkDirection={walkDirection}
           heightFraction={heightFraction}
           floorFraction={floorFraction}
+          facing={facing}
         />
         {interactive ? (
           <OrbitControls
@@ -125,12 +129,14 @@ function Swap({
   walkDirection,
   heightFraction,
   floorFraction,
+  facing,
 }: {
   id: string;
   mood: CharacterMood;
   walkDirection: 1 | -1;
   heightFraction?: number;
   floorFraction?: number;
+  facing?: number;
 }) {
   const viewport = useThree((state) => state.viewport);
   const reduceMotion = useReduceMotion();
@@ -182,6 +188,7 @@ function Swap({
       travelSeconds={walkSeconds}
       heightFraction={heightFraction}
       floorFraction={floorFraction}
+      facing={facing}
     />
   );
 }

@@ -60,6 +60,9 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
                 idOverride={place.characterId}
                 stage
                 mood="celebrate"
+                // Second and third turn in towards the winner rather than all
+                // three standing square to camera.
+                facing={place.rank === 2 ? -0.4 : place.rank === 3 ? 0.4 : 0}
               />
             </div>
 

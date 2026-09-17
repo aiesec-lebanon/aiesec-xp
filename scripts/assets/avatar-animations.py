@@ -19,26 +19,45 @@ import glob
 import json
 import os
 import sys
+import tempfile
 
 import bpy
 
 # Named for what they are used for, not what Mixamo called them.
 CLIPS = {
+    # Ambient
     "Breathing Idle": "idle-breathing",
     "Happy Idle": "idle-happy",
     "Happy Idle (1)": "idle-happy-2",
     "Look Around Idle": "idle-look-around",
-    "Looking Around Idle": "idle-looking-around",
     "Arm Stretching Idle": "idle-stretch",
-    "Catwalk Idle Twist R": "idle-twist",
+    "Bored": "idle-bored",
+    # Transitions -- what makes a walk start and stop instead of snapping
+    "Start Walking": "walk-start",
+    "Walking": "walk",
+    "Stop Walking": "walk-stop",
+    "Left Turn 90": "turn-left",
+    "Right Turn 90": "turn-right",
+    # Addressed to the member
     "Waving": "wave",
+    "Acknowledging": "acknowledge",
+    "Standing Thumbs Up": "thumbs-up",
+    "Salute": "salute",
+    "Disappointed": "disappointed",
+    "Pointing": "point",
+    # Celebration
     "Cheering": "cheer",
     "Cheering (1)": "cheer-2",
     "Clapping": "clap",
     "Rallying": "rally",
     "Victory": "victory",
-    "Jumping": "jump",
-    "Walking": "walk",
+    "Hip Hop Dancing": "dance",
+    # Between two bodies standing near each other
+    "Talking": "talk",
+    "Talking (1)": "talk-2",
+    "Agreeing": "agree",
+    "Look Over Shoulder": "glance",
+    "Telling A Secret": "secret",
 }
 
 # Left out on purpose: the two sitting idles put a body on a chair this product
@@ -52,11 +71,34 @@ SKIP = {
     # line, and a turning cycle veers against it.
     "Walking Left Turn",
     "Walking Right Turn",
+    # Near-duplicates of clips already in the table.
+    "Looking Around Idle",
+    "Catwalk Idle Twist R",
+    "Talking (2)",
+    "Talking (3)",
+    "Silly Dancing",
+    "Silly Dancing (1)",
+    "Jumping",
 }
 
 # Any of the four would do -- they share a rest pose, and only rotation is
 # exported, so this rig's scale and position never reach the output.
 REFERENCE_RIG = "avatar-hoodie-cargo-rig"
+
+# Two files rather than one. Everything that stands on a screen needs the core;
+# only a few surfaces need a body to talk, point or dance, and carrying those
+# everywhere put 1.3MB on every page that shows a character.
+LIBRARIES = {
+    "avatar-animations": [
+        "idle-breathing", "idle-happy", "idle-happy-2", "idle-look-around", "idle-stretch",
+        "walk", "walk-start", "walk-stop", "turn-left", "turn-right",
+        "wave", "cheer", "cheer-2", "clap", "rally", "victory",
+    ],
+    "avatar-animations-social": [
+        "idle-bored", "acknowledge", "thumbs-up", "salute", "disappointed", "point",
+        "talk", "talk-2", "agree", "glance", "secret", "dance",
+    ],
+}
 
 
 def action_fcurves(action):
@@ -186,6 +228,32 @@ def retarget(target, source, frame_start, frame_end):
     return baked
 
 
+def write_library(source, path, names):
+    """Copy the exported file, keeping only the named clips.
+
+    Splitting here rather than exporting twice keeps one retarget pass: the
+    accessors the dropped clips referenced are left orphaned, and
+    `npm run assets:models` prunes them.
+    """
+    with open(source, "rb") as handle:
+        blob = handle.read()
+
+    json_length = int.from_bytes(blob[12:16], "little")
+    document = json.loads(blob[20 : 20 + json_length])
+    rest = blob[20 + json_length :]
+
+    wanted = set(names)
+    document["animations"] = [a for a in document.get("animations", []) if a.get("name") in wanted]
+    kept = [a["name"] for a in document["animations"]]
+
+    encoded = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    encoded += b" " * ((4 - len(encoded) % 4) % 4)
+    header = b"glTF" + (2).to_bytes(4, "little") + (12 + 8 + len(encoded) + len(rest)).to_bytes(4, "little")
+    with open(path, "wb") as handle:
+        handle.write(header + len(encoded).to_bytes(4, "little") + b"JSON" + encoded + rest)
+    return kept
+
+
 def rotation_only(path):
     """Delete every translation and scale channel from the exported file.
 
@@ -280,7 +348,7 @@ def main():
     rig.select_set(True)
     bpy.context.view_layer.objects.active = rig
 
-    out = os.path.join(repo_root, "assets", "source", "avatar-animations.glb")
+    out = os.path.join(tempfile.gettempdir(), "avatar-animations-all.glb")
     bpy.ops.export_scene.gltf(
         filepath=out,
         export_format="GLB",
@@ -294,8 +362,17 @@ def main():
     )
 
     report["channels_removed"] = rotation_only(out)
-    report["bytes"] = os.path.getsize(out)
-    report["path"] = out
+
+    report["libraries"] = {}
+    for name, clips in LIBRARIES.items():
+        path = os.path.join(repo_root, "assets", "source", f"{name}.glb")
+        kept = write_library(out, path, clips)
+        report["libraries"][name] = {"clips": len(kept), "bytes": os.path.getsize(path)}
+        missing = sorted(set(clips) - set(kept))
+        if missing:
+            report["libraries"][name]["missing"] = missing
+
+    os.remove(out)
     print("AVATAR_ANIMATIONS " + json.dumps(report))
 
 
