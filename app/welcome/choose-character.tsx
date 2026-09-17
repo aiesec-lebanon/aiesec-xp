@@ -14,7 +14,7 @@ export function ChooseCharacter({
   initialCharacter: string;
 }) {
   const router = useRouter();
-  const { character, index, step, stepped } = useCharacterChoice(initialCharacter);
+  const { character, index, step, enterFrom } = useCharacterChoice(initialCharacter);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -38,7 +38,7 @@ export function ChooseCharacter({
           memberName={name}
           index={index}
           step={step}
-          animate={stepped}
+          enterFrom={enterFrom}
           height={400}
         />
       </div>

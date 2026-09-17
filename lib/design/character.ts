@@ -49,6 +49,33 @@ export function characterStillPath(id: string): string {
   return `/characters/${id}.png`;
 }
 
+/** The shared clip library every character is driven by (D-53). */
+export const ANIMATION_LIBRARY = "avatar-animations";
+
+// Mixamo clips, renamed for what they are used for. All four characters carry
+// the same skeleton, so any clip drives any of them.
+export const CLIPS = {
+  /** Cycled at random wherever a body is just standing there. */
+  idle: [
+    "idle-breathing",
+    "idle-happy",
+    "idle-happy-2",
+    "idle-look-around",
+    "idle-looking-around",
+    "idle-stretch",
+    "idle-twist",
+  ],
+  /** Played once now and then, between idles. */
+  greet: ["wave"],
+  /** For a leaderboard, where every body on screen has something to celebrate. */
+  celebrate: ["cheer", "cheer-2", "clap", "rally", "victory"],
+  walkLeft: "walk-left",
+  walkRight: "walk-right",
+  jump: "jump",
+} as const;
+
+export type CharacterMood = "idle" | "celebrate";
+
 /** Head and shoulders, for a profile picture. */
 export function characterPortraitPath(id: string): string {
   return `/characters/${id}-portrait.png`;

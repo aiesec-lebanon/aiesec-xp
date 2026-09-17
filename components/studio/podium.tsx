@@ -10,6 +10,8 @@ export type PodiumPlace = {
   name: string;
   office: string | null;
   points: number;
+  /** The member's chosen character, if it has been resolved. */
+  characterId?: string;
 };
 
 const FORM = {
@@ -51,7 +53,14 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
               style={{ height: form.frame }}
             >
               {first ? <Crown /> : null}
-              <Character name={place.name} height={form.body} idle={first ? "bob" : "small"} />
+              <Character
+                name={place.name}
+                height={form.body}
+                idle={first ? "bob" : "small"}
+                idOverride={place.characterId}
+                stage
+                mood="celebrate"
+              />
             </div>
 
             <ContactShadow
