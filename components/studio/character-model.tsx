@@ -30,11 +30,11 @@ export type CharacterModelProps = {
   id: string;
   mood?: CharacterMood;
   phase?: CharacterPhase;
-  /** Which way it walks off. */
+  /** Which way the walk heads: the side of the arrow the member pressed. */
   direction?: 1 | -1;
   /** How far off-centre the frame edge is, in world units. */
   exitDistance?: number;
-  /** Seconds the walk-off or the landing gets. */
+  /** Seconds the walk across the frame gets. */
   travelSeconds?: number;
   /** Share of the frame's height the body fills. */
   heightFraction?: number;
@@ -153,23 +153,14 @@ export function CharacterModel({
     if (!mixer.current) return;
     elapsed.current = 0;
 
-    if (phase === "leaving") {
-      play(direction > 0 ? CLIPS.walkRight : CLIPS.walkLeft, { fade: 0.2 });
-      return;
-    }
-    if (phase === "arriving") {
-      // Stretched to the landing exactly once, so the body does not bounce
-      // through three jumps on the way in.
-      const jump = actions.current.get(CLIPS.jump);
-      const speed = jump ? jump.getClip().duration / travelSeconds : 1;
-      play(CLIPS.jump, { once: true, fade: 0, speed });
+    if (phase !== "settled") {
+      play(CLIPS.walk, { fade: 0.2 });
       return;
     }
 
     const pool = mood === "celebrate" ? CLIPS.celebrate : CLIPS.idle;
     play(pick(pool), { fade: 0.25 });
     nextChange.current = DWELL.min + Math.random() * (DWELL.max - DWELL.min);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, direction, mood, body, library]);
 
   // A member who asked for less motion puts the canvas on `demand`, where
@@ -205,30 +196,26 @@ export function CharacterModel({
       return;
     }
 
+    // Linear on both legs: a walk that eases is a walk that slows down for no
+    // reason. Leaving runs centre to edge, arriving runs the far edge to centre,
+    // both heading the same way, so the two read as one body passing through.
     elapsed.current = Math.min(1, elapsed.current + delta / travelSeconds);
-    const t = elapsed.current;
-
-    if (phase === "leaving") {
-      // Linear: a walk that eases is a walk that slows down for no reason.
-      node.position.x = fit.position[0] + direction * exitDistance * t;
-      return;
-    }
-
-    // Arriving happens on the spot -- the body lands where it will stand, rather
-    // than sliding in from the wing the last one left through.
-    const eased = 1 - (1 - t) ** 3;
-    node.scale.setScalar(fit.scale * (0.86 + 0.14 * eased));
-    node.rotation.y = (1 - eased) * -0.5;
+    const travelled = phase === "leaving" ? elapsed.current : elapsed.current - 1;
+    node.position.x = fit.position[0] + direction * exitDistance * travelled;
   });
 
-  const arriving = phase === "arriving" && !reduceMotion;
+  const walking = phase !== "settled" && !reduceMotion;
+  // The bodies are exported facing +Z, so a quarter turn puts them in profile,
+  // walking the way they are travelling.
+  const facing = walking ? (direction * Math.PI) / 2 : 0;
+  const start = phase === "arriving" && walking ? -direction * exitDistance : 0;
 
   return (
     <group
       ref={group}
-      position={fit.position}
-      scale={arriving ? fit.scale * 0.86 : fit.scale}
-      rotation={[0, arriving ? -0.5 : 0, 0]}
+      position={[fit.position[0] + start, fit.position[1], fit.position[2]]}
+      scale={fit.scale}
+      rotation={[0, facing, 0]}
     >
       <primitive object={body} />
     </group>
