@@ -9,6 +9,8 @@ import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
 import { Dock } from "@/components/studio/dock";
 import { GrowBar, Rise } from "@/components/studio/motion";
 
+import { memberAvatar } from "@/lib/design/avatar";
+
 import { CharacterLab } from "./character-lab";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +35,11 @@ export default async function MePage({
   const user = await requireMemberPage("/me");
   const params = await searchParams;
 
-  const [progress, window] = await Promise.all([personalProgress(user.id), activeWindow()]);
+  const [progress, window, avatar] = await Promise.all([
+    personalProgress(user.id),
+    activeWindow(),
+    memberAvatar(user.id, user.fullName),
+  ]);
 
   const weeks = weeklyPoints(progress.trail, window);
   const tallest = weeks.reduce((most, week) => Math.max(most, week.points), 0);
@@ -168,10 +174,14 @@ export default async function MePage({
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 className="font-display text-xl font-semibold text-ink">Character lab</h2>
           <span className="text-xs text-ink-faint">
-            pick a body and preview colours — nothing is saved yet
+            pick a body and its colours — this is how you appear across AIESEC XP
           </span>
         </div>
-        <CharacterLab name={user.fullName} />
+        <CharacterLab
+          name={user.fullName}
+          initialCharacter={avatar.character}
+          initialColours={avatar.colours}
+        />
       </Rise>
 
       <div className="mx-6 mt-6 flex items-center justify-between gap-6 rounded-[22px] bg-surface-raised px-7 py-6 shadow-e2 sm:mx-16">
