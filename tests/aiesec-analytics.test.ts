@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countsFromPayload } from "@/lib/analytics/funnel-tags";
+import { countsFromPayload, sumProducts } from "@/lib/analytics/funnel-tags";
 
 // Fixture shaped like the AIESEC Analytics API's own response (aies.ec/developer-guides,
 // "Using the AIESEC Analytics API"): one o_<stage>_<programme> key per outgoing
@@ -38,5 +38,16 @@ describe("countsFromPayload", () => {
   it("ignores a malformed entry instead of throwing", () => {
     const result = countsFromPayload({ o_applied_7: null }, [7]);
     expect(result[7]).toEqual({ APL: 0, APD: 0, RE: 0 });
+  });
+});
+
+describe("sumProducts", () => {
+  it("collapses every product into one APL/APD/RE figure", () => {
+    const result = countsFromPayload(PAYLOAD, [7, 8, 9]);
+    expect(sumProducts(result)).toEqual({ APL: 17, APD: 4, RE: 3 });
+  });
+
+  it("returns zeros for an empty product map", () => {
+    expect(sumProducts({})).toEqual({ APL: 0, APD: 0, RE: 0 });
   });
 });

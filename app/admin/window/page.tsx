@@ -4,6 +4,7 @@ import { requireMemberPage } from "@/lib/auth/guards";
 import { toDateInputValue } from "@/lib/admin/window";
 import { activeWindowOrDefault } from "@/lib/admin/window-form";
 import { fetchFunnelAnalytics, type ProductFunnelCounts } from "@/lib/analytics/aiesec-analytics";
+import { PROGRAMME_IDS } from "@/lib/analytics/funnel-tags";
 import { mcOfficeId } from "@/lib/env";
 import { activeMemberCount } from "@/lib/org/active-members";
 
@@ -14,8 +15,6 @@ import { WindowForm } from "./controls";
 
 export const dynamic = "force-dynamic";
 
-// Products in scope (D-04): 7 = GV, 8 = GTa, 9 = GTe.
-const PROGRAMME_IDS = [7, 8, 9] as const;
 const PROGRAMME_LABEL: Record<number, string> = { 7: "GV", 8: "GTa", 9: "GTe" };
 
 export default async function WindowAdminPage() {
