@@ -1,9 +1,10 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Group } from "three";
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
 import { SceneEnvironment } from "@/components/three/environment";
@@ -17,9 +18,8 @@ import {
 
 import { CharacterModel } from "./character-model";
 
-/** How fast a body walks, in world units a second. */
-const WALK_SPEED = 4.2;
-const WALK_BOUNDS = { min: 0.7, max: 1.7 };
+/** How long a newly chosen body takes to settle into place. */
+const ENTRANCE = 0.42;
 
 export type CharacterStageProps = {
   id: string;
@@ -30,13 +30,7 @@ export type CharacterStageProps = {
   eager?: boolean;
   /** Let the member turn the body. For the lab, not for a dashboard. */
   interactive?: boolean;
-  /** Which way the walk heads: the side of the arrow the member pressed. */
-  walkDirection?: 1 | -1;
-  /**
-   * Fill the parent instead of a portrait box. A character that walks off has to
-   * leave *the frame the member can see*, and a 310px box inside a wide panel
-   * puts the edge of the canvas in the middle of the screen.
-   */
+  /** Fill the parent instead of a portrait box. */
   fill?: boolean;
   heightFraction?: number;
   floorFraction?: number;
@@ -58,7 +52,6 @@ export function CharacterStage({
   mood = "idle",
   eager = false,
   interactive = false,
-  walkDirection = 1,
   fill = false,
   heightFraction,
   floorFraction,
@@ -102,7 +95,6 @@ export function CharacterStage({
         <Swap
           id={id}
           mood={mood}
-          walkDirection={walkDirection}
           heightFraction={heightFraction}
           floorFraction={floorFraction}
           facing={facing}
@@ -127,23 +119,18 @@ export function CharacterStage({
   );
 }
 
-type Stage =
-  | { kind: "settled"; id: string }
-  | { kind: "leaving"; id: string; next: string }
-  | { kind: "arriving"; id: string };
-
 /**
- * One body on stage at a time: the outgoing character walks clear of the frame
- * the way the arrow pointed, and the next walks in from the far side after it.
+ * One body on stage at a time, swapped where it stands.
  *
- * Overlapping the two read as a collision, and it also meant both models were
- * mounted at once -- so a character whose file had not finished loading took the
- * whole Suspense boundary down with it and the one walking off vanished.
+ * It used to walk: the outgoing character left the frame the way the arrow
+ * pointed and the next followed it in. That read badly -- the body spent the
+ * transition in profile, off-centre, and a swap interrupted mid-stride left it
+ * stranded at the edge of the canvas. Choosing a character is not a journey, so
+ * the new one simply arrives, settles, and says hello.
  */
 function Swap({
   id,
   mood,
-  walkDirection,
   heightFraction,
   floorFraction,
   facing,
@@ -152,67 +139,72 @@ function Swap({
 }: {
   id: string;
   mood: CharacterMood;
-  walkDirection: 1 | -1;
   heightFraction?: number;
   floorFraction?: number;
   facing?: number;
   social?: boolean;
   beat?: string | null;
 }) {
-  const viewport = useThree((state) => state.viewport);
-  const reduceMotion = useReduceMotion();
-  const [stage, setStage] = useState<Stage>({ kind: "settled", id });
+  const [shown, setShown] = useState(id);
+  const [entry, setEntry] = useState<string | null>(null);
 
-  // Adjusted during render rather than in an effect, which commits a frame later
-  // -- long enough for the new body to be seen standing where the old one was.
-  if (stage.kind === "settled" && stage.id !== id) {
-    setStage(reduceMotion ? { kind: "settled", id } : { kind: "leaving", id: stage.id, next: id });
-  } else if (stage.kind === "leaving" && stage.next !== id) {
-    setStage({ kind: "leaving", id: stage.id, next: id });
-  } else if (stage.kind === "arriving" && stage.id !== id) {
-    setStage(reduceMotion ? { kind: "settled", id } : { kind: "arriving", id });
+  // Derived during render rather than in an effect, so the body that mounts is
+  // already the one holding its greeting.
+  if (shown !== id) {
+    setShown(id);
+    setEntry(beatClip("greet"));
   }
 
-  // The frame the member can actually see, not a guess: the canvas is a
-  // different number of world units wide on a phone and on the TV.
-  const exitDistance = viewport.width / 2 + 1.2;
-  // Timed from the distance rather than fixed, so the walk holds one pace
-  // whatever the canvas is: a fixed duration makes a wide frame a sprint.
-  const walkSeconds = Math.min(
-    WALK_BOUNDS.max,
-    Math.max(WALK_BOUNDS.min, exitDistance / WALK_SPEED),
-  );
-
+  // Let go of it once it has played, or a surface beat clearing later would fall
+  // back to the greeting and wave again for no reason.
   useEffect(() => {
-    if (stage.kind === "settled") return;
-    const hold = walkSeconds;
-    const timer = setTimeout(
-      () =>
-        setStage((current) =>
-          current.kind === "leaving"
-            ? { kind: "arriving", id: current.next }
-            : { kind: "settled", id: current.id },
-        ),
-      hold * 1000,
-    );
+    if (!entry) return;
+    const timer = setTimeout(() => setEntry(null), 2400);
     return () => clearTimeout(timer);
-  }, [stage, walkSeconds]);
+  }, [entry]);
 
   return (
-    <CharacterModel
-      key={`${stage.id}-${stage.kind}`}
-      id={stage.id}
-      mood={mood}
-      phase={stage.kind}
-      direction={walkDirection}
-      exitDistance={exitDistance}
-      travelSeconds={walkSeconds}
-      heightFraction={heightFraction}
-      floorFraction={floorFraction}
-      facing={facing}
-      social={social}
-      beat={beat}
-    />
+    <Entrance key={id}>
+      <CharacterModel
+        id={id}
+        mood={mood}
+        heightFraction={heightFraction}
+        floorFraction={floorFraction}
+        facing={facing}
+        social={social}
+        beat={beat ?? entry}
+      />
+    </Entrance>
+  );
+}
+
+/** Settles a body into place: down a little, up to full size, once. */
+function Entrance({ children }: { children: ReactNode }) {
+  const group = useRef<Group>(null);
+  const elapsed = useRef(0);
+  const reduceMotion = useReduceMotion();
+
+  useFrame((_, delta) => {
+    const node = group.current;
+    if (!node) return;
+
+    if (reduceMotion) {
+      node.scale.setScalar(1);
+      node.position.y = 0;
+      return;
+    }
+    if (elapsed.current >= ENTRANCE) return;
+
+    elapsed.current = Math.min(ENTRANCE, elapsed.current + delta);
+    const eased = 1 - (1 - elapsed.current / ENTRANCE) ** 3;
+    node.scale.setScalar(0.93 + 0.07 * eased);
+    node.position.y = (1 - eased) * 0.22;
+  });
+
+  return (
+    <group ref={group} scale={0.93} position={[0, 0.22, 0]}>
+      {children}
+    </group>
   );
 }
 
