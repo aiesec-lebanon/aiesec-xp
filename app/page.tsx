@@ -218,7 +218,9 @@ export default async function HomePage() {
                 stage
                 idOverride={avatar.character.id}
                 social
-                mood={points > 0 ? "idle" : "empty"}
+                // Calm, not the wandering pool: a hero shot whose gaze roams
+                // reads as distracted rather than present.
+                mood={points > 0 ? "calm" : "empty"}
                 beat={heroBeat}
                 greetKey="dashboard"
               />

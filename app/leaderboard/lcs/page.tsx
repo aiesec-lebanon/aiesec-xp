@@ -50,7 +50,7 @@ export default async function LcLeaderboardPage() {
       {leader ? (
         <Rise
           delay={0.08}
-          className="relative mx-6 mt-7 flex flex-col items-center overflow-hidden rounded-3xl bg-surface px-10 pb-8 pt-11 sm:mx-16"
+          className="relative mx-6 mt-7 flex flex-col items-center overflow-hidden rounded-3xl bg-surface-raised px-10 pb-8 pt-11 shadow-e2 sm:mx-16"
         >
           <div className="absolute inset-x-0 top-[-18px]">
             <GhostNumber>{Math.round(leader.points)}</GhostNumber>

@@ -67,8 +67,12 @@ export const CLIPS = {
     "idle-look-around",
     "idle-stretch",
   ],
-  /** Calm and forward-facing, for a hero shot where a wandering gaze reads as distracted. */
-  idleCalm: ["idle-breathing", "idle-happy"],
+  /**
+   * For a hero shot, where a wandering gaze reads as distracted. Weighted by
+   * repetition rather than excluded outright: a body that never looks anywhere
+   * is as odd as one that never looks at you.
+   */
+  idleCalm: ["idle-breathing", "idle-happy", "idle-breathing", "idle-happy", "idle-look-around"],
   /**
    * Nothing has scored yet. Cheerful idles on an empty board read as the product
    * not knowing what state it is in. `idle-bored` is in the social library, so a
@@ -101,7 +105,7 @@ export const CLIPS = {
   },
 } as const;
 
-export type CharacterMood = "idle" | "celebrate" | "empty";
+export type CharacterMood = "idle" | "calm" | "celebrate" | "empty";
 
 /** A one-shot clip a surface asks for because something happened. */
 export type CharacterBeat =
