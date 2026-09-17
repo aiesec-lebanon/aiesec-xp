@@ -67,6 +67,7 @@ function pick<T>(from: readonly T[], not?: T): T {
 function poolFor(mood: CharacterMood): readonly string[] {
   if (mood === "celebrate") return CLIPS.celebrate;
   if (mood === "empty") return CLIPS.idleEmpty;
+  if (mood === "calm") return CLIPS.idleCalm;
   return CLIPS.idle;
 }
 
@@ -231,7 +232,7 @@ export function CharacterModel({
       node.rotation.y = MathUtils.damp(node.rotation.y, facing, 3.2, delta);
       nextChange.current -= delta;
       if (nextChange.current <= 0) {
-        const greet = mood === "idle" && Math.random() < GREET_CHANCE;
+        const greet = (mood === "idle" || mood === "calm") && Math.random() < GREET_CHANCE;
         const name = greet
           ? pick(CLIPS.greet)
           : pick(poolFor(mood), active.current?.getClip().name);
