@@ -89,7 +89,7 @@ export function CharacterCarousel({
       </div>
 
       <p className="pointer-events-none absolute inset-x-0 bottom-1 z-10 text-center text-[10px] text-ink-faint">
-        Drag to turn · scroll to zoom
+        Drag to turn
       </p>
     </div>
   );
