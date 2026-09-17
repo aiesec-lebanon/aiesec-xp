@@ -36,6 +36,10 @@ export const PART_LABELS: Record<CharacterPart, string> = {
   shoe: "Shoe colour",
 };
 
+// Garments can be any colour, so their swatches are a shortcut and the lab
+// offers a picker too. Skin and hair stay on a curated set on purpose.
+export const PART_TAKES_ANY_COLOUR: readonly CharacterPart[] = ["shirt", "trouser", "shoe"];
+
 export const PART_SWATCHES: Record<CharacterPart, readonly string[]> = {
   skin: ["#F7D9B8", "#E8B98A", "#C88958", "#9C6238", "#6B4226"],
   hair: ["#2B2320", "#6B4226", "#B8752E", "#E8C88A", "#D6453D"],
