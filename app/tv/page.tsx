@@ -105,7 +105,7 @@ export default async function TvPage() {
           {/* The column ran out of rows halfway down. What belongs in the gap
               is the sum no single row carries: APL, APD and RE across every
               entity. */}
-          <div className="mt-[clamp(0.5rem,1.2vh,2rem)] flex min-h-0 flex-[2] flex-col justify-center rounded-3xl bg-surface-raised px-[clamp(1.5rem,2.5vw,2.5rem)] shadow-e1">
+          <div className="mt-[clamp(0.5rem,1.2vh,2rem)] flex min-h-0 flex-[2] flex-col justify-center rounded-3xl bg-surface-raised px-[clamp(1.5rem,2.5vw,2.5rem)] py-[clamp(1rem,2.2vh,2rem)] shadow-e1">
             <p className="shrink-0 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
               All entities
             </p>
