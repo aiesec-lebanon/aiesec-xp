@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Box3, Color, Mesh, MeshStandardMaterial, Object3D, SkinnedMesh, Vector3 } from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 
@@ -59,6 +59,12 @@ export type CharacterModelProps = {
   colours?: CharacterColours;
   /** Rendered height in world units. Defaults to most of the frame. */
   height?: number;
+  /**
+   * The colour each part was authored with, reported once the body has loaded.
+   * Read off the materials rather than held in a table here, so the default a
+   * member is shown cannot drift from the .glb it came from.
+   */
+  onAuthoredColours?: (colours: Partial<Record<CharacterPart, string>>) => void;
 };
 
 // What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back.
@@ -70,6 +76,7 @@ export function CharacterModel({
   id,
   colours,
   height = FRAME_HEIGHT * 0.9,
+  onAuthoredColours,
 }: CharacterModelProps) {
   const { scene } = useModel(characterModelPath(id));
 
@@ -104,17 +111,33 @@ export function CharacterModel({
     };
   }, [body, height]);
 
-  // What each part was authored with, so clearing a choice puts it back.
+  // What each part was authored with, so clearing a choice puts it back -- and
+  // so the lab can show it as the default a member starts on.
   const authored = useMemo(() => {
-    const original = new Map<string, Color>();
+    const byMaterial = new Map<string, Color>();
+    const byPart: Partial<Record<CharacterPart, string>> = {};
     body.traverse((node) => {
       if (!(node instanceof Mesh)) return;
       for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-        if (material instanceof MeshStandardMaterial) original.set(material.uuid, material.color.clone());
+        if (!(material instanceof MeshStandardMaterial)) continue;
+        byMaterial.set(material.uuid, material.color.clone());
+        const part = partOf(material.name);
+        if (part) byPart[part] = `#${material.color.getHexString().toUpperCase()}`;
       }
     });
-    return original;
+    return { byMaterial, byPart };
   }, [body]);
+
+  // Held in a ref, and reported only when the body changes: a caller passing an
+  // inline function would otherwise re-run this on every render, and the state
+  // it sets would render again.
+  const report = useRef(onAuthoredColours);
+  useEffect(() => {
+    report.current = onAuthoredColours;
+  }, [onAuthoredColours]);
+  useEffect(() => {
+    report.current?.(authored.byPart);
+  }, [authored]);
 
   useEffect(() => {
     body.traverse((node) => {
@@ -129,7 +152,7 @@ export function CharacterModel({
         const chosen = colours?.[part];
         // set() converts from sRGB itself under three's colour management.
         if (chosen) material.color.set(chosen);
-        else material.color.copy(authored.get(material.uuid) ?? material.color);
+        else material.color.copy(authored.byMaterial.get(material.uuid) ?? material.color);
         material.needsUpdate = true;
       }
     });
