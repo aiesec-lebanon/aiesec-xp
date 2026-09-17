@@ -4,6 +4,7 @@ import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, closingMove, pace } from "@/lib/dashboard";
 import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, TEXT } from "@/lib/design/tokens";
+import type { CharacterBeat } from "@/lib/design/character";
 
 import { Character, CharacterAvatar, ContactShadow } from "@/components/studio/character";
 import { memberAvatar, memberAvatars } from "@/lib/design/avatar";
@@ -59,6 +60,12 @@ export default async function HomePage() {
   const standing = progress.standing;
   const points = standing?.points ?? 0;
   const next = pace(progress, window);
+
+  // What the body has to say about the numbers beside it. An empty board gets a
+  // restless idle rather than a cheerful one, because a character celebrating
+  // nothing is the product not knowing what state it is in.
+  const heroBeat: CharacterBeat | null =
+    points === 0 ? null : standing?.rank === 1 ? "celebrate" : next === null ? "thumbsUp" : null;
 
   const gap = progress.nextUp
     ? Math.round((progress.nextUp.points - points) * 10_000) / 10_000
@@ -210,6 +217,10 @@ export default async function HomePage() {
                 priority
                 stage
                 idOverride={avatar.character.id}
+                social
+                mood={points > 0 ? "idle" : "empty"}
+                beat={heroBeat}
+                greetKey="dashboard"
               />
               <ContactShadow width={300} height={52} className="-mt-3.5" />
             </div>
@@ -262,7 +273,9 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <Rise delay={0.24} className="pb-20">
+        {/* Clears the floating dock's 80px footprint with room to spare, so the
+            chips are never the thing it lands on. */}
+        <Rise delay={0.24} className="pb-28">
           <StatChips chips={chips} />
         </Rise>
       </div>
