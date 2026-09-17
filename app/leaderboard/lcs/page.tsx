@@ -2,6 +2,7 @@ import { requireMemberPage } from "@/lib/auth/guards";
 import { individualStandings, officeStandings } from "@/lib/leaderboard";
 
 import { Character, ContactShadow } from "@/components/studio/character";
+import { memberAvatars } from "@/lib/design/avatar";
 import { Dock } from "@/components/studio/dock";
 import { GhostNumber, Rise } from "@/components/studio/motion";
 import { Crown } from "@/components/studio/podium";
@@ -16,12 +17,16 @@ export default async function LcLeaderboardPage() {
 
   // The three bodies on the leading LC's plinth are its own top three, so the
   // group on the page is the group that put it there rather than decoration.
-  const faces = leader
-    ? members
-        .filter((standing) => standing.officeId === leader.officeId)
-        .slice(0, 3)
-        .map((standing) => standing.fullName)
+  const top = leader
+    ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 3)
     : [];
+  const characters = await memberAvatars(
+    top.map((standing) => ({ id: standing.memberId, fullName: standing.fullName })),
+  );
+  const faces = top.map((standing) => ({
+    name: standing.fullName,
+    characterId: characters.get(standing.memberId)?.id,
+  }));
 
   const totalMembers = standings.reduce((sum, entry) => sum + entry.memberCount, 0);
 
@@ -54,15 +59,29 @@ export default async function LcLeaderboardPage() {
           <div className="relative z-10 mt-6 flex items-end">
             {faces[1] ? (
               <div className="-mr-5.5">
-                <Character name={faces[1]} height={150} idle="small" />
+                <Character
+                  name={faces[1].name}
+                  idOverride={faces[1].characterId}
+                  height={150}
+                  idle="small"
+                />
               </div>
             ) : null}
             <div className="relative z-10">
-              <Character name={faces[0] ?? leader.officeName} height={196} />
+              <Character
+                name={faces[0]?.name ?? leader.officeName}
+                idOverride={faces[0]?.characterId}
+                height={196}
+              />
             </div>
             {faces[2] ? (
               <div className="-ml-5.5">
-                <Character name={faces[2]} height={150} idle="small" />
+                <Character
+                  name={faces[2].name}
+                  idOverride={faces[2].characterId}
+                  height={150}
+                  idle="small"
+                />
               </div>
             ) : null}
           </div>

@@ -1,6 +1,12 @@
 # Bakes the Mixamo clips into one shared animation file (D-53).
 #
-#   blender -b -P scripts/assets/avatar-animations.py -- <repo-root> <fbx-dir>
+#   blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-animations.py -- <repo-root> <fbx-dir>
+#
+# The clips are retargeted onto one of the characters' own rigs first. A glTF
+# rotation channel replaces a node's local rotation outright, so a clip is only
+# valid against the rest pose it was authored on -- and Mixamo's download rig
+# rests differently from the rigs in the .blend, which collapsed every body that
+# played one. All four characters share a rest, so retargeting once is enough.
 #
 # One file, not one per character: every clip is a set of bone rotations on the
 # Mixamo skeleton, and all four characters carry that skeleton, so the same
@@ -41,6 +47,10 @@ CLIPS = {
 # download folder if that judgement is ever revisited.
 SKIP = {"Sitting Idle", "Sitting Idle (1)", "Offensive Idle"}
 
+# Any of the four would do -- they share a rest pose, and only rotation is
+# exported, so this rig's scale and position never reach the output.
+REFERENCE_RIG = "avatar-hoodie-cargo-rig"
+
 
 def action_fcurves(action):
     """Blender 5 moved fcurves under layers/strips/channelbags."""
@@ -70,44 +80,24 @@ def remove_fcurve(action, fcurve):
 
 
 def trim(action):
-    """Drop what the clip does not need, and stop it walking off the set.
+    """Strip every location channel, leaving rotation only.
 
-    Mixamo keys a location on every bone, which only the hips actually use --
-    dropping the rest is most of the file size. And one clip (Rallying) was not
-    exported in place: it advances over a metre, which on a fixed camera means
-    the body leaves the frame. Subtracting the net drift keeps the motion and
-    loses the travel.
+    Mixamo writes bone translations in its own units: on these clips the hips
+    travel up to 12 units, on a character that is 1.5 units tall. Blender hides
+    it because the armature it was imported onto carries a compensating scale,
+    but exported to glTF and bound to our skeletons it throws the hips eight body
+    heights away and the mesh with it.
+
+    Rotation-only is the usual way to share one clip across characters of
+    different proportions anyway, and these are all in-place clips, so the only
+    thing lost is the vertical bob -- which the stage puts back itself for the
+    jump, where it actually reads.
     """
     dropped = 0
     for fcurve in list(action_fcurves(action)):
-        path = fcurve.data_path
-        if not path.endswith("location"):
-            continue
-
-        if "Hips" not in path:
+        if fcurve.data_path.endswith("location"):
             remove_fcurve(action, fcurve)
             dropped += 1
-            continue
-
-        points = fcurve.keyframe_points
-        if len(points) < 2:
-            continue
-        first = points[0].co[1]
-        last = points[-1].co[1]
-        drift = last - first
-        if abs(drift) < 1e-4:
-            continue
-
-        start = points[0].co[0]
-        span = points[-1].co[0] - start
-        if span <= 0:
-            continue
-        for point in points:
-            share = (point.co[0] - start) / span
-            point.co[1] -= drift * share
-            point.handle_left[1] -= drift * share
-            point.handle_right[1] -= drift * share
-        fcurve.update()
     return dropped
 
 
@@ -147,15 +137,88 @@ def decimate(action, tolerance=0.01):
     return removed
 
 
+
+
+def retarget(target, source, frame_start, frame_end):
+    """Copy the clip onto the character's rig, matching world orientation.
+
+    Copy Rotation rather than Copy Transforms: the two skeletons are the same
+    hierarchy at very different scales, so matching world *positions* would tear
+    the limbs apart, while matching world *orientations* is exactly what a
+    rotation-only clip needs.
+    """
+    for bone in target.pose.bones:
+        if bone.name not in source.pose.bones:
+            continue
+        bone.rotation_mode = "QUATERNION"
+        constraint = bone.constraints.new("COPY_ROTATION")
+        constraint.target = source
+        constraint.subtarget = bone.name
+        constraint.target_space = "WORLD"
+        constraint.owner_space = "WORLD"
+
+    bpy.ops.object.select_all(action="DESELECT")
+    target.select_set(True)
+    bpy.context.view_layer.objects.active = target
+    bpy.ops.object.mode_set(mode="POSE")
+    bpy.ops.pose.select_all(action="SELECT")
+    bpy.ops.nla.bake(
+        frame_start=int(frame_start),
+        frame_end=int(frame_end),
+        only_selected=False,
+        visual_keying=True,
+        clear_constraints=True,
+        clear_parents=False,
+        use_current_action=False,
+        bake_types={"POSE"},
+    )
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    baked = target.animation_data.action
+    target.animation_data.action = None
+    return baked
+
+
+def rotation_only(path):
+    """Delete every translation and scale channel from the exported file.
+
+    Dropping the fcurves is not enough: the exporter writes a TRS channel for
+    each animated bone whatever the action holds, and a zeroed translation is
+    worse than a wrong one -- it overrides the character's own rest offsets and
+    drops the hips to the parent origin. The orphaned accessors left behind are
+    pruned by `npm run assets:models`.
+    """
+    with open(path, "rb") as handle:
+        blob = handle.read()
+
+    json_length = int.from_bytes(blob[12:16], "little")
+    document = json.loads(blob[20 : 20 + json_length])
+    rest = blob[20 + json_length :]
+
+    removed = 0
+    for animation in document.get("animations", []):
+        keep = [c for c in animation["channels"] if c["target"]["path"] == "rotation"]
+        removed += len(animation["channels"]) - len(keep)
+        animation["channels"] = keep
+
+    encoded = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    encoded += b" " * ((4 - len(encoded) % 4) % 4)
+    header = b"glTF" + (2).to_bytes(4, "little") + (12 + 8 + len(encoded) + len(rest)).to_bytes(4, "little")
+    with open(path, "wb") as handle:
+        handle.write(header + len(encoded).to_bytes(4, "little") + b"JSON" + encoded + rest)
+    return removed
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     repo_root = argv[0] if argv else os.getcwd()
     fbx_dir = argv[1] if len(argv) > 1 else r"D:\Blender\mixamo\download"
 
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+    if bpy.context.object is not None and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
 
-    rig = None
-    report = {"clips": [], "skipped": []}
+    rig = bpy.data.objects[REFERENCE_RIG]
+    report = {"clips": [], "skipped": [], "reference": REFERENCE_RIG}
 
     for path in sorted(glob.glob(os.path.join(fbx_dir, "*.fbx"))):
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -163,48 +226,41 @@ def main():
             report["skipped"].append(stem)
             continue
 
-        before = set(bpy.data.actions.keys())
+        before_actions = set(bpy.data.actions.keys())
         before_objects = set(bpy.data.objects.keys())
         bpy.ops.import_scene.fbx(filepath=path)
 
         added = [bpy.data.objects[k] for k in set(bpy.data.objects.keys()) - before_objects]
-        imported_rig = next((o for o in added if o.type == "ARMATURE"), None)
-        actions = [bpy.data.actions[k] for k in set(bpy.data.actions.keys()) - before]
-        if imported_rig is None or not actions:
+        source = next((o for o in added if o.type == "ARMATURE"), None)
+        actions = [bpy.data.actions[k] for k in set(bpy.data.actions.keys()) - before_actions]
+        if source is None or not actions:
             report["skipped"].append(f"{stem} (no rig or action)")
             continue
 
-        action = actions[0]
-        action.name = CLIPS[stem]
-        # Kept alive with no user, so the exporter still sees it after the
-        # armature it arrived on is deleted.
-        action.use_fake_user = True
-        dropped = trim(action)
-        thinned = decimate(action)
+        original = actions[0]
+        start, end = original.frame_range
+        baked = retarget(rig, source, start, end)
+        baked.name = CLIPS[stem]
+        baked.use_fake_user = True
 
-        # The first file with the full skeleton becomes the one the clips are
-        # exported against; the rest only ever contribute their action.
-        if rig is None and len(imported_rig.data.bones) == 65:
-            rig = imported_rig
-            imported_rig = None
+        dropped = trim(baked)
+        thinned = decimate(baked)
 
         for obj in added:
-            if obj is not imported_rig and obj is not rig:
-                bpy.data.objects.remove(obj, do_unlink=True)
-        if imported_rig is not None and imported_rig is not rig:
-            bpy.data.objects.remove(imported_rig, do_unlink=True)
+            bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.data.actions.remove(original)
 
         report["clips"].append(
             {
-                "name": action.name,
-                "frames": [round(v, 1) for v in action.frame_range],
+                "name": baked.name,
+                "frames": [round(v, 1) for v in baked.frame_range],
                 "dropped_location_curves": dropped,
                 "keys_removed": thinned,
             }
         )
 
-    if rig is None:
-        raise RuntimeError("no 65-bone armature found among the clips")
+    if not report["clips"]:
+        raise RuntimeError("no clips were retargeted")
 
     bpy.ops.object.select_all(action="DESELECT")
     rig.select_set(True)
@@ -217,12 +273,13 @@ def main():
         use_selection=True,
         export_animations=True,
         export_animation_mode="ACTIONS",
-        export_bake_animation=True,
+        export_bake_animation=False,
         export_optimize_animation_size=True,
         export_yup=True,
         export_rest_position_armature=True,
     )
 
+    report["channels_removed"] = rotation_only(out)
     report["bytes"] = os.path.getsize(out)
     report["path"] = out
     print("AVATAR_ANIMATIONS " + json.dumps(report))
