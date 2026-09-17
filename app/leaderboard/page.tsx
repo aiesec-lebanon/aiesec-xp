@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { individualStandings } from "@/lib/leaderboard";
 
 import { CharacterAvatar } from "@/components/studio/character";
+import { RollingNumber } from "@/components/studio/rolling-number";
 import { memberAvatars } from "@/lib/design/avatar";
 import { Dock } from "@/components/studio/dock";
 import { Lift, Rise } from "@/components/studio/motion";
@@ -141,6 +142,7 @@ export default async function LeaderboardPage({
                 as="li"
                 key={String(standing.memberId)}
                 lift={-2}
+                layout
                 className={`flex items-center gap-5 rounded-2xl px-5.5 py-3 sm:gap-5 ${
                   isSelf ? "bg-ink shadow-e2" : "bg-surface-raised shadow-e1"
                 }`}
@@ -150,7 +152,7 @@ export default async function LeaderboardPage({
                     isSelf ? "text-surface" : "text-ink-faint"
                   }`}
                 >
-                  {standing.rank}
+                  <RollingNumber value={standing.rank} />
                 </span>
                 <CharacterAvatar
                   name={standing.fullName}
@@ -183,7 +185,7 @@ export default async function LeaderboardPage({
                       isSelf ? "text-ink-faint" : "text-ink-secondary"
                     }`}
                   >
-                    {count}
+                    <RollingNumber value={count} />
                   </span>
                 ))}
 
@@ -192,7 +194,7 @@ export default async function LeaderboardPage({
                     isSelf ? "text-surface" : "text-ink"
                   }`}
                 >
-                  {standing.points}
+                  <RollingNumber value={standing.points} />
                 </span>
               </Lift>
             );

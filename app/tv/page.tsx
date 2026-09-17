@@ -2,9 +2,12 @@ import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, recentActivity, topMembers } from "@/lib/dashboard";
 import { officeStandings } from "@/lib/leaderboard";
 
-import { CharacterAvatar } from "@/components/studio/character";
+import { AutoRefresh } from "@/components/studio/auto-refresh";
+import { Character, CharacterAvatar, ContactShadow } from "@/components/studio/character";
 import { memberAvatars } from "@/lib/design/avatar";
 import { BrandMark } from "@/components/studio/chrome";
+import { Lift } from "@/components/studio/motion";
+import { RollingNumber } from "@/components/studio/rolling-number";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +37,14 @@ export default async function TvPage() {
     [...top, ...activity].map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
   );
 
+  const leader = top[0];
+
   return (
     <main className="flex min-h-dvh flex-col bg-wall">
+      <AutoRefresh seconds={60} />
       <header className="flex items-center justify-between gap-6 px-14 py-7">
+        {/* Already a link home, which is the only way off this screen now that
+            it carries no chrome. */}
         <BrandMark size={38} type={26} />
         <div className="flex items-center gap-3.5">
           <span
@@ -56,18 +64,21 @@ export default async function TvPage() {
       </header>
 
       <div className="grid flex-1 gap-8 px-14 pb-10 xl:grid-cols-[1fr_auto]">
-        <section>
+        <section className="flex flex-col">
           <h2 className="mb-5 text-[15px] font-bold uppercase tracking-[0.1em] text-ink">
             Entities
           </h2>
           <ol className="flex flex-col gap-3.5">
             {entities.map((entity) => (
-              <li
+              <Lift
+                as="li"
+                lift={0}
+                layout
                 key={String(entity.officeId)}
-                className="flex items-center gap-5 rounded-2xl bg-surface px-5 py-4"
+                className="flex items-center gap-5 rounded-2xl bg-surface-raised px-5 py-4 shadow-e1"
               >
                 <span className="tabular w-8.5 text-2xl font-bold text-ink-faint">
-                  {entity.rank}
+                  <RollingNumber value={entity.rank} />
                 </span>
                 <span className="min-w-0 flex-1 truncate font-display text-[22px] font-semibold text-ink">
                   {entity.officeName}
@@ -78,11 +89,44 @@ export default async function TvPage() {
                   <Tile label="RE" value={entity.reCount} wash="bg-re-wash" ink="text-re-ink" />
                 </span>
                 <span className="tabular w-19 text-right text-4xl font-bold text-ink">
-                  {entity.points}
+                  <RollingNumber value={entity.points} />
                 </span>
-              </li>
+              </Lift>
             ))}
           </ol>
+
+          {/* The leader, at the size a room can read. This column ran out of
+              rows halfway down and the screen people actually watch had no body
+              on it at all. */}
+          {leader ? (
+            <div className="mt-6 flex flex-1 items-end justify-center gap-9">
+              <div className="relative flex items-end">
+                <Character
+                  name={leader.fullName}
+                  height={310}
+                  stage
+                  social
+                  mood="celebrate"
+                  // A cheer puts the hands well above standing height, which the
+                  // default fraction crops.
+                  heightFraction={0.68}
+                  idOverride={characters.get(leader.memberId)?.id}
+                />
+                <ContactShadow width={215} height={34} className="absolute inset-x-0 bottom-0" />
+              </div>
+              <div className="pb-6">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
+                  Out in front
+                </p>
+                <p className="mt-1 font-display text-3xl font-semibold text-ink">
+                  {leader.fullName}
+                </p>
+                <p className="tabular mt-1 text-5xl font-bold text-re-ink">
+                  <RollingNumber value={leader.points} />
+                </p>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="xl:w-[620px]">
@@ -93,10 +137,13 @@ export default async function TvPage() {
             {top.map((standing) => {
               const leading = standing.rank === 1;
               return (
-                <li
+                <Lift
+                  as="li"
+                  lift={0}
+                  layout
                   key={String(standing.memberId)}
                   className={`flex items-center gap-3.5 rounded-xl px-4 py-2 ${
-                    leading ? "bg-re-wash" : "bg-surface"
+                    leading ? "bg-re-wash" : "bg-surface-raised shadow-e1"
                   }`}
                 >
                   <span
@@ -104,7 +151,7 @@ export default async function TvPage() {
                       leading ? "text-re-ink" : "text-ink-faint"
                     }`}
                   >
-                    {standing.rank}
+                    <RollingNumber value={standing.rank} />
                   </span>
                   <CharacterAvatar
                     name={standing.fullName}
@@ -115,8 +162,10 @@ export default async function TvPage() {
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
                     {standing.fullName}
                   </span>
-                  <span className="tabular text-[19px] font-bold text-ink">{standing.points}</span>
-                </li>
+                  <span className="tabular text-[19px] font-bold text-ink">
+                    <RollingNumber value={standing.points} />
+                  </span>
+                </Lift>
               );
             })}
           </ol>

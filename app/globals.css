@@ -3,15 +3,25 @@
 :root {
   /* STUDIO (D-24). Mirrors lib/design/tokens.ts, which three.js and Recharts
      read directly; tests/visual-stack.test.ts fails if the two drift. */
-  --surface-base: #f6f4f0;
+  --surface-base: #fbfaf8;
   --surface-raised: #ffffff;
   --surface-sunken: #edeae4;
   --surface-line: #e3dfd7;
 
+  /* The same value as --surface-base on purpose: the chrome sits on the page
+     and the page is the back wall of the set, so there is no seam where the
+     cyclorama starts. */
   --set-wall: #fbfaf8;
   --set-floor: #f1eee8;
   --set-horizon: #e6e2da;
   --set-ghost: #efece5;
+
+  /* One scale for everything a person touches. Motion picks its own numbers
+     for springs; these are for CSS transitions. */
+  --motion-micro: 120ms;
+  --motion-ui: 180ms;
+  --motion-move: 320ms;
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
   --ink-primary: #171614;
   --ink-secondary: #4a4842;
@@ -91,6 +101,25 @@ body {
   background: var(--surface-base);
   color: var(--ink-primary);
   font-family: var(--face-ui), system-ui, sans-serif;
+}
+
+/* Everything in the chrome a person can touch moves the same way: one step of
+   surface and a small lift. Colour is left to mean something, which is why sign
+   out no longer turns blue -- it was the loudest control on the page. */
+.control-surface {
+  transition:
+    background-color var(--motion-micro) var(--motion-ease),
+    box-shadow var(--motion-micro) var(--motion-ease),
+    transform var(--motion-micro) var(--motion-ease);
+}
+
+.control-surface:hover {
+  background-color: var(--surface-sunken);
+  transform: translateY(-1px);
+}
+
+.control-surface:active {
+  transform: translateY(0);
 }
 
 /* Scores and ranks are read at a glance and compared down a column, so they get

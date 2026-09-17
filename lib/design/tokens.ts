@@ -9,7 +9,7 @@
 
 export const SURFACE = {
   /** The page. */
-  base: "#f6f4f0",
+  base: "#fbfaf8",
   /** Cards, chips, the dock -- anything lifted off the page. */
   raised: "#ffffff",
   /** Wells inside a card, and the resting state of a toggle. */
