@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { characterFor, characterStillPath } from "@/lib/design/character";
+import { characterFor, characterStillPath, type CharacterColours } from "@/lib/design/character";
 
 import { CharacterStage } from "./character-stage";
 
@@ -21,6 +21,7 @@ export function Character({
   className = "",
   stage = false,
   idOverride,
+  colours,
 }: {
   /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
@@ -31,13 +32,17 @@ export function Character({
   className?: string;
   /** Render the rigged model live. Worth a canvas only where one body is shown and can change. */
   stage?: boolean;
-  /** Renders this character instead of the one `name` hashes to -- the character lab's picker is the only caller. */
+  /** Renders this character instead of the one `name` hashes to, for a member with a saved avatar. */
   idOverride?: string;
+  /** The member's saved colours. Reaches the live stage only; a still is already rendered. */
+  colours?: CharacterColours;
 }) {
   const id = idOverride ?? characterFor(name).id;
 
   if (stage) {
-    return <CharacterStage id={id} name={name} height={height} className={className} />;
+    return (
+      <CharacterStage id={id} name={name} height={height} colours={colours} className={className} />
+    );
   }
 
   // The still is rendered from the same .glb (D-50), so it is the same
