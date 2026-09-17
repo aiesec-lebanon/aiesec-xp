@@ -2,22 +2,46 @@ import "server-only";
 
 import { db } from "@/lib/db";
 
-import { CHARACTER_PARTS, characterFor, type CharacterColours } from "./character";
+import { CHARACTERS, characterById, characterFor, type CharacterDefinition } from "./character";
 
-export type MemberAvatar = { character: string; colours: CharacterColours };
+export type MemberAvatar = {
+  character: CharacterDefinition;
+  /** False until the member has picked one for themselves. */
+  chosen: boolean;
+};
 
 /**
- * The member's saved avatar, falling back to the body their name hashes to so a
- * member who has never opened the lab still has one.
+ * The member's character, falling back to the one their name hashes to. The
+ * fallback is why no screen is ever empty, and `chosen` is what the first-run
+ * picker keys off.
  */
 export async function memberAvatar(memberId: bigint, fullName: string): Promise<MemberAvatar> {
-  const row = await db.memberAvatar.findUnique({ where: { memberId } });
-  if (!row) return { character: characterFor(fullName).id, colours: {} };
+  const row = await db.memberAvatar.findUnique({
+    where: { memberId },
+    select: { character: true },
+  });
+  const saved = characterById(row?.character);
+  return saved
+    ? { character: saved, chosen: true }
+    : { character: characterFor(fullName), chosen: false };
+}
 
-  const colours: CharacterColours = {};
-  for (const part of CHARACTER_PARTS) {
-    const value = row[part];
-    if (value) colours[part] = value;
-  }
-  return { character: row.character, colours };
+/** The characters of many members at once, for a leaderboard or a roster. */
+export async function memberAvatars(
+  members: readonly { id: bigint; fullName: string }[],
+): Promise<Map<bigint, CharacterDefinition>> {
+  if (members.length === 0) return new Map();
+
+  const rows = await db.memberAvatar.findMany({
+    where: { memberId: { in: members.map((member) => member.id) } },
+    select: { memberId: true, character: true },
+  });
+  const saved = new Map(rows.map((row) => [row.memberId, characterById(row.character)]));
+
+  return new Map(
+    members.map((member) => [
+      member.id,
+      saved.get(member.id) ?? characterFor(member.fullName) ?? CHARACTERS[0]!,
+    ]),
+  );
 }

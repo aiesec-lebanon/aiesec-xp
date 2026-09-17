@@ -38,44 +38,44 @@ the exported `.glb`). `D:\Blender\characters.blend` is the untouched original �
 work on the copy, never on it.
 
 Objects are named by **garment form, never colour** — `avatar-tee-shorts`, not
-`avatar-blue-tee` — because colour is the thing members customise at runtime, so
-a colour in the name is a name that goes stale on first use. Each character is
+`avatar-blue-tee` — so re-authoring a character's palette does not make its name
+a lie. Each character is
 one mesh (`<name>-mesh`) and one armature (`<name>-rig`), normalised to 1.5m
 tall, scale 1, rotation 0, feet at the origin.
 
 ### Rebuilding the avatars
 
 ```
-characters_working.blend  ──  avatar-parts.py  ──▶  assets/source/avatar-*.glb
+characters_working.blend  ──  avatar-export.py  ──▶  assets/source/avatar-*.glb
                                                           │
                               npm run assets:models        ▼
                                                     public/models/avatar-*.glb
                                                           │
                               avatar-stills.py            ▼
-                                                    public/characters/avatar-*.png
+                                             public/characters/avatar-*.png
+                                             public/characters/avatar-*-portrait.png
 ```
 
 ```sh
-blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-parts.py -- .
+blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-export.py -- .
 npm run assets:models
 blender -b -P scripts/assets/avatar-stills.py -- .
 blender -b -P scripts/assets/avatar-preview.py -- . <out-dir>   # check the result
 ```
 
-`avatar-parts.py` is what makes the bodies recolourable; D-50 in `Context.md`
-says why it has to exist. It splits each mesh into one material per part,
-rewrites the baked texture as a per-part luminance map, poses the arms down and
-stands the body at the origin. Its reference colours are read off each
-character's own texture — if a character is re-authored, re-read them rather than
-guessing, or parts will land in the wrong slot.
+`avatar-export.py` keeps each character's authored materials (D-52). It bakes the
+A-pose into the mesh and drops the rig, so the exported geometry is the body in
+world coordinates — which is what makes every character come out the same size in
+the app. Animation will need this run again with `export_skins`; the rig is still
+in the .blend.
 
-`avatar-stills.py` renders the **shipped `.glb`**, not the Blender scene, so the
-still and the live model cannot drift apart.
+`avatar-stills.py` renders two images per character from the **shipped `.glb`**,
+not the Blender scene, so they cannot drift from the model: a full body for the
+screens that show several at once, and a square portrait used as the member's
+profile picture.
 
-Their licence is unresolved and stays that way by decision: the product is
-internal and undistributed, so D-49 accepts the open question rather than
-blocking on it. See the character section of `ATTRIBUTIONS.md` for what would
-have to be answered before any external release.
+`avatar-parts.py` is the parked per-part recolouring pipeline (D-52). It is kept
+because restoring recolouring means running it again, not rewriting it.
 
 ## Where free assets come from
 

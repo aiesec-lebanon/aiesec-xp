@@ -6,23 +6,13 @@ import { z } from "zod";
 import { requireMember } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 
-import { CHARACTER_PARTS, CHARACTERS } from "./character";
+import { CHARACTERS } from "./character";
 
 // A member edits only their own avatar, so the id comes from the session and is
-// never accepted from the client.
-
-const colour = z
-  .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Expected a #RRGGBB colour")
-  .transform((value) => value.toUpperCase());
-
-// The colour picker puts every hex within reach, so the swatch lists are not a
-// whitelist. The character is: it names a .glb that has to exist.
+// never accepted from the client. The character is checked against the four,
+// because it names a .glb that has to exist.
 const schema = z.object({
   character: z.enum(CHARACTERS.map((c) => c.id) as [string, ...string[]]),
-  // partialRecord, not record: a part the member left alone is absent, and a
-  // part they cleared is null. Both mean "as drawn".
-  colours: z.partialRecord(z.enum(CHARACTER_PARTS), colour.nullable()).default({}),
 });
 
 export type SaveCharacterInput = z.input<typeof schema>;
@@ -36,17 +26,32 @@ export async function saveCharacter(input: SaveCharacterInput): Promise<SaveChar
     return { ok: false, error: parsed.error.issues[0]?.message ?? "That character is not valid" };
   }
 
-  const { character, colours } = parsed.data;
-  // A part with no choice is stored as NULL, which is what "as drawn" means.
-  const parts = Object.fromEntries(CHARACTER_PARTS.map((part) => [part, colours[part] ?? null]));
-
+  const { character } = parsed.data;
   await db.memberAvatar.upsert({
     where: { memberId: user.id },
-    create: { memberId: user.id, character, ...parts },
-    update: { character, ...parts },
+    create: { memberId: user.id, character },
+    update: { character },
   });
 
-  revalidatePath("/me");
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   return { ok: true };
 }
+
+/* ---------------------------------------------------------------------------
+ * Parked: saving per-part colours (D-52).
+ *
+ * MemberAvatar still has the nullable colour columns, so restoring this needs no
+ * migration -- only this validation back, and the parts written through to the
+ * upsert above.
+ *
+ * const colour = z
+ *   .string()
+ *   .regex(/^#[0-9a-fA-F]{6}$/, "Expected a #RRGGBB colour")
+ *   .transform((value) => value.toUpperCase());
+ *
+ * // partialRecord, not record: a part the member left alone is absent, and a
+ * // part they cleared is null. Both mean "as drawn".
+ * colours: z.partialRecord(z.enum(CHARACTER_PARTS), colour.nullable()).default({}),
+ *
+ * const parts = Object.fromEntries(CHARACTER_PARTS.map((part) => [part, colours[part] ?? null]));
+ * ------------------------------------------------------------------------- */

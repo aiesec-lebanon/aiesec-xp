@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, closingMove, pace } from "@/lib/dashboard";
 import { personalProgress } from "@/lib/leaderboard";
@@ -49,6 +51,10 @@ export default async function HomePage() {
     activeWindow(),
     memberAvatar(user.id, user.fullName),
   ]);
+
+
+  // First run: a member picks their character before anything else (D-52).
+  if (!avatar.chosen) redirect("/welcome");
 
   const standing = progress.standing;
   const points = standing?.points ?? 0;
@@ -193,8 +199,7 @@ export default async function HomePage() {
                 height={440}
                 priority
                 stage
-                idOverride={avatar.character}
-                colours={avatar.colours}
+                idOverride={avatar.character.id}
               />
               <ContactShadow width={300} height={52} className="-mt-3.5" />
             </div>

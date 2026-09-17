@@ -46,7 +46,13 @@ export function SignOutButton({ full = false }: { full?: boolean }) {
  * console to open, and each of those screens carries its own sign-in or
  * sign-out affordance already.
  */
-export function Header({ user }: { user: CurrentUser | null }) {
+export function Header({
+  user,
+  characterId,
+}: {
+  user: CurrentUser | null;
+  characterId?: string;
+}) {
   if (!user || user.role === "DENIED") return null;
 
   return (
@@ -57,6 +63,7 @@ export function Header({ user }: { user: CurrentUser | null }) {
           name={user.fullName}
           short={user.fullName.split(" ")[0] ?? user.fullName}
           isAdmin={user.role === "ADMIN"}
+          characterId={characterId}
         />
         <SignOutButton />
       </div>
