@@ -37,10 +37,10 @@ export function SignOutButton({ full = false }: { full?: boolean }) {
 }
 
 /**
- * The bar every member-facing screen opens with: the logo, the member's own
- * console (history, and admin where it applies) behind the profile pill, and
- * sign out. Rendered once from the root layout rather than per page, so it is
- * never missing and never drifts between screens.
+ * The bar every member-facing screen opens with: the logo, the profile pill
+ * (linking to the member's own console, with admin behind its hover dropdown
+ * where it applies), and sign out. Rendered once from the root layout rather
+ * than per page, so it is never missing and never drifts between screens.
  *
  * Absent for a visitor with no session and for `DENIED`: neither has a
  * console to open, and each of those screens carries its own sign-in or

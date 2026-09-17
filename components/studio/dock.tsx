@@ -18,7 +18,8 @@ const TABS = [
 export function Dock() {
   const pathname = usePathname();
   const active =
-    TABS.filter((tab) => tab.href !== "/" && pathname.startsWith(tab.href)).at(-1)?.href ?? "/";
+    TABS.filter((tab) => tab.href !== "/" && pathname.startsWith(tab.href)).at(-1)?.href ??
+    (pathname === "/" ? "/" : null);
 
   return (
     <nav aria-label="Sections" className="flex gap-1 rounded-full bg-surface-raised p-1.5 shadow-e2">
