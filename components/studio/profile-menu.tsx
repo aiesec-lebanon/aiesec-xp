@@ -86,7 +86,7 @@ export function ProfileMenu({
           </MenuLink>
           {isAdmin ? (
             <MenuLink href="/admin/assignments" onNavigate={() => setOpen(false)}>
-              Admin
+              Assignments
             </MenuLink>
           ) : null}
         </div>
