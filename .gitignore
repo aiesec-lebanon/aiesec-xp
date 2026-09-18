@@ -64,3 +64,6 @@ next-env.d.ts
 
 ref/
 .claude/
+
+# Python bytecode from the Blender asset scripts
+__pycache__/

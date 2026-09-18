@@ -1,5 +1,7 @@
-// The four bodies a member can be. A member picks one the first time they sign
-// in; until they do, their name hashes to one so no screen is ever empty.
+// The bodies a member can be: four forms, each in four palettes. A member picks
+// one the first time they sign in; until they do, their name hashes to one so no
+// screen is ever empty -- across all of them, so an unchosen crowd is varied
+// rather than four people repeated.
 //
 // Recolouring is parked, not deleted (D-52). The vocabulary below is what the
 // paused code reads, and `lib/design/avatar-actions.ts`, `character-model.tsx`
@@ -7,20 +9,83 @@
 
 import { modelPath } from "@/lib/three/assets";
 
-export type CharacterDefinition = {
+export type CharacterForm = {
   id: string;
   /** What members call them. */
   name: string;
   /** The garment form, never a colour, matching the object names in the .blend. */
   label: string;
+  /**
+   * Which palettes this form has been baked in. Absent means all of them.
+   *
+   * A palette needs per-part reference colours tuned against that character's
+   * own texture (`avatar-variants.py`), so a body only offers the colourings
+   * that actually exist as files.
+   */
+  palettes?: readonly string[];
 };
 
-export const CHARACTERS: readonly CharacterDefinition[] = [
+/** The bodies. A form is a shape and a wardrobe, never a colour. */
+export const CHARACTER_FORMS: readonly CharacterForm[] = [
   { id: "avatar-hoodie-joggers", name: "Milo", label: "Hoodie and joggers" },
   { id: "avatar-tee-shorts", name: "Remi", label: "Tee and shorts" },
   { id: "avatar-hoodie-cargo", name: "Sami", label: "Hoodie and cargos" },
   { id: "avatar-tee-skirt", name: "Juno", label: "Tee and skirt" },
+  { id: "avatar-crop-joggers", name: "Nour", label: "Crop top and joggers", palettes: ["p1"] },
+  { id: "avatar-crop-jeans", name: "Lina", label: "Crop top and jeans", palettes: ["p1"] },
 ] as const;
+
+export type CharacterPalette = {
+  id: string;
+  label: string;
+  /** Two dots for the switcher: the skin, and the top over it. */
+  skin: string;
+  top: string;
+};
+
+/**
+ * How a body is coloured, applied identically to all four forms so the choice
+ * reads as the same four options whichever body a member picked.
+ *
+ * `p1` is what the characters were drawn in, and is the id with no suffix --
+ * which is what every avatar saved before palettes existed already holds, so
+ * nothing needs migrating. The other three are baked by
+ * `scripts/assets/avatar-variants.py`; these swatches are its palettes, and the
+ * two files have to be changed together.
+ */
+export const CHARACTER_PALETTES: readonly CharacterPalette[] = [
+  { id: "p1", label: "As drawn", skin: "#E8C0A0", top: "#7C98CD" },
+  { id: "p2", label: "Slate", skin: "#D9A87C", top: "#4C6B8A" },
+  { id: "p3", label: "Clay", skin: "#8D5A3B", top: "#B5533F" },
+  { id: "p4", label: "Sand", skin: "#F0C8A8", top: "#E3DCCB" },
+] as const;
+
+export type CharacterDefinition = CharacterForm & {
+  /** The form this is a colouring of. */
+  form: string;
+  palette: string;
+};
+
+/** The id of a .glb: the form itself for `p1`, and a suffix for the rest. */
+export function variantId(form: string, palette: string): string {
+  return palette === CHARACTER_PALETTES[0]!.id ? form : `${form}-${palette}`;
+}
+
+/** The palettes a form actually ships in, in the order the switcher shows them. */
+export function palettesFor(form: CharacterForm): readonly CharacterPalette[] {
+  return form.palettes
+    ? CHARACTER_PALETTES.filter((palette) => form.palettes!.includes(palette.id))
+    : CHARACTER_PALETTES;
+}
+
+export const CHARACTERS: readonly CharacterDefinition[] = CHARACTER_FORMS.flatMap((form) =>
+  palettesFor(form).map((palette) => ({
+    ...form,
+    id: variantId(form.id, palette.id),
+    form: form.id,
+    palette: palette.id,
+  })),
+);
 
 function hash(value: string): number {
   let h = 2166136261;

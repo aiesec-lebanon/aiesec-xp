@@ -4,23 +4,47 @@ import { m } from "motion/react";
 import { useEffect, useState } from "react";
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
-import { CHARACTERS, type CharacterBeat } from "@/lib/design/character";
+import {
+  CHARACTERS,
+  CHARACTER_FORMS,
+  palettesFor,
+  variantId,
+  type CharacterBeat,
+} from "@/lib/design/character";
 
 import { CharacterStage } from "./character-stage";
 import { preloadCharacter } from "./character-model";
 
 export function useCharacterChoice(initialCharacter: string) {
+  const start = CHARACTERS.find((character) => character.id === initialCharacter);
   const [index, setIndex] = useState(() =>
     Math.max(
-      CHARACTERS.findIndex((character) => character.id === initialCharacter),
+      CHARACTER_FORMS.findIndex((form) => form.id === (start?.form ?? initialCharacter)),
       0,
     ),
   );
+  const form = CHARACTER_FORMS[index]!;
+  const available = palettesFor(form);
+  const [tone, setTone] = useState(() =>
+    Math.max(
+      available.findIndex((palette) => palette.id === (start?.palette ?? "p1")),
+      0,
+    ),
+  );
+
   const step = (by: number) => {
-    setIndex((current) => (current + by + CHARACTERS.length) % CHARACTERS.length);
+    setIndex((current) => (current + by + CHARACTER_FORMS.length) % CHARACTER_FORMS.length);
   };
 
-  return { character: CHARACTERS[index]!, index, step };
+  // A form that ships in fewer palettes than the one before it would otherwise
+  // leave the switcher pointing past the end of its list.
+  const safeTone = Math.min(tone, available.length - 1);
+  const palette = available[safeTone]!;
+  const character = CHARACTERS.find(
+    (option) => option.form === form.id && option.palette === palette.id,
+  )!;
+
+  return { character, index, step, tone: safeTone, setTone, palette };
 }
 
 /** The set: a body on the cyclorama, an arrow either side, and its name. */
@@ -28,24 +52,42 @@ export function CharacterCarousel({
   memberName,
   index,
   step,
+  tone,
+  setTone,
   beat = null,
   height = 430,
 }: {
   memberName: string;
   index: number;
   step: (by: number) => void;
+  tone: number;
+  setTone: (at: number) => void;
   /** What the body does about something the member just did. */
   beat?: CharacterBeat | null;
   height?: number;
 }) {
   const reduceMotion = useReduceMotion();
-  const character = CHARACTERS[index]!;
+  const form = CHARACTER_FORMS[index]!;
+  const available = palettesFor(form);
+  const palette = available[Math.min(tone, available.length - 1)]!;
+  const character = CHARACTERS.find(
+    (option) => option.form === form.id && option.palette === palette.id,
+  )!;
 
-  // Every body is one arrow press away, so none of them should arrive as a
-  // Suspense fallback the first time it is asked for.
+  // Everything one press away, and nothing further: all sixteen bodies is seven
+  // megabytes on a screen a member sees once, over Lebanese mobile data. What is
+  // one press away is each form in the palette being worn, and this form in each
+  // of the others.
   useEffect(() => {
-    for (const option of CHARACTERS) preloadCharacter(option.id);
-  }, []);
+    for (const other of CHARACTER_FORMS) {
+      const wears = palettesFor(other).some((option) => option.id === palette.id);
+      preloadCharacter(variantId(other.id, wears ? palette.id : "p1"));
+    }
+    for (const other of available) preloadCharacter(variantId(form.id, other.id));
+    // `available` is derived from the form and is a fresh array every render, so
+    // listing it would re-run this on every one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.id, palette.id]);
 
   return (
     <div className="relative flex flex-1 items-end justify-center overflow-hidden">
@@ -81,7 +123,7 @@ export function CharacterCarousel({
         <p className="font-display text-lg font-semibold text-ink">{character.name}</p>
         <p className="text-[11px] text-ink-muted">{character.label}</p>
         <div className="mt-1 flex gap-1.5">
-          {CHARACTERS.map((option, dot) => (
+          {CHARACTER_FORMS.map((option, dot) => (
             <span
               key={option.id}
               aria-hidden
@@ -89,6 +131,27 @@ export function CharacterCarousel({
                 dot === index ? "bg-ink" : "bg-ink-faint/40"
               }`}
             />
+          ))}
+        </div>
+
+        {/* The palette is a second choice, not a fifth character, so it sits
+            under the name rather than on the arrows. Each swatch shows the skin
+            over the top it comes with, which is what actually differs. */}
+        <div className="mt-2.5 flex gap-2">
+          {available.map((option, at) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setTone(at)}
+              aria-label={option.label}
+              aria-pressed={at === tone}
+              className={`size-7 overflow-hidden rounded-full transition-shadow ${
+                at === tone ? "shadow-[0_0_0_2px_var(--ink)]" : "shadow-[0_0_0_1px_rgba(0,0,0,.12)]"
+              }`}
+            >
+              <span aria-hidden className="block h-1/2 w-full" style={{ background: option.skin }} />
+              <span aria-hidden className="block h-1/2 w-full" style={{ background: option.top }} />
+            </button>
           ))}
         </div>
       </div>
