@@ -434,6 +434,54 @@ physical realization share one weight; where both dates exist the earlier wins
 Only events whose `occurredAt` falls inside the active `DisplayWindow` contribute
 to the visible leaderboard, and each event is evaluated independently (D-08).
 
+### Office-level scoring is a separate, unstored path (D-56)
+
+Everything above scores an *individual* member, because attribution (this
+section, and section 5) exists to answer "who earned this." An LC's own total
+doesn't need that answer, so `/leaderboard/lcs` and `/tv` don't sum the ledger
+at all: `officePoints()` (`lib/scoring/engine.ts`) applies the same
+`basePoints(eventType) × productWeight(programmeId) × directionWeight(direction)`
+formula directly to AIESEC's own per-office, per-programme funnel counts, read
+live from the AIESEC Analytics API (`fetchEntityFunnelBreakdown`,
+`lib/analytics/aiesec-analytics.ts`) on every request. Nothing is persisted:
+the request that renders the board is the request that scores it.
+
+This intentionally does **not** replicate every ledger rule. AIESEC's
+analytics counts are cumulative "ever reached this stage" totals, not
+netted, and there is no consequence of a withdrawn/rejected application for
+this path to filter (D-41 has no analytics equivalent) or of a break event to
+subtract (D-10, D-26, D-28 don't apply here either) — an LC's `APD`/`RE` here
+is AIESEC's own raw `approved`/`realized` total for that office, not net of a
+later break. An office's own total therefore will not always equal the sum of
+its members' individual points, and that divergence is accepted rather than
+reconciled: the two boards answer different questions ("what does AIESEC's
+own analytics say this office did" vs. "what did this specific person do"),
+each authoritative for its own question.
+
+Individual scoring (`individualStandings`, `personalProgress`, rewards) is
+entirely unaffected and keeps reading the ledger as above.
+
+#### Which offices are ranked (D-57)
+
+`MC_OFFICE_ID` (182) is only the query root the analytics call is scoped to —
+its own total is always identical to the sum of the ranked offices below it,
+so it is never itself a ranked row (`isMc: false` excludes it) and it
+correctly never appears as its own key in the API's per-office breakdown.
+
+The ranked entities are the operating LCs plus MC-direct's own committee,
+which is a *separate* GIS id from `MC_OFFICE_ID` on the analytics side (for
+AIESEC in Lebanon, entity `1735`, "MC Lebanon" — a normal office row
+`syncOfficeTree` already discovers and stores, `isMc: false` like an LC).
+Confirmed live: a real MCP/MCVP's own **position** is still recorded under
+`MC_OFFICE_ID` in GIS (D-32 holds for the roster side); only the *analytics*
+side buckets MC-direct's applications under the sibling id instead. So that
+one row is displayed under `MC_OFFICE_ID`'s id — joining with
+`individualStandings()`'s `scoringOfficeId` grouping, which the leading-office
+member group on `/leaderboard/lcs` depends on — while its funnel counts still
+come from its own analytics key, configured as the optional
+`MC_DIRECT_ENTITY_ID` env var. Left unset, that row simply reads zero funnel
+activity rather than crashing.
+
 Breaks emit negated points and `countDelta = -1` (D-10), under two constraints
 that keep a visible score defensible:
 
@@ -483,7 +531,7 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 |---|---|
 | `/` | Personal dashboard |
 | `/leaderboard` | Individual ranking, filterable by LC and MC |
-| `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11) |
+| `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11). Points and counts read live from AIESEC's own analytics API, not the ledger (D-56) |
 | `/me` | Full event history and point trail |
 | `/tv` | Fullscreen display mode for office screens |
 | `/admin/*` | Configuration |
