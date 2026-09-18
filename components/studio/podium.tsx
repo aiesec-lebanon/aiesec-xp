@@ -4,18 +4,17 @@ import { useEffect, useRef, useState } from "react";
 
 import { Character, ContactShadow } from "./character";
 import { beatFor, facingFor, useGroupExchange } from "./group-exchange";
-import { Rise } from "./motion";
+import { GhostNumber } from "./motion";
 
 // The top three, standing rather than listed. Height is the ranking: the winner
-// is simply the tallest thing on the page, which is legible before any numeral
+// is simply the tallest thing on the panel, which is legible before any numeral
 // is read.
 //
-// The bodies are sized in pixels because a canvas needs pixels, and at the
-// design sizes below the whole block runs to about 550px. Under a page header
-// and two rows of filters that put the name and points cards under the fold on
-// a laptop -- the winner was on screen and nobody could read who they were. So
-// the bodies shrink to whatever height is actually left. The cards do not: they
-// carry the names, which is the part that has to stay legible.
+// The panel fills whatever height it is given and sizes the bodies to what is
+// left after its own chrome. It used to be sized in fixed pixels, which put the
+// name cards under the fold on a laptop -- the winner was on screen and nobody
+// could read who they were. Nothing here decides how tall the podium is; the
+// page does, and this fits into it.
 
 export type PodiumPlace = {
   rank: 1 | 2 | 3;
@@ -26,11 +25,36 @@ export type PodiumPlace = {
   characterId?: string;
 };
 
+/** Second stands to the left of first, third to its right. */
+const COLUMN: Record<1 | 2 | 3, number> = { 1: 0, 2: -1, 3: 1 };
+
+/** Each rank as a share of the winner's height, and where it sits in the row. */
 const FORM = {
-  1: { body: 350, frame: 360, card: 200, shadow: 220, order: "order-1 sm:order-2" },
-  2: { body: 288, frame: 296, card: 170, shadow: 190, order: "order-2 sm:order-1" },
-  3: { body: 265, frame: 273, card: 170, shadow: 180, order: "order-3" },
+  1: { share: 1, shadow: 0.42, order: "order-2" },
+  2: { share: 0.82, shadow: 0.36, order: "order-1" },
+  3: { share: 0.76, shadow: 0.34, order: "order-3" },
 } as const;
+
+/** Never taller than the original design size, however much room there is. */
+const MAX_BODY = 350;
+
+/** Below this a body stops reading as a person. */
+const MIN_BODY = 84;
+
+/** Headroom over the winner for the crown. */
+const CROWN_ROOM = 22;
+
+/** A body's canvas plus the contact shadow under it, as a multiple of itself. */
+const BODY_WITH_SHADOW = 1.12;
+
+/** `CharacterStage` draws a body this much wider than it is tall. */
+const ASPECT = 0.72;
+
+/** The three bodies' combined width, as a multiple of the winner's height. */
+const ROW_WIDTH = ASPECT * (FORM[1].share + FORM[2].share + FORM[3].share);
+
+/** The stage's own padding plus the gaps between the three. */
+const ROW_GUTTER = 40;
 
 // A cheer puts the hands a long way above standing height, and the fit measures
 // the bind pose -- at 0.9 the winner was photographed with her head cropped off.
@@ -50,85 +74,87 @@ export function Crown() {
   );
 }
 
-// Where each rank stands on screen, which is not the order the data arrives in:
-// second is laid out to the left of first, third to its right.
-const COLUMN: Record<1 | 2 | 3, number> = { 1: 0, 2: -1, 3: 1 };
-
 /**
- * What the bodies do not get: the contact shadow, the name card, and the
- * floating dock, which is sticky and was sitting straight over the winner's
- * name -- first place was on screen and unreadable.
- */
-const RESERVED_BELOW = 340;
-
-/** Shrinking past this stops reading as a person and starts reading as a bug. */
-const MIN_SCALE = 0.4;
-
-/**
- * How much of its design height the podium can actually have.
+ * The stage's own box, watched.
  *
- * Measured from the podium's own offset down the document rather than from a
- * guess about the header, because the filters above it wrap on a narrow screen
- * and change height when they do. The observer catches that wrap, and the
- * listener catches a viewport that changes height without the document doing so.
+ * Safe to observe the node itself: it is a flex child with `min-h-0` in a
+ * column of a definite height, so what it gets is decided by the panel and not
+ * by the bodies standing in it -- measuring cannot feed back into the measure.
  */
-function useFitScale() {
-  const frame = useRef<HTMLOListElement>(null);
-  const [scale, setScale] = useState(1);
+function useStageBox() {
+  const stage = useRef<HTMLDivElement>(null);
+  // A guess that looks right on the first paint; the observer corrects it
+  // before anything but the entrance animation would notice.
+  const [box, setBox] = useState({ width: 460, height: 380 });
 
   useEffect(() => {
-    function measure() {
-      const node = frame.current;
-      if (!node) return;
+    const node = stage.current;
+    if (!node) return;
 
-      // Offset within the document, not the viewport: a resize after scrolling
-      // would otherwise measure from wherever the page happens to sit.
-      const top = node.getBoundingClientRect().top + window.scrollY;
-      const available = window.innerHeight - top - RESERVED_BELOW;
-      setScale(Math.min(1, Math.max(MIN_SCALE, available / FORM[1].frame)));
-    }
-
+    const measure = () =>
+      setBox({ width: node.clientWidth, height: node.clientHeight });
     measure();
-    window.addEventListener("resize", measure);
 
     const observer = new ResizeObserver(measure);
-    observer.observe(document.body);
-
-    return () => {
-      window.removeEventListener("resize", measure);
-      observer.disconnect();
-    };
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
-  return [frame, scale] as const;
+  return [stage, box] as const;
 }
 
 export function Podium({ places }: { places: PodiumPlace[] }) {
   const exchange = useGroupExchange(places.length);
-  const [frame, scale] = useFitScale();
+  const [stage, box] = useStageBox();
   const columnOf = (index: number) => COLUMN[places[index]!.rank];
 
-  return (
-    <ol
-      ref={frame}
-      className="flex flex-wrap items-end justify-center gap-8 sm:gap-16"
-    >
-      {places.map((place, index) => {
-        const form = FORM[place.rank];
-        const first = place.rank === 1;
-        const body = Math.round(form.body * scale);
-        const frameHeight = Math.round(form.frame * scale);
+  // Whichever runs out first. Fitting the height alone was not enough: in a
+  // narrow column three bodies are wider than the panel long before they are
+  // taller than it, and the stage clips rather than scrolls. The height side
+  // pays for the shadow under the winner and the crown over her, or the two of
+  // them push the row past the stage they are standing in.
+  const winner = Math.min(
+    MAX_BODY,
+    Math.max(
+      MIN_BODY,
+      Math.min(
+        (box.height - CROWN_ROOM) / BODY_WITH_SHADOW,
+        (box.width - ROW_GUTTER) / ROW_WIDTH
+      )
+    )
+  );
+  const leader = places.find((place) => place.rank === 1);
 
-        return (
-          <Rise
-            key={place.name}
-            delay={0.1 + index * 0.08}
-            style={{ width: `min(100%, ${form.card + 50}px)` }}
-            className={`flex flex-col items-center ${form.order}`}
-          >
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[26px] bg-surface-raised shadow-e2">
+      <div className="flex shrink-0 items-center justify-between px-6 pb-2 pt-3.5">
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+          Top three
+        </span>
+      </div>
+
+      <div
+        ref={stage}
+        className="relative flex min-h-0 flex-1 items-end justify-center gap-1 overflow-hidden bg-wall px-4"
+      >
+        {leader ? (
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-1">
+            <GhostNumber>{Math.round(leader.points)}</GhostNumber>
+          </div>
+        ) : null}
+
+        {/* Plain divs, not a list: the ranking a screen reader should read is
+            the cards below, which carry the names and the scores. These are the
+            same three people drawn. */}
+        {places.map((place, index) => {
+          const form = FORM[place.rank];
+          const first = place.rank === 1;
+          const body = Math.round(winner * form.share);
+
+          return (
             <div
-              className="relative flex items-end justify-center"
-              style={{ height: frameHeight }}
+              key={place.name}
+              className={`relative z-10 flex flex-col items-center ${form.order}`}
             >
               {first ? <Crown /> : null}
               <Character
@@ -146,32 +172,49 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
                 facing={facingFor(exchange, index, columnOf)}
                 beat={beatFor(exchange, index)}
               />
+              <ContactShadow
+                className="-mt-1.5"
+                width={Math.round(body * form.shadow)}
+                height={Math.max(12, Math.round(body * 0.1))}
+                opacity={first ? 0.17 : 0.14}
+              />
             </div>
+          );
+        })}
+      </div>
 
-            <ContactShadow
-              width={Math.round(form.shadow * scale)}
-              height={Math.round((first ? 38 : 32) * scale)}
-              opacity={first ? 0.17 : 0.14}
-            />
+      <div className="h-0.5 shrink-0 bg-horizon" />
+      <div className="h-5 shrink-0 bg-floor" />
 
-            <div
-              style={{ width: form.card }}
-              className={`-mt-2 rounded-[18px] bg-surface-raised p-4 text-center ${
-                first ? "shadow-e3" : "shadow-e2"
+      <ol className="flex shrink-0 items-stretch gap-2 px-4 pb-4 pt-3">
+        {places.map((place) => (
+          <li
+            key={place.name}
+            className={`min-w-0 flex-1 basis-0 rounded-[18px] bg-surface-raised px-2 py-3 text-center ${
+              FORM[place.rank].order
+            } ${place.rank === 1 ? "shadow-e3" : "shadow-e1"}`}
+          >
+            <p
+              className={`tabular text-lg font-bold leading-none ${
+                place.rank === 1 ? "text-re-ink" : "text-ink-faint"
               }`}
             >
-              <p
-                className={`tabular text-2xl font-bold ${first ? "text-re-ink" : "text-ink-faint"}`}
-              >
-                {place.rank}
-              </p>
-              <p className="mt-0.5 text-[15px] font-semibold text-ink">{place.name}</p>
-              <p className="text-xs text-ink-secondary">{place.office ?? "No office"}</p>
-              <p className="tabular mt-2 text-3xl font-bold text-ink">{place.points}</p>
-            </div>
-          </Rise>
-        );
-      })}
-    </ol>
+              {place.rank}
+            </p>
+            <p className="mt-1 truncate text-[13px] font-semibold text-ink">{place.name}</p>
+            <p className="truncate text-[11px] text-ink-secondary">
+              {place.office ?? "No office"}
+            </p>
+            <p
+              className={`tabular mt-1.5 font-bold leading-none text-ink ${
+                place.rank === 1 ? "text-[26px]" : "text-[21px]"
+              }`}
+            >
+              {place.points}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

@@ -17,7 +17,7 @@ import { RangeFilter } from "@/components/studio/range-filter";
 
 export const dynamic = "force-dynamic";
 
-const PER_PAGE = 20;
+const PER_PAGE = 7;
 
 export default async function LeaderboardPage({
   searchParams,
@@ -116,9 +116,13 @@ export default async function LeaderboardPage({
     }`;
 
   return (
-    <main className="relative flex min-h-dvh flex-col bg-wall">
-      <div className="bg-surface pb-12">
-        <Rise className="flex flex-col gap-4 px-6 pt-8 sm:px-11">
+    // flex-1 under the layout's header, and nothing here overflows it: at lg
+    // and up the whole board is on screen with no page scroll at all. Below
+    // that the two columns stack and only the row list scrolls, so the filters
+    // and the dock stay put.
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-wall">
+      <div className="shrink-0 bg-surface pb-3">
+        <Rise className="flex flex-col gap-4 px-6 pt-2 sm:px-11">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <RangeFilter
               action="/leaderboard"
@@ -158,48 +162,65 @@ export default async function LeaderboardPage({
             </p> */}
           </div>
         </Rise>
+      </div>
 
-        <div className="mt-7 px-6 sm:px-11">
+      <div className="h-0.5 shrink-0 bg-horizon" />
+
+      {/* The split. Stacked below lg, because three bodies and ten rows side by
+          side stop being readable long before a phone's width -- and there the
+          column scrolls as one page, which is what a thumb expects. At lg the
+          scrolling stops and everything is on screen at once. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-3 sm:px-11 lg:flex-row lg:gap-7 lg:overflow-hidden">
+        <section className="h-[38vh] min-h-[280px] shrink-0 lg:h-auto lg:min-h-0 lg:w-[360px] xl:w-[440px] 2xl:w-[520px]">
           {places.length > 0 ? (
             <Podium places={places} />
           ) : (
-            <p className="py-16 text-center text-sm text-ink-secondary">
+            <p className="flex h-full items-center justify-center rounded-[26px] bg-surface-raised px-6 text-center text-sm text-ink-secondary shadow-e2">
               Nobody is in scope for this filter yet.
             </p>
           )}
-        </div>
-      </div>
+        </section>
 
-      <div className="h-0.5 bg-horizon" />
+        <section className="flex min-h-0 flex-1 flex-col gap-2">
+          <Rise className="flex shrink-0 items-end justify-between gap-4 px-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+              {rest.length === 0
+                ? "No one below the podium yet"
+                : `Ranks ${(page - 1) * PER_PAGE + 4}–${Math.min(rest.length, page * PER_PAGE) + 3} of ${standings.length}`}
+            </span>
+            <div
+              aria-hidden
+              className="hidden gap-6.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted sm:flex"
+            >
+              <span className="w-11 text-right">APL</span>
+              <span className="w-11 text-right">APD</span>
+              <span className="w-11 text-right">RE</span>
+              <span className="w-[70px] text-right">Points</span>
+            </div>
+          </Rise>
 
-      <div className="flex-1 px-6 py-8 sm:px-16 lg:px-30">
-        <Rise className="mb-5 flex justify-end">
-          <div
-            aria-hidden
-            className="hidden gap-6.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted sm:flex"
-          >
-            <span className="w-11 text-right">APL</span>
-            <span className="w-11 text-right">APD</span>
-            <span className="w-11 text-right">RE</span>
-            <span className="w-[70px] text-right">Points</span>
-          </div>
-        </Rise>
-
-        <ol className="flex flex-col gap-2">
-          {rows.map((standing) => {
-            const isSelf = standing.memberId === user.id;
-            return (
+          {/* At lg the rows share the height they are given rather than each
+              taking a fixed amount, so ten of them land exactly on the bottom
+              of the column. The cap stops them becoming slabs on a tall
+              monitor; the floor keeps the avatar from being squeezed out, and
+              is why this scrolls rather than hides: on a window under about
+              810px ten rows at their smallest still do not fit, and a row you
+              cannot reach is worse than a scrollbar on one column. */}
+          <ol className="flex flex-col gap-1.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {rows.map((standing) => {
+              const isSelf = standing.memberId === user.id;
+              return (
               <Lift
                 as="li"
                 key={String(standing.memberId)}
                 lift={-2}
                 layout
-                className={`flex items-center gap-5 rounded-2xl px-5.5 py-3 sm:gap-5 ${
+                className={`flex min-h-[44px] items-center gap-4 rounded-2xl px-4 sm:gap-5 sm:px-5.5 lg:max-h-[62px] lg:flex-1 lg:basis-0 ${
                   isSelf ? "bg-ink shadow-e2" : "bg-surface-raised shadow-e1"
                 }`}
               >
                 <span
-                  className={`tabular w-8.5 text-xl font-bold ${
+                  className={`tabular w-7 shrink-0 text-lg font-bold ${
                     isSelf ? "text-surface" : "text-ink-faint"
                   }`}
                 >
@@ -208,7 +229,7 @@ export default async function LeaderboardPage({
                 <CharacterAvatar
                   name={standing.fullName}
                   idOverride={characters.get(standing.memberId)?.id}
-                  size={46}
+                  size={36}
                   tone={isSelf ? "bg-[#2a2926]" : "bg-floor"}
                 />
                 <span className="min-w-0 flex-1">
@@ -254,33 +275,34 @@ export default async function LeaderboardPage({
               </Lift>
             );
           })}
-        </ol>
+          </ol>
 
-        {pageCount > 1 ? (
-          <div className="mt-4 flex items-center gap-2 px-1">
+          <div className="flex shrink-0 items-center gap-2 px-1.5">
             <span className="mr-auto font-mono text-[10px] text-ink-faint">
-              Ranks {(page - 1) * PER_PAGE + 4}–
-              {Math.min(rest.length, page * PER_PAGE) + 3} of {standings.length}
+              {pageCount > 1
+                ? `Page ${page} of ${pageCount} · ${PER_PAGE} per page`
+                : "Ranked on points, then realizations, then approvals"}
             </span>
-            <PageLink href={href({ page: page - 1 })} disabled={page === 1}>
-              Prev
-            </PageLink>
-            <PageLink
-              href={href({ page: page + 1 })}
-              disabled={page === pageCount}
-            >
-              Next
-            </PageLink>
+            {pageCount > 1 ? (
+              <>
+                <PageLink href={href({ page: page - 1 })} disabled={page === 1}>
+                  Prev
+                </PageLink>
+                <PageLink
+                  href={href({ page: page + 1 })}
+                  disabled={page === pageCount}
+                >
+                  Next
+                </PageLink>
+              </>
+            ) : null}
           </div>
-        ) : null}
-
-        <p className="mt-6 text-center text-xs text-ink-faint">
-          Ranked on points, then realizations, then approvals, then
-          applications.
-        </p>
+        </section>
       </div>
 
-      <div className="sticky bottom-7 z-20 flex justify-center px-6 pb-1">
+      {/* A row in the layout rather than a sticky overlay. Sticky, it floated
+          over the bottom of the board and covered the winner's name. */}
+      <div className="flex shrink-0 justify-center px-6 pb-4">
         <Dock />
       </div>
     </main>
