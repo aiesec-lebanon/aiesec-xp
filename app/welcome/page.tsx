@@ -15,7 +15,7 @@ export default async function WelcomePage() {
   if (avatar.chosen) redirect("/");
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-6 py-12">
+    <main className="flex min-h-full flex-col items-center justify-center gap-8 px-6 py-12">
       <div className="flex flex-col items-center gap-2 text-center">
         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
           Welcome to AIESEC XP

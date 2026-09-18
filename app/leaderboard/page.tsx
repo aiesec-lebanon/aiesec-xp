@@ -10,7 +10,6 @@ import { termStart } from "@/lib/term";
 import { CharacterAvatar } from "@/components/studio/character";
 import { RollingNumber } from "@/components/studio/rolling-number";
 import { memberAvatars } from "@/lib/design/avatar";
-import { Dock } from "@/components/studio/dock";
 import { Lift, Rise } from "@/components/studio/motion";
 import { Podium, type PodiumPlace } from "@/components/studio/podium";
 import { RangeFilter } from "@/components/studio/range-filter";
@@ -300,11 +299,6 @@ export default async function LeaderboardPage({
         </section>
       </div>
 
-      {/* A row in the layout rather than a sticky overlay. Sticky, it floated
-          over the bottom of the board and covered the winner's name. */}
-      <div className="flex shrink-0 justify-center px-6 pb-4">
-        <Dock />
-      </div>
     </main>
   );
 }
