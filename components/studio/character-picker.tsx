@@ -89,6 +89,12 @@ export function CharacterCarousel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.id, palette.id]);
 
+  // A runway turn, now and then, while nothing else has asked the body to do
+  // anything -- both the character lab and the first-run picker use this set
+  // (D-60), and a body that only ever idles is oddly stiller than one that is
+  // meant to be tried on. `beat` from the parent (a save reaction) always wins.
+  const flourish = useCatwalkFlourish(beat === null);
+
   return (
     <div className="relative flex flex-1 items-end justify-center overflow-hidden">
       <div
@@ -115,7 +121,7 @@ export function CharacterCarousel({
         heightFraction={0.62}
         floorFraction={0.2}
         social
-        beat={beat}
+        beat={beat ?? flourish}
         eager
       />
 
@@ -195,4 +201,30 @@ function StepButton({
       </svg>
     </m.button>
   );
+}
+
+const CATWALK = { min: 12, max: 26 };
+
+/** A turn on the spot, now and then, while nothing else has a say (D-60). */
+function useCatwalkFlourish(active: boolean): CharacterBeat | null {
+  const reduceMotion = useReduceMotion();
+  const [beat, setBeat] = useState<CharacterBeat | null>(null);
+  const running = active && !reduceMotion;
+
+  useEffect(() => {
+    if (!running) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const gap = () => (CATWALK.min + Math.random() * (CATWALK.max - CATWALK.min)) * 1000;
+    const tick = () => {
+      setBeat("catwalk");
+      timer = setTimeout(() => {
+        setBeat(null);
+        timer = setTimeout(tick, gap());
+      }, 3200);
+    };
+    timer = setTimeout(tick, gap());
+    return () => clearTimeout(timer);
+  }, [running]);
+
+  return running ? beat : null;
 }
