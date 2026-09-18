@@ -1,10 +1,12 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { toDateInputValue } from "@/lib/admin/window";
 import { chooseScoringOffice, type PositionInput } from "@/lib/auth/roles";
 import { gis } from "@/lib/gis/client";
 import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
+import { termStart } from "@/lib/term";
 
 // Sync pass 8, the roster.
 //
@@ -34,15 +36,19 @@ type GisPosition = {
   profilePhotoUrl: string | null;
 };
 
-async function readOffice(officeId: bigint): Promise<GisPosition[]> {
+async function readOffice(officeId: bigint, endDateFrom: string): Promise<GisPosition[]> {
   const collected: GisPosition[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const result = await gis().MemberPositions({
-      officeId: Number(officeId),
-      status: ["active"],
-      page,
-      perPage: PAGE_SIZE,
+      filters: {
+        office_id: Number(officeId),
+        status: ["active"],
+        // D-60: status alone keeps last term's officers, whose rows EXPA often
+        // never moves off "active".
+        end_date: { from: endDateFrom },
+      },
+      pagination: { page, per_page: PAGE_SIZE },
     });
 
     const body = result.memberPositions;
@@ -67,7 +73,10 @@ async function readOffice(officeId: bigint): Promise<GisPosition[]> {
 }
 
 export async function syncRoster(): Promise<RosterSyncResult> {
-  const officeIds = await operatingOfficeIds();
+  const [officeIds, endDateFrom] = await Promise.all([
+    operatingOfficeIds(),
+    termStart().then(toDateInputValue),
+  ]);
   const run = await db.syncRun.create({ data: { pass: "roster", status: "RUNNING" } });
 
   const officeSet = new Set(officeIds.map(String));
@@ -75,7 +84,7 @@ export async function syncRoster(): Promise<RosterSyncResult> {
   try {
     const collected: GisPosition[] = [];
     for (const officeId of officeIds) {
-      collected.push(...(await readOffice(officeId)));
+      collected.push(...(await readOffice(officeId, endDateFrom)));
     }
 
     // office_id is scope-inclusive: querying the MC returns the whole subtree,

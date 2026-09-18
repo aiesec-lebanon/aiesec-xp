@@ -132,6 +132,36 @@ export type ExperienceType =
   | 'physical'
   | 'remote';
 
+export type MemberPositionFilter = {
+  age?: RangeInput | null | undefined;
+  background_ids?: Array<number | null | undefined> | null | undefined;
+  department_ids?: Array<number | null | undefined> | null | undefined;
+  duration_ids?: Array<number | null | undefined> | null | undefined;
+  end_date?: DateInput | null | undefined;
+  exit_reason_ids?: Array<number | null | undefined> | null | undefined;
+  function_ids?: Array<number | null | undefined> | null | undefined;
+  gender?: string | null | undefined;
+  is_ixp?: boolean | null | undefined;
+  ixp_products?: Array<number | null | undefined> | null | undefined;
+  language_ids?: Array<number | null | undefined> | null | undefined;
+  no_of_ixps?: RangeInput | null | undefined;
+  office_id?: number | null | undefined;
+  person_ids?: Array<string | number> | null | undefined;
+  q?: string | null | undefined;
+  /** id of the person to be filtered */
+  reports_to?: number | null | undefined;
+  role_ids?: Array<number | null | undefined> | null | undefined;
+  skill_ids?: Array<number | null | undefined> | null | undefined;
+  start_date?: DateInput | null | undefined;
+  status?: Array<string | null | undefined> | null | undefined;
+  study_level_ids?: Array<number | null | undefined> | null | undefined;
+};
+
+export type Pagination = {
+  page?: number | null | undefined;
+  per_page?: number | null | undefined;
+};
+
 export type PartnerTypes =
   | 'global'
   | 'regional';
@@ -156,15 +186,12 @@ export type OfficeChildrenQueryVariables = Exact<{
 export type OfficeChildrenQuery = { committees: { data: Array<{ id: string, name: string | null, tag: string | null, parent: { id: string } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null } | null } | null };
 
 export type MemberPositionsQueryVariables = Exact<{
-  officeId?: number | null | undefined;
-  personIds?: Array<string | number> | string | number | null | undefined;
-  status?: Array<string | null | undefined> | string | null | undefined;
-  page: number;
-  perPage: number;
+  filters?: MemberPositionFilter | null | undefined;
+  pagination?: Pagination | null | undefined;
 }>;
 
 
-export type MemberPositionsQuery = { memberPositions: { data: Array<{ id: number | null, title: string | null, status: string | null, start_date: string | null, end_date: string | null, office: { id: string, name: string | null } | null, role: { id: string | null, name: string | null } | null, person: { id: string, full_name: string | null, profile_photo: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
+export type MemberPositionsQuery = { memberPositions: { data: Array<{ id: number | null, title: string | null, status: string | null, start_date: string | null, end_date: string | null, office: { id: string, name: string | null } | null, role: { id: string | null, name: string | null, is_active: boolean | null } | null, person: { id: string, full_name: string | null, profile_photo: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
 
 export type ApplicationsQueryVariables = Exact<{
   filters?: ApplicationFilter | null | undefined;
@@ -175,14 +202,14 @@ export type ApplicationsQueryVariables = Exact<{
 
 export type ApplicationsQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, created_at: string | null, person: { id: string } | null, opportunity: { id: string, programme: { id: string | null } | null } | null, meta: { date_approved: string | null, date_approval_broken: string | null, date_realized: string | null, date_realisation_broke: string | null, remote_realized_at: string | null, date_rejected: string | null, date_withdrawn: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
 
-export type ApplicationManagersQueryVariables = Exact<{
+export type ApplicationContextQueryVariables = Exact<{
   filters?: ApplicationFilter | null | undefined;
   page: number;
   perPage: number;
 }>;
 
 
-export type ApplicationManagersQuery = { allOpportunityApplication: { data: Array<{ id: string | null, person: { id: string } | null, managers: Array<{ id: string, full_name: string | null } | null> | null } | null> | null, paging: { total_pages: number | null } | null } | null };
+export type ApplicationContextQuery = { allOpportunityApplication: { data: Array<{ id: string | null, person: { id: string, full_name: string | null } | null, managers: Array<{ id: string, full_name: string | null } | null> | null } | null> | null, paging: { total_pages: number | null } | null } | null };
 
 
 export const CurrentPersonDocument = gql`
@@ -233,12 +260,8 @@ export const OfficeChildrenDocument = gql`
 }
     `;
 export const MemberPositionsDocument = gql`
-    query MemberPositions($officeId: Int, $personIds: [ID!], $status: [String], $page: Int!, $perPage: Int!) {
-  memberPositions(
-    filters: {office_id: $officeId, person_ids: $personIds, status: $status}
-    page: $page
-    per_page: $perPage
-  ) {
+    query MemberPositions($filters: MemberPositionFilter, $pagination: Pagination) {
+  memberPositions(filters: $filters, pagination: $pagination) {
     data {
       id
       title
@@ -252,6 +275,7 @@ export const MemberPositionsDocument = gql`
       role {
         id
         name
+        is_active
       }
       person {
         id
@@ -301,13 +325,14 @@ export const ApplicationsDocument = gql`
   }
 }
     `;
-export const ApplicationManagersDocument = gql`
-    query ApplicationManagers($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
+export const ApplicationContextDocument = gql`
+    query ApplicationContext($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
   allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
     data {
       id
       person {
         id
+        full_name
       }
       managers {
         id
@@ -334,14 +359,14 @@ export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = 
     OfficeChildren(variables?: OfficeChildrenQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<OfficeChildrenQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<OfficeChildrenQuery>({ document: OfficeChildrenDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'OfficeChildren', 'query', variables);
     },
-    MemberPositions(variables: MemberPositionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<MemberPositionsQuery> {
+    MemberPositions(variables?: MemberPositionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<MemberPositionsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<MemberPositionsQuery>({ document: MemberPositionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'MemberPositions', 'query', variables);
     },
     Applications(variables: ApplicationsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ApplicationsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<ApplicationsQuery>({ document: ApplicationsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'Applications', 'query', variables);
     },
-    ApplicationManagers(variables: ApplicationManagersQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ApplicationManagersQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<ApplicationManagersQuery>({ document: ApplicationManagersDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'ApplicationManagers', 'query', variables);
+    ApplicationContext(variables: ApplicationContextQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ApplicationContextQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<ApplicationContextQuery>({ document: ApplicationContextDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'ApplicationContext', 'query', variables);
     }
   };
 }

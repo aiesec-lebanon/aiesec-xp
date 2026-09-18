@@ -7,7 +7,6 @@ import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, stageColour } from "@/lib/design/tokens";
 
 import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
-import { Dock } from "@/components/studio/dock";
 import { GrowBar, Rise } from "@/components/studio/motion";
 
 import { memberAvatar } from "@/lib/design/avatar";
@@ -58,7 +57,7 @@ export default async function MePage({
   const events = progress.trail.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
-    <main className="flex min-h-dvh flex-col bg-wall pb-10">
+    <main className="flex min-h-full flex-col bg-wall pb-6">
       <div className="px-6 pt-8 sm:px-16">
         <h1 className="font-display text-[30px] font-semibold text-ink">Your history</h1>
         <p className="mt-1.5 text-sm text-ink-secondary">
@@ -195,9 +194,6 @@ export default async function MePage({
         <ReduceMotionToggle hideLabel />
       </div>
 
-      <div className="sticky bottom-7 z-20 mt-8 flex justify-center px-6">
-        <Dock />
-      </div>
     </main>
   );
 }

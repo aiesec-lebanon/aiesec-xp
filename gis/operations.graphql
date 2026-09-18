@@ -52,20 +52,17 @@ query OfficeChildren($parentIds: [Int]) {
 }
 
 # status must be ["active"]; "current" is accepted and silently matches nothing.
-# personIds narrows to one member, which is how an admin action re-verifies a
+# person_ids narrows to one member, which is how an admin action re-verifies a
 # position against live GIS rather than against the last sync (Architecture.md 11).
-query MemberPositions(
-  $officeId: Int
-  $personIds: [ID!]
-  $status: [String]
-  $page: Int!
-  $perPage: Int!
-) {
-  memberPositions(
-    filters: { office_id: $officeId, person_ids: $personIds, status: $status }
-    page: $page
-    per_page: $perPage
-  ) {
+# end_date.from is the term floor the roster and the member count both need
+# (D-60): EXPA leaves a position at status "active" after its term has ended
+# often enough that status alone counts people who left.
+#
+# The whole filter arrives as one input rather than a variable per field,
+# because `page`/`per_page`/`q`/`sort` are deprecated on this field in favour
+# of the `filters` and `pagination` inputs.
+query MemberPositions($filters: MemberPositionFilter, $pagination: Pagination) {
+  memberPositions(filters: $filters, pagination: $pagination) {
     data {
       id
       title
@@ -79,6 +76,7 @@ query MemberPositions(
       role {
         id
         name
+        is_active
       }
       person {
         id
@@ -135,16 +133,18 @@ query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
 
 
 
-# The manager EXPA itself records on an application. Shown next to the imported
-# assignment so an admin can see where the two disagree; it is read at display
-# time and never stored (D-42). EXPA populates it only after approval, so it is
-# frequently absent.
-query ApplicationManagers($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
+# What the assignment console needs to name a row: the EP behind an id, and the
+# manager EXPA itself records on the application. Both are read at display time
+# and never stored (D-42) -- this is the "read from GIS per view and discarded"
+# path that decision carves out, not a relaxation of it. EXPA populates the
+# manager only after approval, so it is frequently absent.
+query ApplicationContext($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
   allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
     data {
       id
       person {
         id
+        full_name
       }
       managers {
         id

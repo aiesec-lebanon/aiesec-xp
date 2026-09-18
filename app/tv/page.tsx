@@ -59,7 +59,7 @@ export default async function TvPage() {
   );
 
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-wall">
+    <main className="flex h-full flex-col overflow-hidden bg-wall">
       <AutoRefresh seconds={60} />
       <header className="flex shrink-0 items-center justify-between gap-6 px-[clamp(1.5rem,3vw,3.5rem)] py-[clamp(0.75rem,1.8vh,1.75rem)]">
         {/* Already a link home, which is the only way off this screen now that
