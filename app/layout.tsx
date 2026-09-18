@@ -32,7 +32,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col bg-surface">
         <MotionProvider reduceMotion={reduceMotion}>
           <HeaderSlot user={user} characterId={avatar?.character.id} />
-          <div className="flex min-h-full flex-1 flex-col">{children}</div>
+          {/* min-h-0, not min-h-full: a wrapper that demands a full viewport of
+              its own under a header that is already on screen makes every page
+              exactly the header's height too tall to fit. A page that wants the
+              rest of the screen and no scrollbar now claims it with flex-1. */}
+          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
           {/* <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col items-end gap-1.5">
             <div className="pointer-events-auto rounded-full bg-surface-raised px-3.5 py-2 shadow-e1">
               <ReduceMotionToggle />
