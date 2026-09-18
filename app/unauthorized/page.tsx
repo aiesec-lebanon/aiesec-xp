@@ -13,7 +13,7 @@ export default async function UnauthorizedPage() {
   const name = user?.fullName ?? "Visitor";
 
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-wall">
+    <main className="relative flex min-h-full flex-col overflow-hidden bg-wall">
       <div className="relative z-20 px-6 pt-8 sm:px-11">
         <BrandMark size={28} type={18} />
       </div>

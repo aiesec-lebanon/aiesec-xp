@@ -91,11 +91,16 @@ export async function requireAdminLive(): Promise<CurrentUser> {
 
   let livePositions;
   try {
+    // No end_date floor here, unlike the roster and the member count (D-60).
+    // This asks whether one named person's position has been revoked since the
+    // last sync, and status is what carries a revocation; filtering on a date
+    // as well would refuse an admin their own console over a position EXPA
+    // left without an end date. The expired-position case is already gone by
+    // this point, because requireAdmin() above reads the synced roster, which
+    // does apply the floor.
     const result = await gis().MemberPositions({
-      personIds: [String(user.id)],
-      status: ["active"],
-      page: 1,
-      perPage: 100,
+      filters: { person_ids: [String(user.id)], status: ["active"] },
+      pagination: { page: 1, per_page: 100 },
     });
     livePositions = result.memberPositions?.data ?? [];
   } catch (error) {
