@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Character, ContactShadow } from "./character";
 import { beatFor, facingFor, useGroupExchange } from "./group-exchange";
 import { GhostNumber } from "./motion";
+import { useMoodFlourish } from "./mood-flourish";
 
 // The top three, standing rather than listed. Height is the ranking: the winner
 // is simply the tallest thing on the panel, which is legible before any numeral
@@ -146,41 +147,15 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
         {/* Plain divs, not a list: the ranking a screen reader should read is
             the cards below, which carry the names and the scores. These are the
             same three people drawn. */}
-        {places.map((place, index) => {
-          const form = FORM[place.rank];
-          const first = place.rank === 1;
-          const body = Math.round(winner * form.share);
-
-          return (
-            <div
-              key={place.name}
-              className={`relative z-10 flex flex-col items-center ${form.order}`}
-            >
-              {first ? <Crown /> : null}
-              <Character
-                name={place.name}
-                height={body}
-                idle={first ? "bob" : "small"}
-                idOverride={place.characterId}
-                stage
-                social
-                heightFraction={BODY_IN_FRAME}
-                mood="celebrate"
-                // Second and third turn in towards the winner rather than all
-                // three standing square to camera -- and towards whoever is
-                // talking to them when the group has something to say.
-                facing={facingFor(exchange, index, columnOf)}
-                beat={beatFor(exchange, index)}
-              />
-              <ContactShadow
-                className="-mt-1.5"
-                width={Math.round(body * form.shadow)}
-                height={Math.max(12, Math.round(body * 0.1))}
-                opacity={first ? 0.17 : 0.14}
-              />
-            </div>
-          );
-        })}
+        {places.map((place, index) => (
+          <PodiumBody
+            key={place.name}
+            place={place}
+            body={Math.round(winner * FORM[place.rank].share)}
+            facing={facingFor(exchange, index, columnOf)}
+            beat={beatFor(exchange, index)}
+          />
+        ))}
       </div>
 
       <div className="h-0.5 shrink-0 bg-horizon" />
@@ -215,6 +190,64 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+/**
+ * One body on the podium. Its own component, not inlined in the `.map` above,
+ * because first place calls `useMoodFlourish` and a hook has to belong to a
+ * component whose instance count is stable -- which a list item is and a bare
+ * callback is not.
+ */
+function PodiumBody({
+  place,
+  body,
+  facing,
+  beat,
+}: {
+  place: PodiumPlace;
+  body: number;
+  facing: number;
+  beat: ReturnType<typeof beatFor>;
+}) {
+  const first = place.rank === 1;
+  const form = FORM[place.rank];
+
+  // First place has actually won, not merely placed -- the same distinction
+  // the hero and the LC leaderboard draw (D-60). Dancing alongside celebrate
+  // rather than replacing it, so the podium is not dancing constantly.
+  const mood = useMoodFlourish("celebrate", {
+    active: first,
+    moods: ["dancing"],
+    hold: [6, 11],
+    gap: [12, 26],
+  });
+
+  return (
+    <div className={`relative z-10 flex flex-col items-center ${form.order}`}>
+      {first ? <Crown /> : null}
+      <Character
+        name={place.name}
+        height={body}
+        idle={first ? "bob" : "small"}
+        idOverride={place.characterId}
+        stage
+        social
+        heightFraction={BODY_IN_FRAME}
+        mood={mood}
+        // Second and third turn in towards the winner rather than all three
+        // standing square to camera -- and towards whoever is talking to them
+        // when the group has something to say.
+        facing={facing}
+        beat={beat}
+      />
+      <ContactShadow
+        className="-mt-1.5"
+        width={Math.round(body * form.shadow)}
+        height={Math.max(12, Math.round(body * 0.1))}
+        opacity={first ? 0.17 : 0.14}
+      />
     </div>
   );
 }

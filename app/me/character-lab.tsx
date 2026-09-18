@@ -34,7 +34,9 @@ export function CharacterLab({
     startTransition(async () => {
       const result = await saveCharacter({ character: character.id });
       setStatus(result.ok ? { kind: "saved" } : { kind: "error", message: result.error });
-      if (result.ok) setBeat("acknowledge");
+      // Randomised rather than always "acknowledge" (D-60), or a nod on every
+      // single save reads as a tic rather than a reaction.
+      if (result.ok) setBeat(Math.random() < 0.5 ? "acknowledge" : "salute");
     });
   };
 

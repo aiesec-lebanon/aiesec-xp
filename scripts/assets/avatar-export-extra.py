@@ -35,6 +35,35 @@ EXTRA = {
 EXPECTED_BONES = 65
 
 
+def fix_bone_namespace(mesh, rig):
+    """Rename a rig's bones (and the mesh's matching vertex groups) back onto
+    the `mixamorig:` namespace the shared clip library is authored against.
+
+    Blender auto-suffixes a rig's bones to `mixamorig1:` when it imports a
+    second FBX that declares the same armature name as one already in the
+    file -- which is what happened importing Ch29 alongside Ch03 into
+    characters.blend, both Mixamo exports named plain `mixamorig`. The clips in
+    avatar-animations.glb only ever address `mixamorig:...`, so `bindable()` in
+    character-model.tsx finds zero matching bones for a body on any other
+    namespace and every track is dropped -- the body plays nothing and sits in
+    its bind T-pose forever. Vertex groups must be renamed with the bones: the
+    armature modifier binds a vertex group to a deform bone by name, and
+    renaming one without the other unbinds the mesh from its own skeleton.
+    """
+    renamed = 0
+    for bone in rig.data.bones:
+        namespace, _, rest = bone.name.partition(":")
+        if not rest or not namespace.startswith("mixamorig") or namespace == "mixamorig":
+            continue
+        old = bone.name
+        bone.name = f"mixamorig:{rest}"
+        group = mesh.vertex_groups.get(old)
+        if group is not None:
+            group.name = bone.name
+        renamed += 1
+    return renamed
+
+
 def opaque(mesh):
     """Unwire transparency and the specular map.
 
@@ -79,6 +108,8 @@ def process(source, name, repo_root):
     mesh.name = f"{name}-mesh"
     rig.name = f"{name}-rig"
 
+    renamed = fix_bone_namespace(mesh, rig)
+
     export_step.matte_material(mesh)
     opaque(mesh)
     export_step.normalise(mesh, rig)
@@ -95,7 +126,7 @@ def process(source, name, repo_root):
         export_yup=True,
         export_rest_position_armature=True,
     )
-    return {"bytes": os.path.getsize(out), "bones": len(rig.data.bones)}
+    return {"bytes": os.path.getsize(out), "bones": len(rig.data.bones), "renamed_bones": renamed}
 
 
 def main():

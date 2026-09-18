@@ -2,6 +2,7 @@ import { safeReturnTo } from "@/lib/auth/oauth";
 
 import { Character, ContactShadow } from "@/components/studio/character";
 import { BrandMark } from "@/components/studio/chrome";
+import { LoginBody } from "@/components/studio/login-body";
 import { Rise } from "@/components/studio/motion";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,7 @@ export default async function LoginPage({
     : null;
 
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-wall">
+    <main className="relative flex min-h-full flex-col overflow-hidden bg-wall">
       <div aria-hidden className="pointer-events-none absolute inset-0">
         <div className="absolute inset-x-0 bottom-0 h-[26%] bg-floor" />
         <div className="absolute inset-x-0 bottom-[26%] h-0.5 bg-horizon" />
@@ -136,9 +137,12 @@ function CharacterGroup({ names, side }: { names: string[]; side: "left" | "righ
         <Character name={names[0]!} height={380} idle="small" />
       </div>
       {/* Only the tall one in each group is a canvas: six would be six WebGL
-          contexts on a sign-in screen. */}
+          contexts on a sign-in screen -- which is also why this is an idle/calm
+          mood flourish (D-60) rather than the LC leaderboard's conversational
+          "group" behaviour, which needs at least two live bodies to trade
+          glances with. */}
       <div className="relative z-10">
-        <Character name={names[1]!} height={520} stage />
+        <LoginBody name={names[1]!} height={520} />
       </div>
       <div className="-ml-10">
         <Character name={names[2]!} height={380} idle="small" />
