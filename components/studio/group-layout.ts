@@ -1,77 +1,68 @@
 import { FRAME_HEIGHT } from "./character-model";
 
-/** Where XpCanvas puts the camera, on z, looking at the origin. */
-const CAMERA = 6;
 /** How wide a body is against its own height, arms included. */
 const WIDTH_RATIO = 0.5;
-/** How much further from the camera each step out from the centre stands. */
-const DEPTH_RATIO = 0.18;
-/** Gap between neighbours, as a multiple of the width they need. */
-const CLEARANCE = 1.16;
+/**
+ * Gap between neighbours, as a multiple of the width they need. Tighter than
+ * the old row layout's 1.16 -- a group asked to stand close together, not
+ * spaced out (D-63).
+ */
+const CLEARANCE = 1.05;
+/**
+ * How far beyond the circle's own radius the orbiting camera stands. `6` is
+ * the distance `FRAME_HEIGHT` itself is defined against (fov 42 at 6 units),
+ * so a lone body on this circle frames exactly as it always has; a bigger
+ * group's camera backs off from there by the circle's own radius.
+ */
+const ORBIT_MARGIN = 6;
 
 export type Placement = {
   x: number;
   z: number;
+  /** Radians from +Z, the same convention `facing` already uses. */
+  angle: number;
   /** Share of the frame this body fills, the same for all of them. */
   fraction: number;
 };
 
 /**
- * 0, -1, +1, -2, +2 ... so the best-placed member stands in the middle and the
- * group builds outwards evenly rather than growing off one shoulder.
+ * Stands a group in a circle, all the same size, everyone equally far from
+ * its centre.
+ *
+ * The previous layout staggered depth and shrank bodies to fit a *fixed*
+ * camera (D-55) -- a stage a static viewer stands in front of. A circle is
+ * the opposite: nobody has a "back row", everybody is close to everybody
+ * else, and it only reads as a circle from a camera that moves around it,
+ * which is what replaces the fixed one here (D-63).
+ *
+ * Spacing is solved from one requirement -- neighbours end up `CLEARANCE`
+ * body-widths apart, measured as a straight chord across the circle, which is
+ * also the true closest distance between two points on it (unlike the old
+ * layout's perspective trick, there is no camera distance to fold in). For
+ * `n` evenly spaced points the chord between neighbours is `2R·sin(π/n)`, so
+ * solving that for `R` is the whole function.
  */
-function slotOf(index: number): number {
-  const step = Math.ceil(index / 2);
-  return index % 2 === 1 ? -step : step;
+export function circleGroup(count: number, requestedFraction: number): { places: Placement[]; radius: number } {
+  const fraction = requestedFraction;
+  if (count <= 0) return { places: [], radius: 0 };
+  if (count === 1) return { places: [{ x: 0, z: 0, angle: 0, fraction }], radius: 0 };
+
+  const height = FRAME_HEIGHT * fraction;
+  const bodyWidth = height * WIDTH_RATIO;
+  const minChord = bodyWidth * CLEARANCE;
+  const radius = minChord / (2 * Math.sin(Math.PI / count));
+
+  const places = Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+    return { x: Math.sin(angle) * radius, z: Math.cos(angle) * radius, angle, fraction };
+  });
+
+  return { places, radius };
 }
 
-/**
- * Stands a group on one floor, using distance rather than scale.
- *
- * Every body is the same size in the world; the ones further out stand further
- * back, so perspective does the shrinking. That is also why spacing cannot be a
- * constant: a body twice as far away covers half the screen width, so the world
- * gap has to grow with depth or the group closes up and the bodies intersect.
- *
- * The spacing is solved in projected units -- `x / distance` -- where each slot
- * is `k` apart and `k` is the widest overlap any neighbouring pair could have,
- * which is the pair nearest the camera. If the result is wider than the canvas,
- * the whole group shrinks until it fits instead of being clipped.
- */
-export function placeGroup(
-  count: number,
-  viewportWidth: number,
-  requestedFraction: number,
-): Placement[] {
-  const maxSlot = Math.floor(count / 2);
-  // The frustum half-width at any distance d is (viewportWidth / 2) * d / CAMERA,
-  // so in projected units everything has to sit inside this one number.
-  const limit = viewportWidth / (2 * CAMERA);
-
-  const solve = (height: number) => {
-    const depth = height * DEPTH_RATIO;
-    const halfWidth = (height * WIDTH_RATIO) / 2;
-    // The nearest pair needs the most room, so sizing on it covers every pair.
-    const step = halfWidth * (1 / CAMERA + 1 / (CAMERA + depth)) * CLEARANCE;
-    const extent = maxSlot * step + halfWidth / (CAMERA + maxSlot * depth);
-    return { depth, halfWidth, step, extent };
-  };
-
-  let height = FRAME_HEIGHT * requestedFraction;
-  let solved = solve(height);
-  // extent is near enough linear in height, so one correction lands it and the
-  // second only tidies the rounding.
-  for (let pass = 0; pass < 2 && solved.extent > limit; pass += 1) {
-    height *= limit / solved.extent;
-    solved = solve(height);
-  }
-
-  const fraction = height / FRAME_HEIGHT;
-  return Array.from({ length: count }, (_, index) => {
-    const slot = slotOf(index);
-    const distance = CAMERA + Math.abs(slot) * solved.depth;
-    return { x: slot * solved.step * distance, z: -Math.abs(slot) * solved.depth, fraction };
-  });
+/** How far back the orbiting camera stands from a circle of this radius. */
+export function orbitDistance(radius: number): number {
+  return radius + ORBIT_MARGIN;
 }
 
 /** The world y every body in a group stands on. */

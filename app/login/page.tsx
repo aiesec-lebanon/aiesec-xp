@@ -1,9 +1,9 @@
 import { safeReturnTo } from "@/lib/auth/oauth";
 
-import { Character, ContactShadow } from "@/components/studio/character";
 import { BrandMark } from "@/components/studio/chrome";
-import { LoginBody } from "@/components/studio/login-body";
+import { CharacterGroup } from "@/components/studio/character-group";
 import { Rise } from "@/components/studio/motion";
+import { characterFor } from "@/lib/design/character";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +25,17 @@ const ERRORS: Record<string, { headline: string; detail: string }> = {
   },
 };
 
-// Three bodies to a side, back to the camera's left and right, so the middle of
-// the frame stays empty for the card. They are not the visitor -- nobody is
-// signed in yet -- so they are named for their position on the set.
-const LEFT = ["Group A1", "Group A2", "Group A3"];
-const RIGHT = ["Group B1", "Group B2", "Group B3"];
+// Three bodies to a side, so the middle of the frame stays empty for the
+// card. They are not the visitor -- nobody is signed in yet -- so they are
+// named for their position on the set, and each side is its own circle with
+// its own orbiting camera (D-63) rather than the one-live-body-plus-two-stills
+// this used to be: a real "calm" group, not a decoration standing in for one.
+const LEFT: readonly string[] = ["Group A1", "Group A2", "Group A3"];
+const RIGHT: readonly string[] = ["Group B1", "Group B2", "Group B3"];
+
+function sideMembers(names: readonly string[]) {
+  return names.map((name) => ({ id: characterFor(name).id, name }));
+}
 
 export default async function LoginPage({
   searchParams,
@@ -53,8 +59,15 @@ export default async function LoginPage({
         <BrandMark size={28} type={18} />
       </div>
 
-      <CharacterGroup names={LEFT} side="left" />
-      <CharacterGroup names={RIGHT} side="right" />
+      {/* Hidden below `lg`: two more live groups on a phone is six to ten WebGL
+          contexts nobody asked to load for a sign-in screen already spending
+          one on the card's own set dressing. */}
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 z-0 hidden w-[38%] lg:block">
+        <CharacterGroup members={sideMembers(LEFT)} mood="calm" heightFraction={0.62} floorFraction={0.06} />
+      </div>
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-0 hidden w-[38%] lg:block">
+        <CharacterGroup members={sideMembers(RIGHT)} mood="calm" heightFraction={0.62} floorFraction={0.06} />
+      </div>
 
       {/* The scrim the card sits on. Without it the bodies read straight through
           the copy at narrow widths, which is exactly what this pass fixed. */}
@@ -116,37 +129,5 @@ export default async function LoginPage({
         </Rise>
       </div>
     </main>
-  );
-}
-
-function CharacterGroup({ names, side }: { names: string[]; side: "left" | "right" }) {
-  return (
-    <div
-      aria-hidden
-      className={`pointer-events-none absolute bottom-0 z-0 hidden items-end lg:flex ${
-        side === "left" ? "left-5" : "right-5"
-      }`}
-    >
-      <ContactShadow
-        width={440}
-        height={60}
-        opacity={0.16}
-        className="absolute bottom-0 left-0 right-0"
-      />
-      <div className="-mr-10">
-        <Character name={names[0]!} height={380} idle="small" />
-      </div>
-      {/* Only the tall one in each group is a canvas: six would be six WebGL
-          contexts on a sign-in screen -- which is also why this is an idle/calm
-          mood flourish (D-60) rather than the LC leaderboard's conversational
-          "group" behaviour, which needs at least two live bodies to trade
-          glances with. */}
-      <div className="relative z-10">
-        <LoginBody name={names[1]!} height={520} />
-      </div>
-      <div className="-ml-10">
-        <Character name={names[2]!} height={380} idle="small" />
-      </div>
-    </div>
   );
 }
