@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Assignment } from "@/lib/scoring/attribution";
 import {
   evaluateRewards,
+  officePoints,
   score,
   totalsByMember,
   type RewardDefinition,
@@ -517,5 +518,33 @@ describe("degenerate input", () => {
       rewards: [{ id: "z", thresholdType: "POINTS", threshold: 0 }],
     });
     expect(result.grants).toHaveLength(1);
+  });
+});
+
+describe("officePoints", () => {
+  it("applies base, product and direction weight per programme, then sums", () => {
+    const points = officePoints(
+      { 7: { APL: 10, APD: 4, RE: 1 }, 8: { APL: 2, APD: 0, RE: 0 } },
+      { ...CONFIG, productWeights: { "7": 1, "8": 2 } }
+    );
+    // programme 7: 10*1 + 4*5 + 1*10 = 40; programme 8: 2*1*2 = 4
+    expect(points).toBe(44);
+  });
+
+  it("scores zero for a programme with no configured weight (D-30)", () => {
+    const points = officePoints({ 5: { APL: 100, APD: 100, RE: 100 } }, CONFIG);
+    expect(points).toBe(0);
+  });
+
+  it("uses the OUTGOING direction weight by default", () => {
+    const points = officePoints(
+      { 7: { APL: 1, APD: 0, RE: 0 } },
+      { ...CONFIG, directionWeights: { OUTGOING: 0.5, INCOMING: 1 } }
+    );
+    expect(points).toBe(0.5);
+  });
+
+  it("returns zero for an empty count map", () => {
+    expect(officePoints({}, CONFIG)).toBe(0);
   });
 });

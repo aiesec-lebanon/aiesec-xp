@@ -121,14 +121,11 @@ export function ProfileMenu({
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: reduceMotion ? 0 : 0.16, ease: [0.22, 0.61, 0.36, 1] }}
             style={{ transformOrigin: "top right" }}
-            // Padding rather than an offset: an 8px gap between the pill and the
-            // panel is 8px of nothing for the pointer to cross, and crossing it
-            // used to close the menu before it could be clicked.
-            className="absolute right-0 top-full z-40 w-52 pt-2"
+            className="absolute right-0 top-full z-40 w-full pt-2"
           >
             <div className="overflow-hidden rounded-2xl bg-surface-raised p-1.5 shadow-e3 ring-1 ring-surface-sunken">
               <MenuLink href="/admin/assignments" onNavigate={() => setOpen(false)}>
-                Assignments
+                Admin
               </MenuLink>
             </div>
           </m.div>

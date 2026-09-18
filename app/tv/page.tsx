@@ -1,10 +1,6 @@
 import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, recentActivity, topMembers } from "@/lib/dashboard";
 import { officeStandings } from "@/lib/leaderboard";
-import { defaultWindowRange, toDateInputValue } from "@/lib/admin/window";
-import { fetchEntityFunnelTotals } from "@/lib/analytics/aiesec-analytics";
-import { PROGRAMME_IDS } from "@/lib/analytics/funnel-tags";
-import { mcOfficeId } from "@/lib/env";
 
 import { AutoRefresh } from "@/components/studio/auto-refresh";
 import { CharacterAvatar } from "@/components/studio/character";
@@ -28,7 +24,7 @@ export default async function TvPage() {
   // mode, because everything on this page is member data (D-16).
   await requireMemberPage("/tv");
 
-  const [officeEntities, top, window, activity] = await Promise.all([
+  const [{ standings: entities, analyticsOk }, top, window, activity] = await Promise.all([
     officeStandings(),
     topMembers(10),
     activeWindow(),
@@ -41,37 +37,20 @@ export default async function TvPage() {
     [...top, ...activity].map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
   );
 
-  // Rank and points still come from this product's own ledger (only it can
-  // attribute a score to a person or an LC), but the raw APL/APD/RE counts
-  // shown per entity are AIESEC's own analytics numbers -- a live, external
-  // figure nobody can dispute, rather than a reflection of how completely this
-  // product's assignment register happens to cover that LC.
-  const officeId = mcOfficeId();
-  const range = window
-    ? { startsAt: window.startsAt, endsAt: window.endsAt ?? new Date() }
-    : defaultWindowRange();
-  const analytics = await fetchEntityFunnelTotals({
-    officeId: Number(officeId),
-    startDate: toDateInputValue(range.startsAt),
-    endDate: toDateInputValue(range.endsAt),
-    programmeIds: PROGRAMME_IDS,
-  });
-
-  const entities = officeEntities.map((entity) => {
-    const counts = analytics?.byOffice[String(entity.officeId)];
-    return counts ? { ...entity, aplCount: counts.APL, apdCount: counts.APD, reCount: counts.RE } : entity;
-  });
-
-  const totals = analytics
-    ? { aplCount: analytics.overall.APL, apdCount: analytics.overall.APD, reCount: analytics.overall.RE }
-    : entities.reduce(
-        (sum, entity) => ({
-          aplCount: sum.aplCount + entity.aplCount,
-          apdCount: sum.apdCount + entity.apdCount,
-          reCount: sum.reCount + entity.reCount,
-        }),
-        { aplCount: 0, apdCount: 0, reCount: 0 },
-      );
+  // Rank, points and the per-entity APL/APD/RE counts all come from AIESEC's
+  // own analytics API (D-56) -- a live, external figure nobody can dispute,
+  // rather than a reflection of how completely this product's assignment
+  // register happens to cover that LC. "All entities" is the sum of the rows
+  // actually shown, so it never carries activity from a closed office that
+  // has no row of its own.
+  const totals = entities.reduce(
+    (sum, entity) => ({
+      aplCount: sum.aplCount + entity.aplCount,
+      apdCount: sum.apdCount + entity.apdCount,
+      reCount: sum.reCount + entity.reCount,
+    }),
+    { aplCount: 0, apdCount: 0, reCount: 0 },
+  );
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-wall">
@@ -93,6 +72,7 @@ export default async function TvPage() {
                   window.daysLeft === null ? "" : ` closes in ${window.daysLeft} days`
                 }`
               : " · no display window"}
+            {analyticsOk ? "" : " · analytics unavailable"}
           </span>
         </div>
       </header>

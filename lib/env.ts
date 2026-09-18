@@ -26,6 +26,15 @@ const groups = {
   }),
   scope: z.object({
     MC_OFFICE_ID: z.coerce.number().int().positive(),
+    // The GIS office id MC-direct activity is actually recorded under in each
+    // system, which is not always MC_OFFICE_ID. A member's own position uses
+    // MC_OFFICE_ID (D-32); the AIESEC analytics API buckets MC-direct's
+    // applications under this other, sibling entity instead (D-56) -- both
+    // represent "MC-direct" but as two different ids in two different GIS
+    // subsystems. Optional: unset, MC-direct's office-level funnel counts are
+    // read from MC_OFFICE_ID's own analytics key, which the API never
+    // populates, so they read zero rather than crashing.
+    MC_DIRECT_ENTITY_ID: z.coerce.number().int().positive().optional(),
   }),
 } as const;
 
@@ -55,6 +64,12 @@ export const authEnv = () => read("auth");
 export const gisEnv = () => read("gis");
 export const sessionSecret = () => read("session").SESSION_SECRET;
 export const mcOfficeId = () => BigInt(read("scope").MC_OFFICE_ID);
+
+/** null when unset -- see the MC_DIRECT_ENTITY_ID comment above. */
+export const mcDirectEntityId = (): bigint | null => {
+  const id = read("scope").MC_DIRECT_ENTITY_ID;
+  return id === undefined ? null : BigInt(id);
+};
 
 /** Fails fast at boot rather than on the first request that needs a variable. */
 export function assertEnv(): void {

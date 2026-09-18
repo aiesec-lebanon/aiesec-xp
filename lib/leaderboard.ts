@@ -1,9 +1,20 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { defaultWindowRange, toDateInputValue } from "@/lib/admin/window";
+import { fetchEntityFunnelBreakdown, type ProductFunnelCounts } from "@/lib/analytics/aiesec-analytics";
+import { PROGRAMME_IDS, sumProducts } from "@/lib/analytics/funnel-tags";
+import { mcDirectEntityId, mcOfficeId } from "@/lib/env";
+import { officePoints } from "@/lib/scoring/engine";
 
-// Reads the derived ledger into rankings. No scoring happens here: the engine
-// decides points, this only sorts and groups what it produced.
+// Individual rankings read the derived ledger: no scoring happens here, the
+// engine decides points and this only sorts and groups what it produced.
+//
+// Office/LC rankings (D-56) read AIESEC's own analytics API instead, live, on
+// every request -- an office total doesn't need the per-EP attribution the
+// ledger exists for, and AIESEC's own published counts are a figure nobody
+// here can dispute. There is nothing to store: the same request that shows
+// the board is the one that scores it.
 
 export type Standing = {
   rank: number;
@@ -133,40 +144,97 @@ export type OfficeStanding = {
   reCount: number;
 };
 
-/** D-11: LC ranking, with MC-direct members as an entity of their own. */
-export async function officeStandings(): Promise<OfficeStanding[]> {
-  const [offices, standings] = await Promise.all([
-    db.office.findMany({ where: { isOperating: true }, select: { id: true, name: true } }),
-    individualStandings(),
+export type OfficeStandingsResult = {
+  standings: OfficeStanding[];
+  /** false when the AIESEC analytics API (or the active ScoreConfig) couldn't
+   * be read -- every count and point below is then a zero placeholder, not a
+   * real "nothing happened this window" read, and callers should say so. */
+  analyticsOk: boolean;
+};
+
+const EMPTY_PRODUCT_COUNTS: ProductFunnelCounts = Object.fromEntries(
+  PROGRAMME_IDS.map((id) => [id, { APL: 0, APD: 0, RE: 0 }])
+);
+
+async function memberCountsByOffice(): Promise<Map<string, number>> {
+  const members = await db.member.findMany({
+    where: { positions: { some: {} } },
+    select: { scoringOfficeId: true },
+  });
+
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    if (member.scoringOfficeId === null) continue;
+    const key = String(member.scoringOfficeId);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** D-11: LC ranking, with MC-direct members as an entity of their own.
+ * Points and funnel counts come from AIESEC's analytics API (D-56) -- see the
+ * module comment above. */
+export async function officeStandings(): Promise<OfficeStandingsResult> {
+  const [offices, memberCounts, config, window] = await Promise.all([
+    // isMc excluded: the MC's own row is the subtree root the analytics query
+    // is scoped to, so its total is always identical to the sum of the other
+    // rows -- a 4th "entity" here would just repeat "all entities" (D-56).
+    db.office.findMany({ where: { isOperating: true, isMc: false }, select: { id: true, name: true } }),
+    memberCountsByOffice(),
+    db.scoreConfig.findFirst({ where: { isActive: true } }),
+    db.displayWindow.findFirst({ where: { isActive: true } }),
   ]);
 
-  const byOffice = new Map<string, OfficeStanding>();
-  for (const office of offices) {
-    byOffice.set(String(office.id), {
-      rank: 0,
-      officeId: office.id,
-      officeName: office.name,
-      memberCount: 0,
-      points: 0,
-      aplCount: 0,
-      apdCount: 0,
-      reCount: 0,
-    });
-  }
+  const range = window
+    ? { startsAt: window.startsAt, endsAt: window.endsAt ?? new Date() }
+    : defaultWindowRange();
 
-  for (const standing of standings) {
-    if (standing.officeId === null) continue;
-    const entry = byOffice.get(String(standing.officeId));
-    if (!entry) continue;
+  const breakdown = config
+    ? await fetchEntityFunnelBreakdown({
+        officeId: Number(mcOfficeId()),
+        startDate: toDateInputValue(range.startsAt),
+        endDate: toDateInputValue(range.endsAt),
+        programmeIds: PROGRAMME_IDS,
+      })
+    : null;
 
-    entry.memberCount += 1;
-    entry.points = Math.round((entry.points + standing.points) * 10_000) / 10_000;
-    entry.aplCount += standing.aplCount;
-    entry.apdCount += standing.apdCount;
-    entry.reCount += standing.reCount;
-  }
+  const analyticsOk = config !== null && breakdown !== null;
+  const weights = config
+    ? {
+        aplPoints: Number(config.aplPoints),
+        apdPoints: Number(config.apdPoints),
+        rePoints: Number(config.rePoints),
+        productWeights: config.productWeights as Record<string, number>,
+        directionWeights: config.directionWeights as Record<string, number>,
+      }
+    : null;
 
-  return [...byOffice.values()]
+  const directEntityId = mcDirectEntityId();
+
+  const standings = offices
+    .map((office) => {
+      const counts = breakdown?.byOffice[String(office.id)] ?? EMPTY_PRODUCT_COUNTS;
+      const totals = sumProducts(counts);
+
+      // MC-direct's own committee (D-56): AIESEC's analytics API buckets its
+      // applications under this office's own GIS id (read above), but its
+      // members' positions record office 182 (D-32) -- so the row is shown
+      // under 182 instead, to join with individualStandings()'s
+      // scoringOfficeId grouping (used by the leading-office member group on
+      // /leaderboard/lcs), while its funnel counts still come from its own key.
+      const officeId = office.id === directEntityId ? mcOfficeId() : office.id;
+
+      return {
+        rank: 0,
+        officeId,
+        officeName: office.name,
+        memberCount: memberCounts.get(String(officeId)) ?? 0,
+        points: weights ? officePoints(counts, weights) : 0,
+        aplCount: totals.APL,
+        apdCount: totals.APD,
+        reCount: totals.RE,
+      };
+    })
     .sort(
       (a, b) =>
         b.points - a.points ||
@@ -176,6 +244,8 @@ export async function officeStandings(): Promise<OfficeStanding[]> {
         a.officeName.localeCompare(b.officeName)
     )
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
+
+  return { standings, analyticsOk };
 }
 
 export type PersonalProgress = {

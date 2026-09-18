@@ -209,6 +209,35 @@ export function score({
   return { ledger, grants: evaluateRewards(ledger, events, rewards), anomalies };
 }
 
+export type OfficeFunnelCounts = Record<number, { APL: number; APD: number; RE: number }>;
+
+/**
+ * Points for a whole office's raw AIESEC-analytics funnel counts (D-56): LC
+ * ranking doesn't need per-EP attribution, so this skips assignment, breaks
+ * and APL reversal and applies the same base/product/direction weights
+ * `score()` uses per event, directly to an aggregate count per programme.
+ */
+export function officePoints(
+  counts: OfficeFunnelCounts,
+  config: Pick<ScoringConfig, "aplPoints" | "apdPoints" | "rePoints" | "productWeights" | "directionWeights">,
+  direction: DirectionValue = "OUTGOING"
+): number {
+  const directionWeight = config.directionWeights[direction] ?? 0;
+  let points = 0;
+
+  for (const [programmeId, stage] of Object.entries(counts)) {
+    const productWeight = config.productWeights[programmeId];
+    if (productWeight === undefined) continue; // D-30: unconfigured weight scores zero
+
+    points +=
+      config.aplPoints * productWeight * directionWeight * stage.APL +
+      config.apdPoints * productWeight * directionWeight * stage.APD +
+      config.rePoints * productWeight * directionWeight * stage.RE;
+  }
+
+  return round(points);
+}
+
 export type MemberTotals = {
   points: number;
   aplCount: number;
