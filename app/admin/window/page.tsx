@@ -7,11 +7,12 @@ import { fetchFunnelAnalytics, type ProductFunnelCounts } from "@/lib/analytics/
 import { PROGRAMME_IDS } from "@/lib/analytics/funnel-tags";
 import { mcOfficeId } from "@/lib/env";
 import { activeMemberCount } from "@/lib/org/active-members";
+import { termStart } from "@/lib/term";
 
 import { Rise } from "@/components/studio/motion";
 
 import { AdminNav } from "../admin-nav";
-import { WindowForm } from "./controls";
+import { TermForm, WindowForm } from "./controls";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function WindowAdminPage() {
   const officeId = mcOfficeId();
   const form = await activeWindowOrDefault();
 
-  const [analytics, memberCount] = await Promise.all([
+  const [analytics, memberCount, term] = await Promise.all([
     fetchFunnelAnalytics({
       officeId: Number(officeId),
       startDate: form.startsAt,
@@ -43,6 +44,7 @@ export default async function WindowAdminPage() {
       programmeIds: PROGRAMME_IDS,
     }),
     activeMemberCount(officeId),
+    termStart(),
   ]);
 
   return (
@@ -82,6 +84,21 @@ export default async function WindowAdminPage() {
           </div>
 
           <WindowForm label={form.label} startsAt={form.startsAt} endsAt={form.endsAt} />
+        </section>
+
+        <section className="flex flex-col gap-4 rounded-[22px] bg-surface-raised px-7 py-6.5">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">
+              Term start
+            </h2>
+            <p className="mt-1 max-w-140 text-[13px] text-ink-secondary">
+              The floor under everything (D-58). Sync collects nothing earlier, and the leaderboards
+              open on this date through today when nobody has picked a range. Moving it does not
+              replay the ledger — the window above is what scores are measured in.
+            </p>
+          </div>
+
+          <TermForm startsAt={toDateInputValue(term)} />
         </section>
 
         <section className="flex flex-col gap-4 rounded-[22px] bg-surface-raised px-7 py-6.5">

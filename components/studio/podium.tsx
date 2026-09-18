@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import { Character, ContactShadow } from "./character";
 import { beatFor, facingFor, useGroupExchange } from "./group-exchange";
 import { Rise } from "./motion";
@@ -7,6 +9,13 @@ import { Rise } from "./motion";
 // The top three, standing rather than listed. Height is the ranking: the winner
 // is simply the tallest thing on the page, which is legible before any numeral
 // is read.
+//
+// The bodies are sized in pixels because a canvas needs pixels, and at the
+// design sizes below the whole block runs to about 550px. Under a page header
+// and two rows of filters that put the name and points cards under the fold on
+// a laptop -- the winner was on screen and nobody could read who they were. So
+// the bodies shrink to whatever height is actually left. The cards do not: they
+// carry the names, which is the part that has to stay legible.
 
 export type PodiumPlace = {
   rank: 1 | 2 | 3;
@@ -45,15 +54,70 @@ export function Crown() {
 // second is laid out to the left of first, third to its right.
 const COLUMN: Record<1 | 2 | 3, number> = { 1: 0, 2: -1, 3: 1 };
 
+/**
+ * What the bodies do not get: the contact shadow, the name card, and the
+ * floating dock, which is sticky and was sitting straight over the winner's
+ * name -- first place was on screen and unreadable.
+ */
+const RESERVED_BELOW = 340;
+
+/** Shrinking past this stops reading as a person and starts reading as a bug. */
+const MIN_SCALE = 0.4;
+
+/**
+ * How much of its design height the podium can actually have.
+ *
+ * Measured from the podium's own offset down the document rather than from a
+ * guess about the header, because the filters above it wrap on a narrow screen
+ * and change height when they do. The observer catches that wrap, and the
+ * listener catches a viewport that changes height without the document doing so.
+ */
+function useFitScale() {
+  const frame = useRef<HTMLOListElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    function measure() {
+      const node = frame.current;
+      if (!node) return;
+
+      // Offset within the document, not the viewport: a resize after scrolling
+      // would otherwise measure from wherever the page happens to sit.
+      const top = node.getBoundingClientRect().top + window.scrollY;
+      const available = window.innerHeight - top - RESERVED_BELOW;
+      setScale(Math.min(1, Math.max(MIN_SCALE, available / FORM[1].frame)));
+    }
+
+    measure();
+    window.addEventListener("resize", measure);
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.body);
+
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer.disconnect();
+    };
+  }, []);
+
+  return [frame, scale] as const;
+}
+
 export function Podium({ places }: { places: PodiumPlace[] }) {
   const exchange = useGroupExchange(places.length);
+  const [frame, scale] = useFitScale();
   const columnOf = (index: number) => COLUMN[places[index]!.rank];
 
   return (
-    <ol className="flex flex-wrap items-end justify-center gap-8 sm:gap-16">
+    <ol
+      ref={frame}
+      className="flex flex-wrap items-end justify-center gap-8 sm:gap-16"
+    >
       {places.map((place, index) => {
         const form = FORM[place.rank];
         const first = place.rank === 1;
+        const body = Math.round(form.body * scale);
+        const frameHeight = Math.round(form.frame * scale);
 
         return (
           <Rise
@@ -64,12 +128,12 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
           >
             <div
               className="relative flex items-end justify-center"
-              style={{ height: form.frame }}
+              style={{ height: frameHeight }}
             >
               {first ? <Crown /> : null}
               <Character
                 name={place.name}
-                height={form.body}
+                height={body}
                 idle={first ? "bob" : "small"}
                 idOverride={place.characterId}
                 stage
@@ -85,8 +149,8 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
             </div>
 
             <ContactShadow
-              width={form.shadow}
-              height={first ? 38 : 32}
+              width={Math.round(form.shadow * scale)}
+              height={Math.round((first ? 38 : 32) * scale)}
               opacity={first ? 0.17 : 0.14}
             />
 
