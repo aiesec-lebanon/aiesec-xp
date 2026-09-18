@@ -42,7 +42,9 @@ for (const s of (await individualStandings()).filter((x) => x.points !== 0)) {
 }
 
 console.log("\nLC leaderboard:");
-for (const o of await officeStandings()) {
+const { standings: officeRows, analyticsOk } = await officeStandings();
+if (!analyticsOk) console.log("  (AIESEC analytics API unreachable -- totals below are zero placeholders)");
+for (const o of officeRows) {
   console.log(`  ${o.rank}  ${o.officeName.padEnd(22)} members=${o.memberCount} pts=${o.points}`);
 }
 process.exit(0);

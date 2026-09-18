@@ -2,7 +2,7 @@ import "server-only";
 
 import { gisEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { countsFromPayload, sumProducts, type ProductFunnelCounts } from "@/lib/analytics/funnel-tags";
+import { countsFromPayload, type ProductFunnelCounts } from "@/lib/analytics/funnel-tags";
 
 // AIESEC's Analytics API -- a separate REST product from GIS GraphQL, documented
 // at aies.ec/developer-guides ("Using the AIESEC Analytics API"). It is what
@@ -74,31 +74,31 @@ export async function fetchFunnelAnalytics(query: AnalyticsQuery): Promise<Produ
   return countsFromPayload(payload, query.programmeIds);
 }
 
-export type EntityFunnelTotals = {
-  /** The queried office's own total, across its whole subtree. */
-  overall: { APL: number; APD: number; RE: number };
+export type EntityFunnelBreakdown = {
+  /** The queried office's own total, across its whole subtree, per programme. */
+  overall: ProductFunnelCounts;
   /** One entry per office id the response nests a nested section for. Verified
-   * live against office 182: the response nests one section per office in the
-   * subtree, keyed by that office's own id -- including the queried office
-   * itself, which is what stands for MC-direct members (D-11) with no
-   * subtraction needed. An office with no activity in the window carries no
+   * live against office 182: the queried office's own id shows up again as one
+   * of these keys only when it has direct activity of its own in the window --
+   * an office with none (including the queried office itself, D-56) carries no
    * key at all rather than a zeroed one. */
-  byOffice: Record<string, { APL: number; APD: number; RE: number }>;
+  byOffice: Record<string, ProductFunnelCounts>;
 };
 
-/** Per-entity APL/APD/RE totals for the TV board (D-11: LC ranking, MC-direct
- * as its own entity) -- AIESEC's own funnel counts, not this product's scored
- * points. */
-export async function fetchEntityFunnelTotals(query: AnalyticsQuery): Promise<EntityFunnelTotals | null> {
+/** Per-entity, per-programme APL/APD/RE counts -- the same parse
+ * `fetchFunnelAnalytics` does, kept per-programme and per-office instead of
+ * collapsed so a caller (D-56: office-level scoring) can apply a per-product
+ * point weight before summing. */
+export async function fetchEntityFunnelBreakdown(query: AnalyticsQuery): Promise<EntityFunnelBreakdown | null> {
   const payload = await fetchAnalyticsPayload(query);
   if (!payload) return null;
 
-  const overall = sumProducts(countsFromPayload(payload, query.programmeIds));
-  const byOffice: EntityFunnelTotals["byOffice"] = {};
+  const overall = countsFromPayload(payload, query.programmeIds);
+  const byOffice: EntityFunnelBreakdown["byOffice"] = {};
 
   for (const [key, value] of Object.entries(payload)) {
     if (!/^\d+$/.test(key) || !value || typeof value !== "object") continue;
-    byOffice[key] = sumProducts(countsFromPayload(value as Record<string, unknown>, query.programmeIds));
+    byOffice[key] = countsFromPayload(value as Record<string, unknown>, query.programmeIds);
   }
 
   return { overall, byOffice };

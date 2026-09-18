@@ -12,14 +12,17 @@ export const dynamic = "force-dynamic";
 
 export default async function LcLeaderboardPage() {
   await requireMemberPage("/leaderboard/lcs");
-  const [standings, members] = await Promise.all([officeStandings(), individualStandings()]);
+  const [{ standings, analyticsOk }, members] = await Promise.all([
+    officeStandings(),
+    individualStandings(),
+  ]);
 
   const [leader, ...rest] = standings;
 
   // The bodies on the leading LC's plinth are its own top members, so the group
   // on the page is the group that put it there rather than decoration.
   const top = leader
-    ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 10)
+    ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 5)
     : [];
   const characters = await memberAvatars(
     top.map((standing) => ({ id: standing.memberId, fullName: standing.fullName })),
@@ -45,6 +48,12 @@ export default async function LcLeaderboardPage() {
           Each member counts once, for the office of their highest active position.
         </p>
       </div>
+
+      {!analyticsOk ? (
+        <p className="mx-6 mt-5 rounded-2xl bg-break-wash px-5 py-3 text-center text-sm font-semibold text-ink sm:mx-16">
+          Could not reach the AIESEC analytics API just now — LC totals may be out of date.
+        </p>
+      ) : null}
 
       {leader ? (
         <Rise
