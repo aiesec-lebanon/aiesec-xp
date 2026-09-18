@@ -9,12 +9,28 @@ import sys
 import bpy
 from mathutils import Vector
 
-NAMES = [
+FORMS = [
     "avatar-hoodie-joggers",
     "avatar-tee-shorts",
     "avatar-hoodie-cargo",
     "avatar-tee-skirt",
+    "avatar-crop-joggers",
+    "avatar-crop-jeans",
 ]
+
+
+def names(repo_root):
+    """Every body in public/models: the four forms and each one's palettes.
+
+    Discovered rather than listed, so adding a palette to `avatar-variants.py`
+    does not also mean remembering to add it here.
+    """
+    models = os.path.join(repo_root, "public", "models")
+    found = {f[: -len(".glb")] for f in os.listdir(models) if f.endswith(".glb")}
+    ordered = []
+    for form in FORMS:
+        ordered += sorted(n for n in found if n == form or n.startswith(f"{form}-"))
+    return ordered
 
 WIDTH = 560
 HEIGHT = 780
@@ -25,6 +41,15 @@ MARGIN = 1.10
 PORTRAIT = 320
 PORTRAIT_SPAN = 0.36
 PORTRAIT_DROP = 0.17
+
+# Per form, because a head is a share of the body and these bodies disagree
+# about it: the four kids are drawn with heads about a quarter of their height,
+# where the two adult figures are nearer a seventh, so the crop tuned for one
+# frames mostly chest on the other.
+PORTRAIT_FIT = {
+    "avatar-crop-joggers": (0.23, 0.105),
+    "avatar-crop-jeans": (0.23, 0.105),
+}
 
 
 def stage():
@@ -150,10 +175,12 @@ def render_one(repo_root, name):
     # The profile picture: head and a little shoulder, square, so it can be
     # cropped to a circle anywhere without losing the face.
     top = max(c.z for c in corners)
+    span, drop = PORTRAIT_FIT.get(name.split("-p")[0] if "-p" in name else name,
+                                  (PORTRAIT_SPAN, PORTRAIT_DROP))
     scene.render.resolution_x = PORTRAIT
     scene.render.resolution_y = PORTRAIT
-    cam.location = (mid_x, depth, top - height * PORTRAIT_DROP)
-    cam.data.ortho_scale = height * PORTRAIT_SPAN
+    cam.location = (mid_x, depth, top - height * drop)
+    cam.data.ortho_scale = height * span
 
     out = os.path.join(repo_root, "public", "characters", f"{name}-portrait.png")
     scene.render.filepath = out
@@ -163,12 +190,14 @@ def render_one(repo_root, name):
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    repo_root = argv[0] if argv else os.getcwd()
+    # Absolute: a bare "." is resolved by Blender against its own notion of the
+    # working directory, not the shell's, and the renders landed on C:\.
+    repo_root = os.path.abspath(argv[0] if argv else os.getcwd())
     os.makedirs(os.path.join(repo_root, "public", "characters"), exist_ok=True)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     stage()
-    for name in NAMES:
+    for name in names(repo_root):
         render_one(repo_root, name)
     print("AVATAR_STILLS_OK")
 

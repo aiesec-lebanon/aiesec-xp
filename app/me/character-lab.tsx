@@ -16,7 +16,7 @@ export function CharacterLab({
   name: string;
   initialCharacter: string;
 }) {
-  const { character, index, step } = useCharacterChoice(initialCharacter);
+  const { character, index, step, tone, setTone } = useCharacterChoice(initialCharacter);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [pending, startTransition] = useTransition();
 
@@ -45,6 +45,12 @@ export function CharacterLab({
         index={index}
         step={(by) => {
           step(by);
+          setStatus({ kind: "idle" });
+          setBeat(null);
+        }}
+        tone={tone}
+        setTone={(at) => {
+          setTone(at);
           setStatus({ kind: "idle" });
           setBeat(null);
         }}

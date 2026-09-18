@@ -32,7 +32,8 @@ in a blob worker under the CSP — actually works.
 
 ## Character avatars
 
-The four member avatars are authored in Blender at `D:\Blender\characters_working.blend`
+The member avatars are four forms in four palettes plus two further bodies
+(D-59). They are authored in Blender at `D:\Blender\characters_working.blend`
 (not in the repo: ~40MB of packed source textures, and the tracked input here is
 the exported `.glb`). `D:\Blender\characters.blend` is the untouched original —
 work on the copy, never on it.
@@ -94,8 +95,37 @@ blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-animatio
 `avatar-to-mixamo.py` writes the unrigged, T-posed FBX the Mixamo auto-rigger
 wants, for a character that needs a skeleton it does not already have.
 
+`avatar-variants.py` bakes the three alternate palettes (D-59). A palette is a
+repainted base-colour texture over the authored mesh, rig and UVs, so it costs no
+geometry and the shared clips drive it unchanged. It imports `avatar-parts.py`'s
+classifier for the per-part mask rather than copying it, and fills two gaps in it
+that only show once the colours change -- the torso could not reach `trouser`,
+and Milo's salmon sleeves were not claimed by his hoodie. Rerunning it is:
+
+```sh
+blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-variants.py -- .
+npm run assets:models
+blender -b -P scripts/assets/avatar-stills.py -- .
+```
+
+The palettes live in `PALETTES` there and their swatches in
+`lib/design/character.ts`; the two are changed together.
+
+`avatar-export-extra.py` exports the characters that live in `characters.blend`
+rather than the working file -- currently Nour and Lina. It refuses anything that
+is not on Mixamo's 65-bone skeleton, because that is what the clips are authored
+against, which is why `characters.blend`'s 149-bone and 138-bone rigs are not
+imported. It also unwires transparency and the specular map, which arrive from a
+non-PBR Specular/Glossiness source meaning something else: one of them had its
+own diffuse wired into Alpha and exported with ragged holes through its arms.
+
+```sh
+blender -b D:\Blender\characters.blend -P scripts/assets/avatar-export-extra.py -- .
+```
+
 `avatar-parts.py` is the parked per-part recolouring pipeline (D-52). It is kept
-because restoring recolouring means running it again, not rewriting it.
+because restoring recolouring means running it again, not rewriting it, and
+because `avatar-variants.py` reads its classifier.
 
 ## Where free assets come from
 
