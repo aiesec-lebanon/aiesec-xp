@@ -32,7 +32,7 @@ export default async function LcLeaderboardPage({
   // The bodies on the leading LC's plinth are its own top members, so the group
   // on the page is the group that put it there rather than decoration.
   const top = leader
-    ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 5)
+    ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 10)
     : [];
   const characters = await memberAvatars(
     top.map((standing) => ({ id: standing.memberId, fullName: standing.fullName })),
