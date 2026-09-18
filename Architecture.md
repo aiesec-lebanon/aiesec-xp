@@ -1,6 +1,6 @@
 # Architecture.md — AIESEC in Lebanon | AIESEC XP
 
-Companion: `Context.md` (domain, glossary, decisions D-01…D-47; open items O-09, O-10, O-11, O-12)
+Companion: `Context.md` (domain, glossary, decisions D-01…D-58; open items O-09, O-10, O-13)
 
 ---
 
@@ -255,6 +255,12 @@ model DisplayWindow {                          // D-07, D-20
   isActive Boolean                              // exactly one true, partial unique index (D-21)
 }
 
+model TermSettings {                            // D-58. One row, check constraint
+  id        String   @id @default("singleton")  // on the id rather than a convention
+  startsAt  DateTime                            // collection floor + leaderboard default
+  updatedAt DateTime @updatedAt
+}
+
 model Reward {                                 // D-09
   id            String  @id @default(cuid())
   label         String
@@ -326,8 +332,11 @@ what makes D-15 safe.
 ## 6. Sync pipeline
 
 Runs every 15 minutes on the service token, scoped to the 182 subtree and
-`programmes: [7, 8, 9]`, and floored at the active display window's start: the
-system fetches only what it scores (D-43). Scope is applied on the person side today; the
+`programmes: [7, 8, 9]`, and floored at `TermSettings.startsAt`: the system
+fetches only what it scores (D-43, amended by D-58). The floor was the active
+display window's start, which meant moving the window forward stopped collecting
+everything behind it — and a leaderboard read over a historic range would have
+found nothing there. Scope is applied on the person side today; the
 opportunity side is the same code path selected by `ScoreConfig.scopeSides`, so
 incoming exchange is a configuration change (D-27). Results from both sides
 converge on the same idempotency key, so an application that is Lebanese on both
@@ -431,8 +440,33 @@ returned as an anomaly, never scored at an assumed weight of 1 (D-30). Remote an
 physical realization share one weight; where both dates exist the earlier wins
 (D-29).
 
-Only events whose `occurredAt` falls inside the active `DisplayWindow` contribute
-to the visible leaderboard, and each event is evaluated independently (D-08).
+Only events whose `occurredAt` falls inside the scored range contribute to a
+board, and each event is evaluated independently (D-08).
+
+### The scored range is the caller's, not always the window (D-58)
+
+`score()` takes its window as an argument, so "which range" is a question each
+surface answers for itself:
+
+| Surface | Range |
+|---|---|
+| `/leaderboard`, `/leaderboard/lcs` | `?from=&to=`, defaulting to the term start through today |
+| `/tv` | The active `DisplayWindow`. It is the live screen for exchange hackathons and takes no range of its own |
+| `/`, `/me`, rewards | The active `DisplayWindow`, because `RewardGrant` is derived against it (D-34) |
+| `ScoreLedgerEntry` (the replay) | The active `DisplayWindow` |
+
+That last row is why the individual board cannot read the ledger for a historic
+range: the replay bakes the window in, so the ledger only ever holds rows inside
+it. `individualStandings(range)` therefore runs this engine on the request that
+renders the board, over events narrowed to the range in the query — the same set
+the engine would have kept anyway. It is the same shape as the office path below,
+and it keeps every rule in this section correct by construction instead of
+re-deriving break netting and APL reversal in a query. `lib/scoring/config.ts`
+maps the stored row for both callers, so the two cannot drift.
+
+`lib/leaderboard-range.ts` resolves the query string, clamping to
+`[TermSettings.startsAt, today]` and echoing every bound back, so a clamped
+request is visible in the date inputs rather than silently applied.
 
 ### Office-level scoring is a separate, unstored path (D-56)
 
@@ -507,7 +541,10 @@ the simplest correct option. Replays are audited.
 - **Scoring config** — APL/APD/RE points, product and direction multipliers, APL
   reversal toggle, scope sides. Saving creates a new version and shows a
   leaderboard diff preview before committing.
-- **Display window** — the date range everyone sees.
+- **Display window** — the range the reward race is measured in. Saving replays.
+- **Term start** — the floor under everything (D-58): sync collects nothing
+  earlier and the leaderboards open on it. Saving does not replay, because the
+  ledger is still derived against the window above.
 - **Rewards** — create, edit, activate.
 - **Assignments** — import the MC's sheet, with a dry-run preview and a per-row
   error report. There is no EP picker and no browsable directory: assignment is
@@ -530,10 +567,10 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 | Route | Purpose |
 |---|---|
 | `/` | Personal dashboard |
-| `/leaderboard` | Individual ranking, filterable by LC and MC |
-| `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11). Points and counts read live from AIESEC's own analytics API, not the ledger (D-56) |
+| `/leaderboard` | Individual ranking, filterable by LC and MC and by date range (D-58). Both filters sit above the podium |
+| `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11), over the same date range. Points and counts read live from AIESEC's own analytics API, not the ledger (D-56) |
 | `/me` | Full event history and point trail |
-| `/tv` | Fullscreen display mode for office screens |
+| `/tv` | Fullscreen display mode for office screens. Stays on the active display window; no range picker (D-58) |
 | `/admin/*` | Configuration |
 
 ### Interactions
@@ -548,6 +585,20 @@ Every mutation writes an `AuditLog` row with before/after JSON.
   a this-week number and is the highest-leverage element for behaviour change.
 - **Live leaderboard.** SSE-pushed. FLIP transitions on rank change so movement is
   legible. Contextual nudge: "1 approval behind the next rank."
+- **Date range control.** Two fields and an Apply, above the podium with the
+  office chips, writing `?from=&to=` (D-58). The calendar is this product's own
+  (`components/studio/date-field.tsx`), not `<input type="date">`: that control's
+  popup is browser chrome, rendered by the platform in the platform's own blue,
+  and no stylesheet reaches it — next to a warm-paper cyclorama it reads as a
+  different application. Ours also refuses dates before the term start rather
+  than only rejecting them on submit. Keyboard behaviour follows the ARIA
+  date-picker pattern: one tab stop into the grid, arrows to move, Escape to
+  leave, because 42 tabbable days would be operable and unusable.
+- **The podium fits the viewport.** Its bodies are sized in pixels, since a
+  canvas needs pixels, and at the design sizes the block runs past the fold on a
+  laptop — the winner was on screen with their name behind the floating dock. The
+  bodies and shadows scale to the height actually left below the filters; the
+  name cards do not, because they carry the part that has to stay readable.
 - **Milestone moment.** Full-screen celebration on a new scored event, plus a
   server-rendered share card.
 - **Audit drawer.** Any score expands into the events behind it: stage, date,
@@ -644,10 +695,12 @@ Technical measures that remain regardless:
   request an EP's name, so no code path can store one (D-42). The only EP datum
   held is `epPersonId`, the join that makes attribution possible at all. Names
   are read from GIS per view and discarded.
-- **Collection is bounded by purpose.** Nothing before the active display window
-  is fetched or stored, because nothing before it is scored (D-43). When this
-  was introduced, 206 of 269 stored events fell outside the window and existed
-  for no reason; they were deleted by migration.
+- **Collection is bounded by purpose.** Nothing before the term start is fetched
+  or stored, because nothing before it can be scored to the right member (D-43,
+  amended by D-58). When this bound was introduced, 206 of 269 stored events fell
+  outside it and existed for no reason; they were deleted by migration. The bound
+  was originally the active display window, which made it move every time the MC
+  moved the race — the term is the stable statement of what this holds.
 - A test suite reads the schema and the GIS operations as text and fails if a
   name, email or phone field reappears in either.
 - No DOB, gender, nationality, CVs or academic history, all of which GIS exposes

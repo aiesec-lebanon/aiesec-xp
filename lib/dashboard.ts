@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import type { DateRange } from "@/lib/leaderboard-range";
 import { individualStandings, type PersonalProgress } from "@/lib/leaderboard";
 
 // What the member-facing screens need on top of the rankings: the window they
@@ -183,6 +184,6 @@ export async function recentActivity(limit = 12): Promise<ActivityItem[]> {
 }
 
 /** The top of the individual board, for /tv and the podium. */
-export async function topMembers(count: number) {
-  return (await individualStandings()).slice(0, count);
+export async function topMembers(count: number, range: DateRange) {
+  return (await individualStandings(range)).slice(0, count);
 }

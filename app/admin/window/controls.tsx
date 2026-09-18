@@ -2,7 +2,11 @@
 
 import { useActionState } from "react";
 
-import { setDisplayWindowAction, type ActionState } from "@/lib/admin/window-actions";
+import {
+  setDisplayWindowAction,
+  setTermStartAction,
+  type ActionState,
+} from "@/lib/admin/window-actions";
 
 const FIELD =
   "rounded-[10px] border border-line bg-surface-raised px-3 py-2 text-[13px] text-ink";
@@ -82,6 +86,39 @@ export function WindowForm({
 
         <button type="submit" disabled={pending} className={PRIMARY}>
           Save window
+        </button>
+      </div>
+
+      <Message state={state} />
+    </form>
+  );
+}
+
+export function TermForm({ startsAt }: { startsAt: string }) {
+  const [state, action, pending] = useActionState<ActionState | null, FormData>(
+    setTermStartAction,
+    null
+  );
+
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="termStartsAt" className="text-xs font-semibold text-ink-muted">
+            Term starts
+          </label>
+          <input
+            id="termStartsAt"
+            name="termStartsAt"
+            type="date"
+            required
+            defaultValue={startsAt}
+            className={FIELD}
+          />
+        </div>
+
+        <button type="submit" disabled={pending} className={PRIMARY}>
+          Save term start
         </button>
       </div>
 

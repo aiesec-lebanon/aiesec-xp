@@ -225,6 +225,21 @@ model DisplayWindow {
   @@index([isActive])
 }
 
+// The term this system holds data for (D-58). Exactly one row, enforced by a
+// check constraint in the migration.
+//
+// It answers two questions with one date, because for this product they are the
+// same date. It is the collection floor, so sync fetches nothing earlier and the
+// active DisplayWindow can move without orphaning the history behind it; and it
+// is where the leaderboards' date range starts when nobody has picked one.
+// Events before it exist in GIS but predate the assignment register, so nothing
+// built from them could be attributed to the right member.
+model TermSettings {
+  id        String   @id @default("singleton")
+  startsAt  DateTime
+  updatedAt DateTime @updatedAt
+}
+
 enum ThresholdType {
   POINTS
   APL_COUNT
