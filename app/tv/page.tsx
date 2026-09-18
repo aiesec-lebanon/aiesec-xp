@@ -1,6 +1,6 @@
 import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, recentActivity, topMembers } from "@/lib/dashboard";
-import { officeStandings } from "@/lib/leaderboard";
+import { activeWindowRange, officeStandings } from "@/lib/leaderboard";
 
 import { AutoRefresh } from "@/components/studio/auto-refresh";
 import { CharacterAvatar } from "@/components/studio/character";
@@ -24,9 +24,15 @@ export default async function TvPage() {
   // mode, because everything on this page is member data (D-16).
   await requireMemberPage("/tv");
 
+  // The live screen for exchange hackathons, so it stays on the active display
+  // window and takes no range of its own: nobody standing in front of a TV is
+  // going to pick dates, and the race it announces is the one the window
+  // defines (D-58).
+  const range = await activeWindowRange();
+
   const [{ standings: entities, analyticsOk }, top, window, activity] = await Promise.all([
-    officeStandings(),
-    topMembers(10),
+    officeStandings(range),
+    topMembers(10, range),
     activeWindow(),
     recentActivity(8),
   ]);

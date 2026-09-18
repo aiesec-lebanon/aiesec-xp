@@ -1,5 +1,7 @@
 import { requireMemberPage } from "@/lib/auth/guards";
 import { individualStandings, officeStandings } from "@/lib/leaderboard";
+import { resolveRange } from "@/lib/leaderboard-range";
+import { termStart } from "@/lib/term";
 
 import { CharacterGroup } from "@/components/studio/character-group";
 import { memberAvatars } from "@/lib/design/avatar";
@@ -7,14 +9,23 @@ import { characterFor } from "@/lib/design/character";
 import { Dock } from "@/components/studio/dock";
 import { GhostNumber, Rise } from "@/components/studio/motion";
 import { Crown } from "@/components/studio/podium";
+import { RangeFilter } from "@/components/studio/range-filter";
 
 export const dynamic = "force-dynamic";
 
-export default async function LcLeaderboardPage() {
+export default async function LcLeaderboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
   await requireMemberPage("/leaderboard/lcs");
+  const params = await searchParams;
+
+  const range = resolveRange(params, await termStart());
+
   const [{ standings, analyticsOk }, members] = await Promise.all([
-    officeStandings(),
-    individualStandings(),
+    officeStandings(range),
+    individualStandings(range),
   ]);
 
   const [leader, ...rest] = standings;
@@ -36,18 +47,25 @@ export default async function LcLeaderboardPage() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-wall">
-      <div className="flex justify-end px-6 pt-8 sm:px-11">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+      <div className="flex flex-wrap items-end justify-between gap-4 px-6 pt-8 sm:px-11">
+        <RangeFilter
+          action="/leaderboard/lcs"
+          from={range.from}
+          to={range.to}
+          min={range.floor}
+          max={range.ceiling}
+        />
+        {/* <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
           {standings.length} entit{standings.length === 1 ? "y" : "ies"} · {totalMembers} members
-        </p>
+        </p> */}
       </div>
 
-      <div className="px-6 pt-7 text-center sm:px-11">
+      {/* <div className="px-6 pt-8 text-center sm:px-11">
         <h1 className="font-display text-[28px] font-semibold text-ink">Local Committees</h1>
         <p className="mt-1.5 text-[13px] text-ink-muted">
           Each member counts once, for the office of their highest active position.
         </p>
-      </div>
+      </div> */}
 
       {!analyticsOk ? (
         <p className="mx-6 mt-5 rounded-2xl bg-break-wash px-5 py-3 text-center text-sm font-semibold text-ink sm:mx-16">

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { termStart } from "@/lib/term";
 
 // The watermark is how a 15-minute sync avoids re-reading the whole corpus. It
 // advances only when a pass completes in full, so a failure halfway through
@@ -16,19 +17,16 @@ export const OVERLAP_MS = 48 * 60 * 60 * 1000;
 export type Window = { from: Date; to: Date };
 
 /**
- * The earliest moment this system may collect anything (D-43).
+ * The earliest moment this system may collect anything (D-43, amended by D-58).
  *
- * Nothing before the active display window is scored, so nothing before it is
- * fetched or stored either. This is the difference between holding data with a
- * purpose and holding a copy of EXPA: at the point it was introduced, 206 of
- * 269 stored events fell outside the window and existed for no reason.
+ * Still bounded by purpose -- this holds what it scores, not a copy of EXPA --
+ * but the bound is the term start rather than the active display window's. Under
+ * D-43 they were the same date, which meant moving the window forward stopped
+ * collecting everything behind it, and a leaderboard read over a historic range
+ * would have found nothing there.
  */
 export async function collectionFloor(): Promise<Date> {
-  const window = await db.displayWindow.findFirst({ where: { isActive: true } });
-  if (!window) {
-    throw new Error("No active DisplayWindow; sync has no bound and must not run");
-  }
-  return window.startsAt;
+  return termStart();
 }
 
 export async function readWatermark(pass: string): Promise<Date | null> {
