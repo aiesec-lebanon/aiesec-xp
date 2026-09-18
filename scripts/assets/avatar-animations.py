@@ -31,6 +31,7 @@ CLIPS = {
     "Happy Idle (1)": "idle-happy-2",
     "Look Around Idle": "idle-look-around",
     "Arm Stretching Idle": "idle-stretch",
+    "Neck Stretching": "idle-neck-stretch",
     "Bored": "idle-bored",
     # Transitions -- what makes a walk start and stop instead of snapping
     "Start Walking": "walk-start",
@@ -52,32 +53,44 @@ CLIPS = {
     "Rallying": "rally",
     "Victory": "victory",
     "Hip Hop Dancing": "dance",
+    "Silly Dancing": "dance-silly",
+    "Silly Dancing (1)": "dance-silly-2",
+    # Ambient idle, re-added to the pool at the product's request (D-59). Each
+    # puts the body somewhere the set has no prop for -- a chair for the two
+    # sitting idles, a fighting stance for the warrior one -- which is why they
+    # were left out originally; kept in now that the call has been made deliberately.
+    "Sitting Idle": "idle-sitting",
+    "Sitting Idle (1)": "idle-sitting-2",
+    "Warrior Idle": "idle-warrior",
+    # A one-shot, not a pool member: played on save in the character lab (D-59),
+    # not cycled while a body just stands there.
+    "Catwalk Idle Twist R": "idle-catwalk",
     # Between two bodies standing near each other
     "Talking": "talk",
     "Talking (1)": "talk-2",
+    "Talking (2)": "talk-3",
+    "Talking (3)": "talk-4",
     "Agreeing": "agree",
     "Look Over Shoulder": "glance",
     "Telling A Secret": "secret",
 }
 
-# Left out on purpose: the two sitting idles put a body on a chair this product
-# does not have, and Offensive Idle is a combat stance. Both are still in the
+# Superseded or duplicate clips, left out entirely. All are still in the
 # download folder if that judgement is ever revisited.
 SKIP = {
-    "Sitting Idle",
-    "Sitting Idle (1)",
-    "Offensive Idle",
     # Superseded by the straight "Walking" cycle: the swap walks in a straight
     # line, and a turning cycle veers against it.
     "Walking Left Turn",
     "Walking Right Turn",
-    # Near-duplicates of clips already in the table.
+    # Near-duplicate of "Look Around Idle" already in the table.
     "Looking Around Idle",
-    "Catwalk Idle Twist R",
-    "Talking (2)",
-    "Talking (3)",
-    "Silly Dancing",
-    "Silly Dancing (1)",
+    # A second, unnamed arm-stretch download alongside "Arm Stretching Idle",
+    # which is already the one in the table. Left out rather than guessed at --
+    # say which one should replace it, if either should.
+    "Arm Stretching",
+    # A fighting stance, superseded once "Warrior Idle" -- the clip the name
+    # actually asks for -- was in the download folder.
+    "Offensive Idle",
     "Jumping",
 }
 
@@ -91,12 +104,14 @@ REFERENCE_RIG = "avatar-hoodie-cargo-rig"
 LIBRARIES = {
     "avatar-animations": [
         "idle-breathing", "idle-happy", "idle-happy-2", "idle-look-around", "idle-stretch",
+        "idle-neck-stretch", "idle-sitting", "idle-sitting-2", "idle-warrior",
         "walk", "walk-start", "walk-stop", "turn-left", "turn-right",
         "wave", "cheer", "cheer-2", "clap", "rally", "victory",
     ],
     "avatar-animations-social": [
         "idle-bored", "acknowledge", "thumbs-up", "salute", "disappointed", "point",
-        "talk", "talk-2", "agree", "glance", "secret", "dance",
+        "talk", "talk-2", "talk-3", "talk-4", "agree", "glance", "secret",
+        "dance", "dance-silly", "dance-silly-2", "idle-catwalk",
     ],
 }
 
@@ -286,7 +301,9 @@ def rotation_only(path):
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    repo_root = argv[0] if argv else os.getcwd()
+    # Absolute: a bare "." resolves against Blender's own working directory,
+    # not the shell's, and would otherwise write the libraries onto C:\.
+    repo_root = os.path.abspath(argv[0] if argv else os.getcwd())
     fbx_dir = argv[1] if len(argv) > 1 else r"D:\Blender\mixamo\download"
 
     if bpy.context.object is not None and bpy.context.object.mode != "OBJECT":

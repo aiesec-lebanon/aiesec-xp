@@ -12,6 +12,7 @@ import { beatClip, characterStillPath, type CharacterMood } from "@/lib/design/c
 import { CharacterModel, FRAME_HEIGHT } from "./character-model";
 import { beatFor, facingFor, useGroupExchange } from "./group-exchange";
 import { groundY, placeGroup } from "./group-layout";
+import { useMoodFlourish } from "./mood-flourish";
 
 export type GroupMember = {
   id: string;
@@ -29,6 +30,7 @@ export type GroupMember = {
 export function CharacterGroup({
   members,
   mood = "celebrate",
+  flourish = false,
   className = "",
   heightFraction = 0.6,
   floorFraction = 0.12,
@@ -37,6 +39,13 @@ export function CharacterGroup({
   /** In the order they should stand, best placed first. */
   members: GroupMember[];
   mood?: CharacterMood;
+  /**
+   * Each body breaks from `mood` into dancing now and then, on its own
+   * independent timer -- everybody reacting on the same beat is as artificial
+   * as nobody reacting (D-54), and a group that all danced together would be
+   * the same fault at a different clip (D-60).
+   */
+  flourish?: boolean;
   className?: string;
   heightFraction?: number;
   floorFraction?: number;
@@ -72,6 +81,7 @@ export function CharacterGroup({
         <Bodies
           members={members}
           mood={mood}
+          flourish={flourish}
           heightFraction={heightFraction}
           floorFraction={floorFraction}
         />
@@ -83,11 +93,13 @@ export function CharacterGroup({
 function Bodies({
   members,
   mood,
+  flourish,
   heightFraction,
   floorFraction,
 }: {
   members: GroupMember[];
   mood: CharacterMood;
+  flourish: boolean;
   heightFraction: number;
   floorFraction: number;
 }) {
@@ -120,19 +132,64 @@ function Bodies({
               <planeGeometry args={[blob, blob * 0.62]} />
               <meshBasicMaterial map={shadow} transparent depthWrite={false} />
             </mesh>
-            <CharacterModel
+            <GroupBody
               id={member.id}
               mood={mood}
+              flourish={flourish}
               facing={facingFor(exchange, index, (at) => places[at]!.x)}
               beat={beat ? beatClip(beat) : null}
               heightFraction={place.fraction}
               floorFraction={floorFraction}
-              social
             />
           </group>
         );
       })}
     </>
+  );
+}
+
+/**
+ * One body in the group. Its own component, not `CharacterModel` inlined in
+ * the `.map` above, because `useMoodFlourish` is a hook and belongs to a
+ * component whose instance count is stable -- a list item is, a bare callback
+ * is not. Each instance times its own flourish independently, which is the
+ * whole point: everybody switching together would look as staged as everybody
+ * standing still.
+ */
+function GroupBody({
+  id,
+  mood,
+  flourish,
+  facing,
+  beat,
+  heightFraction,
+  floorFraction,
+}: {
+  id: string;
+  mood: CharacterMood;
+  flourish: boolean;
+  facing: number;
+  beat: string | null;
+  heightFraction: number;
+  floorFraction: number;
+}) {
+  const resolved = useMoodFlourish(mood, {
+    active: flourish && mood === "celebrate",
+    moods: ["dancing"],
+    hold: [5, 10],
+    gap: [8, 20],
+  });
+
+  return (
+    <CharacterModel
+      id={id}
+      mood={resolved}
+      facing={facing}
+      beat={beat}
+      heightFraction={heightFraction}
+      floorFraction={floorFraction}
+      social
+    />
   );
 }
 

@@ -57,6 +57,7 @@ function pick<T>(from: readonly T[], not?: T): T {
 
 function poolFor(mood: CharacterMood): readonly string[] {
   if (mood === "celebrate") return CLIPS.celebrate;
+  if (mood === "dancing") return CLIPS.dancing;
   if (mood === "empty") return CLIPS.idleEmpty;
   if (mood === "calm") return CLIPS.idleCalm;
   return CLIPS.idle;

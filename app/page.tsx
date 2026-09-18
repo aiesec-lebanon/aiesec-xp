@@ -10,7 +10,6 @@ import { CharacterAvatar, ContactShadow } from "@/components/studio/character";
 import { BeatOnHover, HeroBeatScope, HeroCharacter } from "@/components/studio/hero-beat";
 import { memberAvatar, memberAvatars } from "@/lib/design/avatar";
 import { Cyclorama } from "@/components/studio/cyclorama";
-import { Dock } from "@/components/studio/dock";
 import { WindowLabel } from "@/components/studio/chrome";
 import { GhostNumber, Rise } from "@/components/studio/motion";
 import { StatChips, type Chip, type ChipEvent } from "@/components/studio/stat-chips";
@@ -64,9 +63,13 @@ export default async function HomePage() {
 
   // What the body has to say about the numbers beside it. An empty board gets a
   // restless idle rather than a cheerful one, because a character celebrating
-  // nothing is the product not knowing what state it is in.
+  // nothing is the product not knowing what state it is in. Rank 1 is handled
+  // by `HeroCharacter` itself (D-60): a fixed "celebrate" on every render read
+  // as a single flash rather than someone who has actually won, so it now
+  // replays on its own timer and sometimes breaks into dancing instead.
+  const leading = points > 0 && standing?.rank === 1;
   const heroBeat: CharacterBeat | null =
-    points === 0 ? null : standing?.rank === 1 ? "celebrate" : next === null ? "thumbsUp" : null;
+    points === 0 || leading ? null : next === null ? "thumbsUp" : null;
 
   const gap = progress.nextUp
     ? Math.round((progress.nextUp.points - points) * 10_000) / 10_000
@@ -171,7 +174,7 @@ export default async function HomePage() {
   }
 
   return (
-    <Cyclorama floor="30%" className="flex min-h-dvh flex-col">
+    <Cyclorama floor="30%" className="flex min-h-full flex-col">
       <div className="flex flex-1 flex-col gap-6 px-6 pb-8 pt-6 sm:px-11">
         {window ? (
           <Rise className="flex justify-center" delay={0.05}>
@@ -224,6 +227,8 @@ export default async function HomePage() {
                   // reads as distracted rather than present.
                   mood={points > 0 ? "calm" : "empty"}
                   beat={heroBeat}
+                  leading={leading}
+                  points={points}
                   greetKey="dashboard"
                 />
                 <ContactShadow width={300} height={52} className="-mt-3.5" />
@@ -282,13 +287,9 @@ export default async function HomePage() {
 
         {/* Clears the floating dock's 80px footprint with room to spare, so the
             chips are never the thing it lands on. */}
-        <Rise delay={0.24} className="pb-28">
+        <Rise delay={0.24} className="pb-8">
           <StatChips chips={chips} />
         </Rise>
-      </div>
-
-      <div className="sticky bottom-7 z-20 flex justify-center px-6">
-        <Dock />
       </div>
     </Cyclorama>
   );

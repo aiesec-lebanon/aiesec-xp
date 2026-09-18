@@ -124,30 +124,48 @@ export const ANIMATION_LIBRARY = "avatar-animations";
 export const SOCIAL_LIBRARY = "avatar-animations-social";
 
 export const CLIPS = {
-  /** Cycled at random wherever a body is just standing there. */
+  /**
+   * Cycled at random wherever a body is just standing there. `idle-warrior`,
+   * `idle-sitting` and `idle-sitting-2` put a body somewhere the set has no
+   * prop for -- a fighting stance, a chair that is not there -- which is a
+   * deliberate call (D-60), not an oversight.
+   */
   idle: [
     "idle-breathing",
     "idle-happy",
     "idle-happy-2",
     "idle-look-around",
     "idle-stretch",
+    "idle-neck-stretch",
+    "idle-warrior",
+    "idle-sitting",
+    "idle-sitting-2",
   ],
   /**
-   * For a hero shot, where a wandering gaze reads as distracted. Weighted by
-   * repetition rather than excluded outright: a body that never looks anywhere
-   * is as odd as one that never looks at you.
+   * For a hero shot, where a wandering gaze or a body sitting down reads as
+   * distracted rather than present -- the smallest, calmest slice of `idle`.
    */
-  idleCalm: ["idle-breathing", "idle-happy", "idle-breathing", "idle-happy", "idle-look-around"],
+  idleCalm: ["idle-breathing", "idle-happy", "idle-happy-2", "idle-look-around"],
   /**
-   * Nothing has scored yet. Cheerful idles on an empty board read as the product
-   * not knowing what state it is in. `idle-bored` is in the social library, so a
-   * surface using this mood has to ask for it.
+   * Nothing has scored yet. Cheerful idles on an empty board read as the
+   * product not knowing what state it is in, so this pool leans restless
+   * instead. `disappointed` is a beat everywhere else (D-60); looped here it
+   * is closer to a sulk than a reaction, which is what an empty board is.
+   * Everything here is in the social library, so a surface using this mood
+   * has to ask for it.
    */
-  idleEmpty: ["idle-bored", "idle-look-around", "idle-stretch"],
+  idleEmpty: ["idle-bored", "idle-look-around", "idle-stretch", "idle-warrior", "disappointed"],
   /** Played once now and then, between idles. */
   greet: ["wave"],
   /** For a leaderboard, where every body on screen has something to celebrate. */
   celebrate: ["cheer", "cheer-2", "clap", "rally", "victory"],
+  /**
+   * A body that has properly won, not merely doing well -- rank 1 on the hero,
+   * first place on the podium, and any leading LC (D-60). A surface opts a
+   * body into this at random alongside `celebrate` via `useMoodFlourish`
+   * rather than replacing it outright, so a leader is not dancing constantly.
+   */
+  dancing: ["dance", "dance-silly", "dance-silly-2"],
   /**
    * In the library but unplayed. The picker used to walk a character off the
    * frame while the next walked in; choosing a character is not a journey, and
@@ -166,7 +184,9 @@ export const CLIPS = {
     salute: "salute",
     disappointed: "disappointed",
     point: "point",
-    talk: ["talk", "talk-2"],
+    /** A runway turn, played once -- not part of any looping pool. */
+    catwalk: "idle-catwalk",
+    talk: ["talk", "talk-2", "talk-3", "talk-4"],
     agree: "agree",
     glance: "glance",
     secret: "secret",
@@ -174,16 +194,19 @@ export const CLIPS = {
   },
 } as const;
 
-export type CharacterMood = "idle" | "calm" | "celebrate" | "empty";
+export type CharacterMood = "idle" | "calm" | "celebrate" | "empty" | "dancing";
 
 /** A one-shot clip a surface asks for because something happened. */
 export type CharacterBeat =
   | "greet"
   | "acknowledge"
+  | "salute"
   | "thumbsUp"
   | "point"
   | "disappointed"
+  | "losePoints"
   | "celebrate"
+  | "catwalk"
   | "talk"
   | "talkAgain"
   | "agree"
@@ -195,14 +218,19 @@ export function beatClip(beat: CharacterBeat): string {
       return CLIPS.greet[0];
     case "acknowledge":
       return CLIPS.social.acknowledge;
+    case "salute":
+      return CLIPS.social.salute;
     case "thumbsUp":
       return CLIPS.social.thumbsUp;
     case "point":
       return CLIPS.social.point;
     case "disappointed":
+    case "losePoints":
       return CLIPS.social.disappointed;
     case "celebrate":
       return "victory";
+    case "catwalk":
+      return CLIPS.social.catwalk;
     case "talk":
       return CLIPS.social.talk[0];
     case "talkAgain":
