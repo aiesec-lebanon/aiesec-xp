@@ -3,6 +3,9 @@
 // (tests/aiesec-analytics.test.ts). lib/analytics/aiesec-analytics.ts is the
 // server-only module that actually calls the endpoint and uses this to parse it.
 
+// Products in scope (D-04): 7 = GV, 8 = GTa, 9 = GTe.
+export const PROGRAMME_IDS = [7, 8, 9] as const;
+
 // Stage name -> the funnel stage this product scores (D-05). "realized" is
 // summed with "remote_realized" because remote realization scores identically
 // to physical (D-29).
@@ -37,4 +40,13 @@ export function countsFromPayload(
     };
   }
   return result;
+}
+
+/** Collapses per-product counts into one figure, for a screen that shows a
+ * single APL/APD/RE per entity rather than a per-product breakdown. */
+export function sumProducts(counts: ProductFunnelCounts): FunnelCounts {
+  return Object.values(counts).reduce(
+    (sum, entry) => ({ APL: sum.APL + entry.APL, APD: sum.APD + entry.APD, RE: sum.RE + entry.RE }),
+    { APL: 0, APD: 0, RE: 0 }
+  );
 }
