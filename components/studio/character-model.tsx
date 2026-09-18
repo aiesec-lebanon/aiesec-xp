@@ -40,6 +40,13 @@ export type CharacterModelProps = {
    * trigger, so a surface bumps it rather than calling into the body.
    */
   beat?: string | null;
+  /**
+   * Loops this exact clip instead of cycling `mood`'s pool at random --
+   * for locomotion (walk, turn-left, turn-right), where a caller needs the
+   * specific clip playing right now, not a random pool member. Releasing it
+   * (passing null) resumes the mood pool immediately, not on its next dwell.
+   */
+  lock?: string | null;
 };
 
 // What XpCanvas's camera sees at the origin: fov 42 vertical, 6 units back. fov
@@ -49,6 +56,9 @@ export const FRAME_HEIGHT = 2 * 6 * Math.tan((42 * Math.PI) / 360);
 const CROSSFADE = 0.35;
 const DWELL = { min: 5, max: 11 };
 const GREET_CHANCE = 0.25;
+
+/** Clips authored for a chair this set does not have (D-62's own idle pool). */
+const SIT_CLIPS = new Set(["idle-sitting", "idle-sitting-2"]);
 
 function pick<T>(from: readonly T[], not?: T): T {
   const options = from.length > 1 && not !== undefined ? from.filter((v) => v !== not) : from;
@@ -85,6 +95,7 @@ export function CharacterModel({
   facing = 0,
   social = false,
   beat = null,
+  lock = null,
 }: CharacterModelProps) {
   const { scene } = useModel(characterModelPath(id));
   const core = useModel(characterModelPath(ANIMATION_LIBRARY));
@@ -97,6 +108,9 @@ export function CharacterModel({
   const actions = useRef(new Map<string, AnimationAction>());
   const active = useRef<AnimationAction | null>(null);
   const nextChange = useRef(0);
+  const groundCorrection = useRef(0);
+  const groundCheck = useRef(0);
+  const scratchBox = useRef(new Box3());
 
   const body = useMemo(() => {
     const copy = cloneSkinned(scene);
@@ -188,9 +202,13 @@ export function CharacterModel({
 
   useEffect(() => {
     if (!mixer.current) return;
-    settle(0.25);
+    if (lock) {
+      play(lock, { fade: 0.25 });
+    } else {
+      settle(0.25);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mood, body, core, extra]);
+  }, [mood, lock, body, core, extra]);
 
   useEffect(() => {
     if (!beat || !mixer.current || reduceMotion) return;
@@ -217,6 +235,36 @@ export function CharacterModel({
     mixer.current.update(delta);
 
     node.rotation.y = MathUtils.damp(node.rotation.y, facing, 3.2, delta);
+
+    // Mixamo's sitting idles are authored against a chair this set does not
+    // have, so the hips settle at chair height and the body floats above the
+    // floor `fit` put it on rather than sitting on it. Corrected by measuring
+    // the actually-posed lowest point -- not just assumed from the clip's
+    // name -- so it also catches any other clip that turns out to sit or
+    // crouch. Checked a few times a second, not every frame: the pose is
+    // holding still by the time it matters, and a full posed bounding box is
+    // not free.
+    groundCheck.current -= delta;
+    if (groundCheck.current <= 0) {
+      groundCheck.current = 0.12;
+      const clip = active.current?.getClip().name;
+      if (clip && SIT_CLIPS.has(clip)) {
+        body.updateMatrixWorld(true);
+        scratchBox.current.setFromObject(body);
+        groundCorrection.current = Math.max(0, scratchBox.current.min.y - fit.floor);
+      } else if (groundCorrection.current !== 0) {
+        groundCorrection.current = 0;
+      }
+    }
+    // Eased rather than snapped, and driven every frame regardless of whether
+    // a correction is active: JSX's own `position` prop on this same group
+    // would otherwise re-apply `fit.floor` verbatim on the next unrelated
+    // re-render (a mood or beat change) and cancel this out.
+    node.position.y = MathUtils.damp(node.position.y, fit.floor - groundCorrection.current, 8, delta);
+
+    // Locked to an exact clip -- a caller driving locomotion, not this
+    // component's own random pool -- so the dwell cycle below is not running.
+    if (lock) return;
     nextChange.current -= delta;
     if (nextChange.current <= 0) {
       const greet = (mood === "idle" || mood === "calm") && Math.random() < GREET_CHANCE;
