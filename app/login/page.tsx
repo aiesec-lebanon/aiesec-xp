@@ -49,7 +49,7 @@ export default async function LoginPage({
     : null;
 
   return (
-    <main className="relative flex min-h-full flex-col overflow-hidden bg-wall">
+    <main className="relative flex min-h-full shrink-0 flex-col overflow-hidden bg-wall">
       <div aria-hidden className="pointer-events-none absolute inset-0">
         <div className="absolute inset-x-0 bottom-0 h-[26%] bg-floor" />
         <div className="absolute inset-x-0 bottom-[26%] h-0.5 bg-horizon" />

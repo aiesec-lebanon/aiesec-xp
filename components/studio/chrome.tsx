@@ -57,7 +57,7 @@ export function Header({
   if (!user || user.role === "DENIED") return null;
 
   return (
-    <header className="relative z-30 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 pb-1 pt-5 sm:px-11">
+    <header className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 pb-1 pt-5 sm:px-11">
       <BrandMark />
 
       {/* The dock lives up here with the rest of the chrome. At the bottom of

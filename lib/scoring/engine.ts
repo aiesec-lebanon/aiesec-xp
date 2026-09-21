@@ -209,6 +209,63 @@ export function score({
   return { ledger, grants: evaluateRewards(ledger, events, rewards), anomalies };
 }
 
+export type EpStatus = "APL" | "APD" | "RE" | "BROKEN";
+
+type StatusEvent = Pick<ScorableEvent, "applicationId" | "eventType" | "occurredAt">;
+
+const STATUS_RANK: Record<EpStatus, number> = { RE: 3, APD: 2, APL: 1, BROKEN: 0 };
+
+function latestOccurrence(events: readonly StatusEvent[], eventType: FunnelEventType): Date | null {
+  let latest: Date | null = null;
+  for (const event of events) {
+    if (event.eventType !== eventType) continue;
+    if (!latest || event.occurredAt > latest) latest = event.occurredAt;
+  }
+  return latest;
+}
+
+/**
+ * One application's current stage, net of a break superseded by a later
+ * re-approval (D-28) — an approve, break, re-approve sequence reads as
+ * approved, not broken.
+ */
+function applicationStage(events: readonly StatusEvent[]): EpStatus | null {
+  const re = latestOccurrence(events, "RE");
+  const reBroken = latestOccurrence(events, "RE_BROKEN");
+  if (re && (!reBroken || re > reBroken)) return "RE";
+
+  const apd = latestOccurrence(events, "APD");
+  const apdBroken = latestOccurrence(events, "APD_BROKEN");
+  if (apd && (!apdBroken || apd > apdBroken)) return "APD";
+
+  if (latestOccurrence(events, "APL")) return "APL";
+
+  return re || apd ? "BROKEN" : null;
+}
+
+/**
+ * The highest stage an EP currently sits at across all their applications —
+ * a display label for the assignments admin console, not a scoring input.
+ * Unlike `score()`, this is not windowed: it reads whatever the EP's events
+ * say right now.
+ */
+export function epFunnelStatus(events: readonly StatusEvent[]): EpStatus | null {
+  const byApplication = new Map<string, StatusEvent[]>();
+  for (const event of events) {
+    const key = String(event.applicationId);
+    const bucket = byApplication.get(key);
+    if (bucket) bucket.push(event);
+    else byApplication.set(key, [event]);
+  }
+
+  let best: EpStatus | null = null;
+  for (const appEvents of byApplication.values()) {
+    const stage = applicationStage(appEvents);
+    if (stage && (!best || STATUS_RANK[stage] > STATUS_RANK[best])) best = stage;
+  }
+  return best;
+}
+
 export type OfficeFunnelCounts = Record<number, { APL: number; APD: number; RE: number }>;
 
 /**

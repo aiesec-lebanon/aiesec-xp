@@ -594,6 +594,19 @@ Every mutation writes an `AuditLog` row with before/after JSON.
   than only rejecting them on submit. Keyboard behaviour follows the ARIA
   date-picker pattern: one tab stop into the grid, arrows to move, Escape to
   leave, because 42 tabbable days would be operable and unusable.
+- **One shell, one scroll container (D-64).** The body is the viewport; the
+  header is fixed chrome above a single `overflow-y-auto` column, and the page
+  moves inside it. That column is a flex container, so a page root is a flex
+  item and declares one of two contracts: `min-h-full shrink-0` to grow with its
+  content, or `min-h-0 flex-1` to fit the viewport and scroll an inner region.
+  Without `shrink-0` the first kind is squeezed back to one viewport while its
+  content overflows the box, which strands the page's own padding at the fold.
+  Every scrolling screen ends on the same `.page-end` gutter.
+- **The dashboard fits the viewport (D-65).** From `lg` up `/` is pinned to the
+  shell and the hero is drawn at whatever height the stage has left, capped at
+  the 440px it was composed at; below `lg` the three columns stack and the page
+  scrolls. `components/studio/hero-stage.tsx` does the measuring, on the same
+  terms as the podium below.
 - **The podium fits the viewport.** Its bodies are sized in pixels, since a
   canvas needs pixels, and at the design sizes the block runs past the fold on a
   laptop — the winner was on screen with their name behind the floating dock. The

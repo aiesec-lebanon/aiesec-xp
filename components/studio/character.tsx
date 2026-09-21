@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
 
 import {
   characterFor,
@@ -136,16 +137,20 @@ export function ContactShadow({
   height = 52,
   opacity = 0.17,
   className = "",
+  style,
 }: {
   width: number;
   height?: number;
   opacity?: number;
   className?: string;
+  /** For a caller that sizes the body itself, and has to lift the shadow with it. */
+  style?: CSSProperties;
 }) {
   return (
     <div
       aria-hidden
       style={{
+        ...style,
         width,
         height,
         background: `radial-gradient(ellipse at center, rgba(23,22,20,${opacity}) 0%, rgba(23,22,20,${
