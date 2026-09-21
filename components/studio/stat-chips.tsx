@@ -116,7 +116,10 @@ export function StatChips({ chips }: { chips: Chip[] }) {
             transition={{ duration: 0.35, ease: EASE }}
             className="w-full max-w-[1000px] overflow-hidden"
           >
-            <div className="rounded-[20px] bg-surface-raised p-6 shadow-e2">
+            {/* Capped and scrolled rather than free to grow: the dashboard is
+                sized to the viewport, and a twelve-row trail that pushed the
+                body off the top of the set would cost more than it showed. */}
+            <div className="max-h-[34vh] overflow-y-auto rounded-[20px] bg-surface-raised p-6 shadow-e2">
               <ChipDrawer chip={opened} />
             </div>
           </m.div>

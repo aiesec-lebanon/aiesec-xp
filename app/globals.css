@@ -211,3 +211,19 @@ body {
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+/* The gutter every scrolling screen ends on. A page whose last card stops dead
+   at the fold reads as truncated rather than finished, so the end of the
+   content is always announced by the same band of empty set. */
+.page-end {
+  padding-bottom: clamp(3rem, 7vh, 5rem);
+}
+
+/* The two readings flanking the hero start a little below its head. The offset
+   is a share of the body actually drawn, so on a short screen it tightens with
+   the stage instead of pushing the columns down past it. */
+@media (min-width: 64rem) {
+  .hero-column {
+    padding-top: clamp(0px, calc(var(--hero-body, 440px) * 0.11), 48px);
+  }
+}
