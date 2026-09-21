@@ -13,7 +13,7 @@ import { AliasForm, ImportButtons, OverrideForm } from "./controls";
 
 export const dynamic = "force-dynamic";
 
-const PER_PAGE = 20;
+const PER_PAGE = 10;
 
 // D-04: the products in scope.
 const PROGRAMMES: Record<number, string> = { 7: "GV", 8: "GTa", 9: "GTe" };

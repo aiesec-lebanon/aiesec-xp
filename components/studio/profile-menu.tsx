@@ -4,7 +4,10 @@ import { AnimatePresence, m } from "motion/react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import { GiCrown, GiPerson } from "react-icons/gi";
+
 import { useReduceMotion } from "@/components/motion/motion-provider";
+import { GameIcon, type GameIconComponent } from "@/components/icons";
 
 import { CharacterAvatar } from "./character";
 
@@ -63,11 +66,11 @@ export function ProfileMenu({
     <div
       ref={root}
       className="relative"
-      onMouseEnter={() => isAdmin && schedule(true, OPEN_DELAY)}
-      onMouseLeave={() => isAdmin && schedule(false, CLOSE_DELAY)}
+      onMouseEnter={() => schedule(true, OPEN_DELAY)}
+      onMouseLeave={() => schedule(false, CLOSE_DELAY)}
     >
       <div className="control-surface flex items-center gap-1 rounded-full bg-surface-raised py-1.5 pl-2 pr-1.5 shadow-e1">
-        <Link href="/me" className="flex items-center gap-2.5 rounded-full pr-1.5">
+        <div className="flex items-center gap-2.5 rounded-full pr-1.5">
           <CharacterAvatar
             name={name}
             idOverride={characterId}
@@ -76,42 +79,40 @@ export function ProfileMenu({
             tone="bg-re-wash"
           />
           <span className="text-[13px] font-semibold text-ink">{short ?? name}</span>
-        </Link>
+        </div>
 
-        {isAdmin ? (
-          <button
-            ref={trigger}
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={open}
-            aria-controls={menuId}
-            aria-label={`${name}'s account menu`}
-            onClick={() => {
-              if (timer.current) clearTimeout(timer.current);
-              setOpen((current) => !current);
-            }}
-            className="grid size-6 place-items-center rounded-full text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
+        <button
+          ref={trigger}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls={menuId}
+          aria-label={`${name}'s account menu`}
+          onClick={() => {
+            if (timer.current) clearTimeout(timer.current);
+            setOpen((current) => !current);
+          }}
+          className="grid size-6 place-items-center rounded-full text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 20 20"
+            className={`size-3 transition-transform duration-[var(--motion-ui)] ease-[var(--motion-ease)] ${open ? "rotate-180" : ""}`}
           >
-            <svg
-              aria-hidden
-              viewBox="0 0 20 20"
-              className={`size-3 transition-transform duration-[var(--motion-ui)] ease-[var(--motion-ease)] ${open ? "rotate-180" : ""}`}
-            >
-              <path
-                d="M5 7.5l5 5 5-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        ) : null}
+            <path
+              d="M5 7.5l5 5 5-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </div>
 
       <AnimatePresence>
-        {isAdmin && open ? (
+        {open ? (
           <m.div
             id={menuId}
             role="menu"
@@ -124,9 +125,14 @@ export function ProfileMenu({
             className="absolute right-0 top-full z-40 w-full pt-2"
           >
             <div className="overflow-hidden rounded-2xl bg-surface-raised p-1.5 shadow-e3 ring-1 ring-surface-sunken">
-              <MenuLink href="/admin/assignments" onNavigate={() => setOpen(false)}>
-                Admin
+              <MenuLink href="/me" icon={GiPerson} onNavigate={() => setOpen(false)}>
+                Profile
               </MenuLink>
+              {isAdmin ? (
+                <MenuLink href="/admin/assignments" icon={GiCrown} onNavigate={() => setOpen(false)}>
+                  Admin
+                </MenuLink>
+              ) : null}
             </div>
           </m.div>
         ) : null}
@@ -137,10 +143,12 @@ export function ProfileMenu({
 
 function MenuLink({
   href,
+  icon,
   onNavigate,
   children,
 }: {
   href: string;
+  icon: GameIconComponent;
   onNavigate: () => void;
   children: ReactNode;
 }) {
@@ -149,8 +157,9 @@ function MenuLink({
       href={href}
       role="menuitem"
       onClick={onNavigate}
-      className="block rounded-xl px-3.5 py-2.5 text-[13px] font-medium text-ink-secondary transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
+      className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] font-medium text-ink-secondary transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
     >
+      <GameIcon icon={icon} decorative size={15} className="text-ink-faint" />
       {children}
     </Link>
   );
