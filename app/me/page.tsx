@@ -60,9 +60,6 @@ export default async function MePage({
     <main className="flex min-h-full flex-col bg-wall pb-6">
       <div className="px-6 pt-8 sm:px-16">
         <h1 className="font-display text-[30px] font-semibold text-ink">Your history</h1>
-        <p className="mt-1.5 text-sm text-ink-secondary">
-          Every point explained — nothing here happens without a row below it.
-        </p>
       </div>
 
       <Rise

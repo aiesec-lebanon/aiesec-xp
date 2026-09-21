@@ -173,10 +173,8 @@ export default async function TvPage() {
         </section>
       </div>
 
-      {activity.length > 0 ? (
+      {/* {activity.length > 0 ? (
         <div className="flex h-[clamp(64px,9vh,120px)] shrink-0 items-center overflow-hidden bg-ink">
-          {/* The strip is duplicated so the CSS translate of -50% lands exactly
-              on the start of the second copy and the loop has no seam. */}
           <div className="tv-ticker flex shrink-0 items-center gap-14 whitespace-nowrap pl-14">
             {[0, 1].map((copy) =>
               activity.map((item, index) => (
@@ -199,7 +197,7 @@ export default async function TvPage() {
             )}
           </div>
         </div>
-      ) : null}
+      ) : null} */}
     </main>
   );
 }
