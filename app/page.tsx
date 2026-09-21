@@ -6,8 +6,9 @@ import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, TEXT } from "@/lib/design/tokens";
 import type { CharacterBeat } from "@/lib/design/character";
 
-import { CharacterAvatar, ContactShadow } from "@/components/studio/character";
-import { BeatOnHover, HeroBeatScope, HeroCharacter } from "@/components/studio/hero-beat";
+import { CharacterAvatar } from "@/components/studio/character";
+import { BeatOnHover } from "@/components/studio/hero-beat";
+import { HeroStage } from "@/components/studio/hero-stage";
 import { memberAvatar, memberAvatars } from "@/lib/design/avatar";
 import { Cyclorama } from "@/components/studio/cyclorama";
 import { WindowLabel } from "@/components/studio/chrome";
@@ -174,8 +175,15 @@ export default async function HomePage() {
   }
 
   return (
-    <Cyclorama floor="30%" className="flex min-h-full flex-col">
-      <div className="flex flex-1 flex-col gap-6 px-6 pb-8 pt-6 sm:px-11">
+    // Below `lg` the three columns stack, which is taller than any phone, so
+    // the page grows and scrolls like every other screen. From `lg` up it is
+    // pinned to the viewport and the stage absorbs whatever is left over, so a
+    // member never scrolls to find their own score or the chips under it.
+    <Cyclorama
+      floor="30%"
+      className="flex min-h-full shrink-0 flex-col lg:min-h-0 lg:flex-1 lg:shrink"
+    >
+      <div className="page-end flex flex-1 flex-col gap-6 px-6 pt-6 sm:px-11 lg:min-h-0 lg:gap-4">
         {window ? (
           <Rise className="flex justify-center" delay={0.05}>
             <WindowLabel>
@@ -194,100 +202,88 @@ export default async function HomePage() {
         )}
 
         {/* The stage. The ghost numeral sits behind the body, the two readings
-            flank it, and nothing moves except the idle breath. */}
-        <div className="relative flex flex-1 items-end justify-center pt-2">
-          <div className="absolute inset-x-0 top-0">
-            <GhostNumber>{Math.round(points)}</GhostNumber>
-          </div>
-
-          <HeroBeatScope>
-            <div className="relative z-10 grid w-full max-w-[1250px] grid-cols-1 items-end gap-8 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-              <Rise delay={0.12} className="self-start lg:pt-12">
-                <p className="tabular text-[clamp(56px,7vw,96px)] font-bold leading-[0.9] text-ink">
-                  {points}
+            flank it, and nothing moves except the idle breath. How tall the
+            body is drawn is decided by `HeroStage` from the room left here. */}
+        <HeroStage
+          name={user.fullName}
+          idOverride={avatar.character.id}
+          // Calm, not the wandering pool: a hero shot whose gaze roams reads as
+          // distracted rather than present.
+          mood={points > 0 ? "calm" : "empty"}
+          beat={heroBeat}
+          leading={leading}
+          points={points}
+          greetKey="dashboard"
+          ghost={<GhostNumber>{Math.round(points)}</GhostNumber>}
+          left={
+            <Rise delay={0.12} className="hero-column self-start">
+              <p className="tabular text-[clamp(56px,7vw,96px)] font-bold leading-[0.9] text-ink">
+                {points}
+              </p>
+              <p className="mt-0.5 text-[15px] font-semibold text-ink-secondary">
+                points this window
+              </p>
+              <span aria-hidden className="mt-4 block h-[3px] w-11 rounded-sm bg-stage-apl" />
+              <p className="mt-4 max-w-[230px] text-sm leading-relaxed text-ink-secondary">
+                Every point here is an EP you carried through a stage. Open a chip to see which.
+              </p>
+            </Rise>
+          }
+          right={
+            <Rise delay={0.18} className="hero-column self-start lg:text-right">
+              {standing ? (
+                <div className="flex items-baseline gap-2 lg:justify-end">
+                  <span className="tabular text-[clamp(56px,7vw,96px)] font-bold leading-[0.9] text-ink">
+                    {standing.rank}
+                  </span>
+                  <span className="tabular text-[30px] font-semibold text-ink-faint">
+                    /{progress.totalMembers}
+                  </span>
+                </div>
+              ) : (
+                <p className="tabular text-[clamp(44px,5vw,64px)] font-bold leading-none text-ink-faint">
+                  unranked
                 </p>
-                <p className="mt-0.5 text-[15px] font-semibold text-ink-secondary">
-                  points this window
-                </p>
-                <span aria-hidden className="mt-4 block h-[3px] w-11 rounded-sm bg-stage-apl" />
-                <p className="mt-4 max-w-[230px] text-sm leading-relaxed text-ink-secondary">
-                  Every point here is an EP you carried through a stage. Open a chip to see which.
-                </p>
-              </Rise>
+              )}
+              <p className="mt-0.5 text-[15px] font-semibold text-ink-secondary">
+                rank in Lebanon
+              </p>
+              <span
+                aria-hidden
+                className="mt-4 block h-[3px] w-11 rounded-sm bg-stage-re lg:ml-auto"
+              />
 
-              <div className="relative order-first flex flex-col items-center lg:order-none">
-                <HeroCharacter
-                  name={user.fullName}
-                  height={440}
-                  priority
-                  stage
-                  idOverride={avatar.character.id}
-                  social
-                  // Calm, not the wandering pool: a hero shot whose gaze roams
-                  // reads as distracted rather than present.
-                  mood={points > 0 ? "calm" : "empty"}
-                  beat={heroBeat}
-                  leading={leading}
-                  points={points}
-                  greetKey="dashboard"
-                />
-                <ContactShadow width={300} height={52} className="-mt-3.5" />
-              </div>
-
-              <Rise delay={0.18} className="self-start lg:pt-12 lg:text-right">
-                {standing ? (
-                  <div className="flex items-baseline gap-2 lg:justify-end">
-                    <span className="tabular text-[clamp(56px,7vw,96px)] font-bold leading-[0.9] text-ink">
-                      {standing.rank}
-                    </span>
-                    <span className="tabular text-[30px] font-semibold text-ink-faint">
-                      /{progress.totalMembers}
-                    </span>
+              {progress.nextUp ? (
+                // Pointing at the rival you are pointing at: the body reacts to
+                // what the member is doing, not just to what the numbers say.
+                <BeatOnHover beat="point" className="mt-4 inline-flex items-center gap-3 rounded-[18px] bg-surface-raised px-4 py-3 text-left shadow-e2">
+                  <CharacterAvatar
+                    name={progress.nextUp.fullName}
+                    idOverride={chasing?.id}
+                    size={38}
+                    rounded="rounded-xl"
+                    tone="bg-surface-sunken"
+                  />
+                  <div>
+                    <p className="text-[13px] font-semibold text-ink">
+                      {gap} point{gap === 1 ? "" : "s"} behind {firstName(progress.nextUp.fullName)}
+                    </p>
+                    {nudge ? <p className="text-xs text-ink-secondary">{nudge}</p> : null}
                   </div>
-                ) : (
-                  <p className="tabular text-[clamp(44px,5vw,64px)] font-bold leading-none text-ink-faint">
-                    unranked
-                  </p>
-                )}
-                <p className="mt-0.5 text-[15px] font-semibold text-ink-secondary">
-                  rank in Lebanon
+                </BeatOnHover>
+              ) : standing?.rank === 1 ? (
+                <p className="mt-4 text-[13px] font-semibold text-ink">
+                  Nobody is ahead of you.
                 </p>
-                <span
-                  aria-hidden
-                  className="mt-4 block h-[3px] w-11 rounded-sm bg-stage-re lg:ml-auto"
-                />
+              ) : null}
+            </Rise>
+          }
+        />
 
-                {progress.nextUp ? (
-                  // Pointing at the rival you are pointing at: the body reacts to
-                  // what the member is doing, not just to what the numbers say.
-                  <BeatOnHover beat="point" className="mt-4 inline-flex items-center gap-3 rounded-[18px] bg-surface-raised px-4 py-3 text-left shadow-e2">
-                    <CharacterAvatar
-                      name={progress.nextUp.fullName}
-                      idOverride={chasing?.id}
-                      size={38}
-                      rounded="rounded-xl"
-                      tone="bg-surface-sunken"
-                    />
-                    <div>
-                      <p className="text-[13px] font-semibold text-ink">
-                        {gap} point{gap === 1 ? "" : "s"} behind {firstName(progress.nextUp.fullName)}
-                      </p>
-                      {nudge ? <p className="text-xs text-ink-secondary">{nudge}</p> : null}
-                    </div>
-                  </BeatOnHover>
-                ) : standing?.rank === 1 ? (
-                  <p className="mt-4 text-[13px] font-semibold text-ink">
-                    Nobody is ahead of you.
-                  </p>
-                ) : null}
-              </Rise>
-            </div>
-          </HeroBeatScope>
-        </div>
-
-        {/* Clears the floating dock's 80px footprint with room to spare, so the
-            chips are never the thing it lands on. */}
-        <Rise delay={0.24} className="pb-8">
+        {/* The dock is chrome now, not a lozenge floating over the end of the
+            page, so the chips no longer have to clear it -- the page's own end
+            gutter is what sits under them. */}
+        <Rise delay={0.24} className="shrink-0">
           <StatChips chips={chips} />
         </Rise>
       </div>

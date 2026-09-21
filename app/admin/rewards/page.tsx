@@ -27,7 +27,7 @@ export default async function RewardsAdminPage() {
 
   if (user.role !== "ADMIN") {
     return (
-      <main className="flex min-h-full flex-col items-center justify-center gap-3 bg-wall px-6 text-center">
+      <main className="flex min-h-full shrink-0 flex-col items-center justify-center gap-3 bg-wall px-6 text-center">
         <h1 className="font-display text-2xl font-semibold text-ink">Not available</h1>
         <p className="text-sm text-ink-secondary">This console is for MCP and MCVP IM.</p>
         <Link href="/" className="mt-2 text-sm font-semibold text-apl-ink">
@@ -40,7 +40,7 @@ export default async function RewardsAdminPage() {
   const rewards = await db.reward.findMany({ orderBy: [{ sortOrder: "asc" }, { threshold: "asc" }] });
 
   return (
-    <main className="min-h-full bg-wall px-6 py-8 sm:px-11">
+    <main className="page-end min-h-full shrink-0 bg-wall px-6 pt-8 sm:px-11">
       <div className="mb-7 flex items-center justify-end gap-4">
         <Link
           href="/"

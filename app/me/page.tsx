@@ -57,7 +57,7 @@ export default async function MePage({
   const events = progress.trail.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
-    <main className="flex min-h-full flex-col bg-wall pb-6">
+    <main className="page-end flex min-h-full shrink-0 flex-col bg-wall">
       <div className="px-6 pt-8 sm:px-16">
         <h1 className="font-display text-[30px] font-semibold text-ink">Your history</h1>
       </div>
