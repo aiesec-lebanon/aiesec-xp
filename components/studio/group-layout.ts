@@ -9,12 +9,12 @@ const WIDTH_RATIO = 0.5;
  */
 const CLEARANCE = 1.05;
 /**
- * How far beyond the circle's own radius the orbiting camera stands. `6` is
- * the distance `FRAME_HEIGHT` itself is defined against (fov 42 at 6 units),
+ * How far beyond the circle's own radius the orbiting camera stands. `7` is
+ * the distance `FRAME_HEIGHT` itself is defined against (fov 42 at 7 units),
  * so a lone body on this circle frames exactly as it always has; a bigger
  * group's camera backs off from there by the circle's own radius.
  */
-const ORBIT_MARGIN = 6;
+const ORBIT_MARGIN = 7;
 
 export type Placement = {
   x: number;

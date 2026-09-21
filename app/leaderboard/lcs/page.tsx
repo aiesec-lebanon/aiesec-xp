@@ -81,46 +81,35 @@ export default async function LcLeaderboardPage({
               <GhostNumber>{Math.round(leader.points)}</GhostNumber>
             </div>
 
-            <Crown />
+            <div className="relative z-10 flex min-h-[130px] w-full flex-1 items-center gap-6">
+              <div className="relative h-full min-w-0 flex-1">
+                <CharacterGroup
+                  members={faces.map((face) => ({
+                    id: face.characterId ?? characterFor(face.name).id,
+                    name: face.name,
+                  }))}
+                  heightFraction={0.92}
+                  floorFraction={0.08}
+                  flourish
+                  eager
+                />
+              </div>
 
-            {/* One canvas for all of them, standing on one floor. Rank decides
-                how far back a body stands, not how big it is drawn, so the group
-                is a group rather than a row of different-sized cut-outs.
-                The office card used to sit in its own row below this, which
-                cost the canvas real height for a block that only ever needed
-                the bottom edge of it. It is a foreground layer now -- z-20
-                over the z-10 canvas rather than a sibling in the flex column
-                -- so the group gets the space back and a body can stand or
-                dance behind the card instead of stopping at its edge. */}
-            <div className="relative z-10 min-h-[130px] w-full flex-1">
-              <CharacterGroup
-                members={faces.map((face) => ({
-                  id: face.characterId ?? characterFor(face.name).id,
-                  name: face.name,
-                }))}
-                heightFraction={0.92}
-                floorFraction={0.08}
-                flourish
-                eager
-              />
+              <div className="w-full max-w-sm shrink-0 rounded-3xl bg-surface-raised/92 px-10 py-8 text-center shadow-e2 backdrop-blur-sm">
+                <p className="font-display text-[28px] font-semibold text-ink">
+                  {leader.officeName}
+                </p>
+                <p className="mt-1 text-[14px] text-ink-muted">
+                  {leader.memberCount} member{leader.memberCount === 1 ? "" : "s"} · rank 1
+                </p>
+                <p className="tabular mt-3 text-[52px] font-bold leading-none text-ink">
+                  {leader.points}
+                </p>
 
-              <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-4">
-                <div className="pointer-events-auto rounded-3xl bg-surface-raised/92 px-6 py-4 text-center shadow-e2 backdrop-blur-sm">
-                  <p className="font-display text-[20px] font-semibold text-ink">
-                    {leader.officeName}
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-ink-muted">
-                    {leader.memberCount} member{leader.memberCount === 1 ? "" : "s"} · rank 1
-                  </p>
-                  <p className="tabular mt-1.5 text-[32px] font-bold leading-none text-ink xl:text-[40px]">
-                    {leader.points}
-                  </p>
-
-                  <div className="mt-2.5 flex justify-center gap-2">
-                    <StageTile label="APL" value={leader.aplCount} wash="bg-apl-wash" ink="text-apl-ink" />
-                    <StageTile label="APD" value={leader.apdCount} wash="bg-apd-wash" ink="text-apd-ink" />
-                    <StageTile label="RE" value={leader.reCount} wash="bg-re-wash" ink="text-re-ink" />
-                  </div>
+                <div className="mt-5 flex justify-center gap-3">
+                  <StageTile label="APL" value={leader.aplCount} wash="bg-apl-wash" ink="text-apl-ink" />
+                  <StageTile label="APD" value={leader.apdCount} wash="bg-apd-wash" ink="text-apd-ink" />
+                  <StageTile label="RE" value={leader.reCount} wash="bg-re-wash" ink="text-re-ink" />
                 </div>
               </div>
             </div>
@@ -181,9 +170,9 @@ function StageTile({
   ink: string;
 }) {
   return (
-    <span className={`block rounded-[11px] px-4 py-2 ${wash}`}>
-      <span className={`tabular block text-[17px] font-bold ${ink}`}>{value}</span>
-      <span className={`block text-[10px] font-bold tracking-[0.06em] ${ink}`}>{label}</span>
+    <span className={`block rounded-[13px] px-5 py-3 ${wash}`}>
+      <span className={`tabular block text-[21px] font-bold ${ink}`}>{value}</span>
+      <span className={`block text-[11px] font-bold tracking-[0.06em] ${ink}`}>{label}</span>
     </span>
   );
 }
