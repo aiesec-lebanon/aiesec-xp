@@ -1,6 +1,6 @@
 # Architecture.md — AIESEC in Lebanon | AIESEC XP
 
-Companion: `Context.md` (domain, glossary, decisions D-01…D-58; open items O-09, O-10, O-13)
+Companion: `Context.md` (domain, glossary, decisions D-01…D-66; open items O-09, O-10, O-13)
 
 ---
 
@@ -23,7 +23,7 @@ Companion: `Context.md` (domain, glossary, decisions D-01…D-58; open items O-0
 4. **Configuration over code.** Point values, per-product multipliers, rewards,
    thresholds, display window, scope sides and admin role matchers all live
    in tables.
-5. **KISS / YAGNI.** One Next.js deployment, one Postgres, one scheduled job.
+5. **KISS / YAGNI.** One Next.js deployment, one Postgres, one scheduler.
 
 ---
 
@@ -70,7 +70,7 @@ JavaScript.
 | DB | PostgreSQL (Neon or Supabase) | Relational, transactional, cheap |
 | ORM | Prisma | Typed access, versioned migrations |
 | GIS client | graphql-request + graphql-codegen | Types generated from the schema, captured by introspection at the spike |
-| Scheduling | Vercel Cron | No always-on worker needed. Vercel is the only deployment target and there is no staging (D-37) |
+| Scheduling | GitHub Actions `schedule` (D-66) | No always-on worker needed: the workflows only call bearer-authenticated routes and the work runs on Vercel. Vercel Cron on Hobby runs at most once a day; GitHub's floor is five minutes and it is free for a public repository |
 | Realtime | Server-Sent Events | One-way push is all the leaderboard needs |
 | Validation | Zod | One schema for form, server action and DB write |
 | Tests | Vitest (scoring, attribution, matching) + Playwright (auth, admin, leaderboard) | Scoring and identity matching must never be wrong |
@@ -331,8 +331,8 @@ what makes D-15 safe.
 
 ## 6. Sync pipeline
 
-Runs every 15 minutes on the service token, scoped to the 182 subtree and
-`programmes: [7, 8, 9]`, and floored at `TermSettings.startsAt`: the system
+Runs on the service token on the schedule below (D-66), scoped to the 182
+subtree and `programmes: [7, 8, 9]`, and floored at `TermSettings.startsAt`: the system
 fetches only what it scores (D-43, amended by D-58). The floor was the active
 display window's start, which meant moving the window forward stopped collecting
 everything behind it — and a leaderboard read over a historic range would have
@@ -375,10 +375,44 @@ exposes only a relay alias in place of an EP's email, which identifies nobody.
 has no `updated_at` filter, so applications already ingested are re-read nightly
 to repair silent drift.
 
-**Pass 8 — nightly roster, office tree and EP directory refresh.**
+**Pass 8 — roster and office tree refresh**, monthly (D-66).
 
 Every pass writes a `SyncRun` row. Repeated failures raise an alert and the
 UI shows a staleness banner with the last successful sync time.
+
+### Scheduling (D-66)
+
+Two jobs, on GitHub Actions rather than Vercel Cron, whose Hobby plan runs a
+cron at most once a day and refuses to deploy a more frequent one:
+
+| Job | Passes | Schedule | Route |
+|---|---|---|---|
+| EP data (`events`) | 1–5, 5b, then the ledger rebuild | Daily; every 5 minutes while hackathon mode is on | `/api/cron/events` |
+| Members (`roster`) | 8 | Monthly, on the 1st | `/api/cron/roster` |
+
+The workflows (`.github/workflows/sync-ep-data.yml`, `sync-members.yml`) only
+call the routes, carrying `CRON_SECRET` as a bearer token; the work runs on
+Vercel. The five-minute tick carries no policy of its own: `lib/sync/cadence.ts`
+decides whether it has work, so hackathon mode is a switch on `/admin/sync`
+rather than an edit to a workflow. Hackathon mode is stored as an end time
+(`SyncSettings.hackathonUntil`), so it lapses back to daily by itself.
+
+Every trigger, scheduled or an admin's button, goes through `runSyncJob()`
+(`lib/sync/jobs.ts`), which first takes a lease on the job's `SyncJob` row, so a
+tick and a button never run one job at once. The lease outlives the 300s any run
+is allowed, so a run the platform killed cannot wedge the job. A button always
+runs; a scheduled tick within two minutes of the previous start is a duplicate
+and is dropped. Outside hackathon mode the tick also catches up a daily run that
+nobody has attempted for 26 hours, because GitHub documents that scheduled runs
+can be dropped under load. It is keyed on the attempt rather than the success, so
+a job that keeps failing is retried daily, not every five minutes.
+
+The LC board has nothing to schedule: it reads AIESEC's analytics live on every
+render (D-56).
+
+GitHub pauses scheduled workflows in a public repository after 60 days without
+a commit, and nothing in the product would otherwise announce it, so
+`/admin/sync` flags a job whose last success is older than its cadence allows.
 
 ---
 
@@ -548,12 +582,15 @@ the simplest correct option. Replays are audited.
 - **Rewards** — create, edit, activate.
 - **Assignments** — import the MC's sheet, with a dry-run preview and a per-row
   error report. There is no EP picker and no browsable directory: assignment is
-  decided in the sheet, and this is only where it is read (D-44).
+  decided in the sheet, and this is only where it is read (D-44). The EP table
+  lists the newest application first and carries a Refresh that runs the EP data
+  job there and then (D-66).
 - **Offices** — which offices are operating (D-39), seeded from the alignments
   list and editable without a deploy.
 - **Match review queue** — `NEEDS_REVIEW` assignments awaiting confirmation.
 - **Unattributed queue** — events with no assignment.
-- **Sync health** — per-pass last run, watermark, errors, manual run, manual replay.
+- **Sync** (`/admin/sync`) — hackathon mode, and for each job its schedule, last
+  success, last run and its error, and a button that runs it now (D-66).
 - **Admin matchers** — role-name and title patterns.
 
 Every mutation writes an `AuditLog` row with before/after JSON.
@@ -736,6 +773,11 @@ Technical measures that remain regardless:
   relied on for isolation.
 - CSRF protection on server actions, strict `SameSite` cookies.
 - Rate limiting on auth, admin and sync-trigger routes.
+- The cron routes (`/api/cron/*`) are the one API surface with no session behind
+  them: the proxy lets them through and each authenticates with `CRON_SECRET`
+  itself. The job lease and the two-minute gap bound how often even a leaked
+  secret can make GIS work, and the routes answer with statuses and counts only,
+  because the GitHub Actions logs that print them are public (D-66).
 - CSP with a per-request nonce, no inline scripts, built in `lib/security/csp.ts`
   and applied in `proxy.ts`. Because the nonce is minted per request, every route
   must render dynamically — a statically prerendered page gets no nonce and its

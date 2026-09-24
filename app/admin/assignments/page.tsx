@@ -1,10 +1,14 @@
 import Link from "next/link";
 
+import { byNewestApplication, latestApplication } from "@/lib/admin/ep-order";
 import { requireMemberPage } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
+import { formatDisplay, toIso } from "@/lib/design/calendar";
+import { timeAgo } from "@/lib/design/time-labels";
 import { expaEpContext } from "@/lib/gis/expa-ep-context";
 import { importAssignments } from "@/lib/import/run-import";
 import { epFunnelStatus } from "@/lib/scoring/engine";
+import { syncJobState } from "@/lib/sync/jobs";
 
 import { Rise } from "@/components/studio/motion";
 
@@ -13,6 +17,8 @@ import { AliasForm, ImportButtons } from "./controls";
 import { AssignmentsTable, type AssignmentRow } from "./assignments-table";
 
 export const dynamic = "force-dynamic";
+// The EP table's Refresh is a server action, which runs under this page's limit.
+export const maxDuration = 300;
 
 export default async function AssignmentsAdminPage() {
   const currentUser = await requireMemberPage("/admin/assignments");
@@ -29,7 +35,7 @@ export default async function AssignmentsAdminPage() {
     );
   }
 
-  const [preview, members, aliases, assignments, epEvents, epContext] = await Promise.all([
+  const [preview, members, aliases, assignments, epEvents, epContext, eventsJob] = await Promise.all([
     importAssignments(currentUser.id, { dryRun: true }),
     db.member.findMany({
       where: { positions: { some: {} } },
@@ -48,6 +54,7 @@ export default async function AssignmentsAdminPage() {
       },
     }),
     expaEpContext(),
+    syncJobState("events"),
   ]);
 
   const memberName = new Map(members.map((member) => [String(member.id), member.fullName]));
@@ -65,16 +72,22 @@ export default async function AssignmentsAdminPage() {
     else eventsByEp.set(key, [event]);
   }
 
-  // Named EPs first and alphabetical within them: an admin works down this list
-  // looking for a person, and an id alone is nothing to look for.
   const rows: AssignmentRow[] = [...eventsByEp.entries()]
-    .map(([epPersonId, events]) => {
+    .map(([epPersonId, events]) => ({
+      epPersonId,
+      events,
+      fullName: epContext.get(epPersonId)?.fullName ?? null,
+      appliedAt: latestApplication(events),
+    }))
+    .sort(byNewestApplication)
+    .map(({ epPersonId, events, fullName, appliedAt }) => {
       const assignment = assignedBy.get(epPersonId);
       const expa = epContext.get(epPersonId)?.managers ?? [];
 
       return {
         epPersonId,
-        fullName: epContext.get(epPersonId)?.fullName ?? null,
+        fullName,
+        appliedOn: appliedAt ? formatDisplay(toIso(appliedAt)) : null,
         products: [...new Set(events.map((event) => event.programmeId))].sort((a, b) => a - b),
         status: epFunnelStatus(events),
         creditedMemberId: assignment ? String(assignment.memberId) : null,
@@ -84,13 +97,11 @@ export default async function AssignmentsAdminPage() {
         source: assignment?.source ?? null,
         expaManagers: expa.map((manager) => ({ id: String(manager.id), fullName: manager.fullName })),
       };
-    })
-    .sort((a, b) => {
-      if (a.fullName && b.fullName) return a.fullName.localeCompare(b.fullName);
-      if (a.fullName) return -1;
-      if (b.fullName) return 1;
-      return a.epPersonId.localeCompare(b.epPersonId);
     });
+
+  const refreshed = eventsJob?.lastSucceededAt
+    ? `updated ${timeAgo(eventsJob.lastSucceededAt)}`
+    : "not refreshed yet";
 
   const managerOptions = [...new Map(rows.flatMap((row) => row.expaManagers).map((m) => [m.id, m.fullName]))]
     .map(([id, fullName]) => ({ id, fullName }))
@@ -219,7 +230,12 @@ export default async function AssignmentsAdminPage() {
         </section>
 
         <section className="flex flex-col gap-3.5 rounded-[22px] bg-surface-raised px-7 py-6.5">
-          <AssignmentsTable rows={rows} members={memberOptions} managers={managerOptions} />
+          <AssignmentsTable
+            rows={rows}
+            members={memberOptions}
+            managers={managerOptions}
+            refreshed={refreshed}
+          />
         </section>
       </Rise>
     </main>

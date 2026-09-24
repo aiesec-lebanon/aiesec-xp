@@ -363,6 +363,36 @@ model SyncWatermark {
   updatedAt DateTime @updatedAt
 }
 
+enum SyncTrigger {
+  HACKATHON
+  SCHEDULE
+  MANUAL
+}
+
+// One row per scheduled job (D-66): "events" and "roster". Every trigger, a
+// GitHub schedule or an admin's button, takes the lease before running, so the
+// two can never run one job at once. The lease expires by itself, so a run the
+// platform killed at its time limit cannot wedge the job.
+model SyncJob {
+  name            String       @id
+  leaseUntil      DateTime?
+  lastStartedAt   DateTime?
+  lastFinishedAt  DateTime?
+  lastSucceededAt DateTime?
+  lastStatus      SyncStatus?
+  lastTrigger     SyncTrigger?
+  lastError       String?
+}
+
+// D-66. One row, enforced by a check constraint like TermSettings. Hackathon
+// mode is an end time rather than a flag, so a switch nobody remembers to turn
+// off lapses back to the daily cadence by itself.
+model SyncSettings {
+  id             String    @id @default("singleton")
+  hackathonUntil DateTime?
+  updatedAt      DateTime  @updatedAt
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   actorId    BigInt
