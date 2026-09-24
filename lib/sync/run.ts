@@ -276,18 +276,31 @@ export async function refreshApplicationStatuses(now = new Date()): Promise<Pass
   }
 }
 
-/** One pass failing does not stop the others; each owns its own watermark. */
-export async function runAllPasses(now = new Date()): Promise<PassResult[]> {
+/**
+ * Passes 1-5 and 5b: the EP data. One pass failing does not stop the others;
+ * each owns its own watermark.
+ */
+export async function runEventPasses(now = new Date()): Promise<PassResult[]> {
   const results: PassResult[] = [];
-
-  // The office tree and roster come first: scope and membership decide what the
-  // event passes are allowed to collect and who they can be attributed to.
-  results.push(await runStructuralPass("offices", async () => (await syncOfficeTree()).officesSeen));
-  results.push(await runStructuralPass("roster", async () => (await syncRoster()).membersUpserted));
-
   for (const pass of PASSES) results.push(await runPass(pass, now));
   results.push(await refreshApplicationStatuses(now));
   return results;
+}
+
+/**
+ * Pass 8: the office tree, then the roster, which is read per operating office.
+ * Scheduled monthly rather than with the EP data (D-66).
+ */
+export async function runMemberPasses(): Promise<PassResult[]> {
+  return [
+    await runStructuralPass("offices", async () => (await syncOfficeTree()).officesSeen),
+    await runStructuralPass("roster", async () => (await syncRoster()).membersUpserted),
+  ];
+}
+
+/** Everything, membership first. What the sync CLI runs. */
+export async function runAllPasses(now = new Date()): Promise<PassResult[]> {
+  return [...(await runMemberPasses()), ...(await runEventPasses(now))];
 }
 
 /**

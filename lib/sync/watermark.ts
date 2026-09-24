@@ -3,7 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { termStart } from "@/lib/term";
 
-// The watermark is how a 15-minute sync avoids re-reading the whole corpus. It
+// The watermark is how a frequent sync avoids re-reading the whole corpus. It
 // advances only when a pass completes in full, so a failure halfway through
 // costs a repeat rather than a gap.
 

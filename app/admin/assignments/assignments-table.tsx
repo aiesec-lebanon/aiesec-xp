@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { CharacterAvatar } from "@/components/studio/character";
 
+import { RunJobButton } from "../run-job-button";
 import { OverrideForm } from "./controls";
 
 // D-04: the products in scope.
@@ -37,6 +38,8 @@ export type ManagerOption = { id: string; fullName: string };
 export type AssignmentRow = {
   epPersonId: string;
   fullName: string | null;
+  /** The EP's latest application, formatted; null when it predates the term. */
+  appliedOn: string | null;
   products: number[];
   status: EpStatus | null;
   creditedMemberId: string | null;
@@ -47,14 +50,18 @@ export type AssignmentRow = {
 
 const PER_PAGE = 10;
 
+/** Rows arrive newest application first; filtering keeps that order. */
 export function AssignmentsTable({
   rows: allRows,
   members,
   managers,
+  refreshed,
 }: {
   rows: AssignmentRow[];
   members: MemberOption[];
   managers: ManagerOption[];
+  /** When the EP data was last pulled from GIS, e.g. "updated 4 min ago". */
+  refreshed: string;
 }) {
   const [q, setQ] = useState("");
   const [product, setProduct] = useState(ALL);
@@ -127,13 +134,21 @@ export function AssignmentsTable({
 
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">
-          EPs with scored events ({rows.length})
-        </h2>
-        <span className="font-mono text-[11px] text-ink-faint">
-          Page {clampedPage} of {pageCount}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">
+            EPs with scored events ({rows.length})
+          </h2>
+          <p className="mt-1 text-xs text-ink-secondary">
+            Newest application first · EP data {refreshed}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <RunJobButton job="events" label="Refresh" pendingLabel="Refreshing…" />
+          <span className="font-mono text-[11px] text-ink-faint">
+            Page {clampedPage} of {pageCount}
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap">
@@ -248,7 +263,16 @@ export function AssignmentsTable({
         </div>
 
         {shown.map(
-          ({ epPersonId: key, fullName, products, status: rowStatus, creditedName, source: rowSource, expaManagers }) => (
+          ({
+            epPersonId: key,
+            fullName,
+            appliedOn,
+            products,
+            status: rowStatus,
+            creditedName,
+            source: rowSource,
+            expaManagers,
+          }) => (
             <div
               key={key}
               className="grid grid-cols-[1fr_1fr] items-center gap-4 rounded-2xl px-3.5 py-3 transition-colors hover:bg-surface xl:grid-cols-[minmax(200px,1.2fr)_1fr_130px_200px_220px]"
@@ -259,6 +283,11 @@ export function AssignmentsTable({
                 </span>
                 <span className="flex flex-wrap items-center gap-1.5">
                   <span className="tabular font-mono text-[11px] text-ink-faint">{key}</span>
+                  {appliedOn ? (
+                    <span className="tabular font-mono text-[11px] text-ink-faint">
+                      · applied {appliedOn}
+                    </span>
+                  ) : null}
                   {products.map((programmeId) => (
                     <span key={programmeId} className={`${CHIP} bg-surface-sunken text-ink-secondary`}>
                       {PROGRAMMES[programmeId] ?? `Programme ${programmeId}`}
