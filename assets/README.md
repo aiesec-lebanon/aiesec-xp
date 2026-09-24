@@ -138,7 +138,7 @@ rendered in the UI, because this is an internal tool behind the member wall.
 | [Poly Haven](https://polyhaven.com) | CC0 | HDRIs, textures, models |
 | [Kenney](https://kenney.nl) | CC0 | Game asset packs, isometric tiles, UI |
 | [Game Icons](https://game-icons.net) | CC BY 3.0 | Icons, via `react-icons/gi` — credited in `ATTRIBUTIONS.md` |
-| [Google Fonts](https://fonts.google.com) | OFL | Typefaces, self-hosted by `next/font` |
+| [Google Fonts](https://fonts.google.com) | OFL | Typefaces, built by `scripts/assets/build-faces.py` into `lib/design/faces/` (D-67) |
 | [Blender](https://blender.org) | GPL | Authoring; exports glTF for the pipeline above |
 
 Assets are never loaded from a CDN. Everything is fetched from our own origin —

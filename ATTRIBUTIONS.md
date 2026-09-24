@@ -73,9 +73,10 @@ licence strictly demands.
 
 ## Open source software
 
-Typefaces are served under the SIL Open Font License, self-hosted at build time
-by `next/font` so no request reaches Google. STUDIO uses four (D-48): Fredoka,
-Figtree, Baloo 2 and Space Mono.
+Typefaces are served under the SIL Open Font License, built from `google/fonts`
+into `lib/design/faces/` with each family's `OFL.txt` beside it, so no request
+reaches Google at build time or runtime (D-67). STUDIO uses four (D-48):
+Fredoka, Figtree, Baloo 2 and Space Mono.
 
 The 3D stack — three.js, @react-three/fiber, @react-three/drei, @pmndrs/assets,
 Motion, Recharts, react-icons and glTF-Transform — is MIT or CC0.
