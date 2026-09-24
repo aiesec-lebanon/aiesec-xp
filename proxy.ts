@@ -14,13 +14,17 @@ import { contentSecurityPolicy, generateNonce, NONCE_HEADER } from "@/lib/securi
 // reads it back off the request's Content-Security-Policy header and stamps it
 // onto the framework and page scripts itself.
 
+// /api/cron has no session behind it: a scheduler carries CRON_SECRET instead,
+// which the route checks itself (lib/cron-auth.ts). Left out of this list, every
+// scheduled call was redirected to /login and no sync ever ran.
+//
 // /lab is the development-only visual stack surface. It is listed here only in
 // development, and app/lab/page.tsx returns notFound() in production regardless,
 // so neither guard alone can expose it.
 const PUBLIC_PATHS =
   process.env.NODE_ENV === "development"
-    ? ["/login", "/unauthorized", "/api/auth", "/lab"]
-    : ["/login", "/unauthorized", "/api/auth"];
+    ? ["/login", "/unauthorized", "/api/auth", "/api/cron", "/lab"]
+    : ["/login", "/unauthorized", "/api/auth", "/api/cron"];
 
 function withSecurityHeaders(request: NextRequest): NextResponse {
   const nonce = generateNonce();

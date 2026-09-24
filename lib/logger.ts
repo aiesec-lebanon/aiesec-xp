@@ -13,6 +13,7 @@ function secrets(): string[] {
     process.env.GIS_SERVICE_TOKEN,
     process.env.AIESEC_CLIENT_SECRET,
     process.env.SESSION_SECRET,
+    process.env.CRON_SECRET,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 

@@ -8,11 +8,13 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 const SERVICE_TOKEN = "spike-service-token-value-0123456789abcdef";
 const CLIENT_SECRET = "aiesec-client-secret-value-abcdef0123456789";
 const SESSION_SECRET = "session-secret-value-0123456789abcdefghijklmno";
+const CRON_SECRET = "cron-secret-value-0123456789abcdefghijklmnopq";
 
 beforeAll(() => {
   process.env.GIS_SERVICE_TOKEN = SERVICE_TOKEN;
   process.env.AIESEC_CLIENT_SECRET = CLIENT_SECRET;
   process.env.SESSION_SECRET = SESSION_SECRET;
+  process.env.CRON_SECRET = CRON_SECRET;
 });
 
 vi.mock("server-only", () => ({}));
@@ -31,9 +33,10 @@ describe("redact", () => {
   });
 
   it("removes every configured secret, not only the GIS token", () => {
-    const out = serialise({ a: CLIENT_SECRET, b: SESSION_SECRET });
+    const out = serialise({ a: CLIENT_SECRET, b: SESSION_SECRET, c: CRON_SECRET });
     expect(out).not.toContain(CLIENT_SECRET);
     expect(out).not.toContain(SESSION_SECRET);
+    expect(out).not.toContain(CRON_SECRET);
   });
 
   it("removes the token from a nested request-shaped object", () => {

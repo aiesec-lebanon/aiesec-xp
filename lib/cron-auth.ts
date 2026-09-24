@@ -3,8 +3,8 @@ import "server-only";
 import { timingSafeEqual } from "node:crypto";
 
 // Cron routes are the one authenticated surface with no user behind it, so they
-// carry a shared secret instead. Vercel sends it as a Bearer token to crons
-// declared in vercel.json.
+// carry a shared secret instead. The GitHub Actions workflows in
+// .github/workflows send it as a Bearer token (D-66).
 
 export function isAuthorisedCron(request: Request): boolean {
   const expected = process.env.CRON_SECRET;

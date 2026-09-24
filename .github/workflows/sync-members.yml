@@ -1,0 +1,37 @@
+# Members: the office tree and the roster (D-66), on the 1st of each month. An
+# admin can also run it from /admin/sync, which is the thing to do at a term
+# handover. Needs the same repository settings as sync-ep-data.yml.
+name: Sync members
+
+on:
+  schedule:
+    # 01:15 UTC on the 1st: 04:15 in Beirut in summer, 03:15 in winter.
+    - cron: "15 1 1 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-members
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Call /api/cron/roster
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          : "${APP_URL:?Set the APP_URL repository variable}"
+          : "${CRON_SECRET:?Set the CRON_SECRET repository secret}"
+
+          # The body is statuses and counts only: these logs are public.
+          status=$(curl --silent --show-error --max-time 330 \
+            --output response.json --write-out '%{http_code}' \
+            --request POST --header "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/roster")
+          cat response.json; echo
+          test "$status" = 200

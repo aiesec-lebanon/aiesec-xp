@@ -1,0 +1,54 @@
+# EP data: sync passes 1-5b and the ledger rebuild (D-66). The work runs on
+# Vercel; this only calls the route, because Vercel's Hobby plan allows a cron
+# once a day and GitHub's floor is five minutes.
+#
+# The five-minute tick carries no policy of its own. The app decides whether it
+# has work -- only while hackathon mode is on in /admin/sync, or when the daily
+# run was missed -- so switching modes never means editing this file.
+#
+# Repository settings (Settings > Secrets and variables > Actions):
+#   secret   CRON_SECRET  the same value as the Vercel environment variable
+#   variable APP_URL      the production domain, e.g. https://aiesec-xp.vercel.app
+name: Sync EP data
+
+on:
+  schedule:
+    # Every five minutes, clear of the top of the hour, when GitHub's queue is
+    # busiest and scheduled runs are most often delayed.
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
+    # Daily at 00:45 UTC: 03:45 in Beirut in summer, 02:45 in winter.
+    - cron: "45 0 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-ep-data
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Call /api/cron/events
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          : "${APP_URL:?Set the APP_URL repository variable}"
+          : "${CRON_SECRET:?Set the CRON_SECRET repository secret}"
+
+          # The daily schedule and a manual run are the daily run; the other
+          # schedule is the hackathon tick.
+          cadence=hackathon
+          if [ -z "$SCHEDULE" ] || [ "$SCHEDULE" = "45 0 * * *" ]; then cadence=daily; fi
+
+          # The body is statuses and counts only: these logs are public.
+          status=$(curl --silent --show-error --max-time 330 \
+            --output response.json --write-out '%{http_code}' \
+            --request POST --header "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/events?cadence=$cadence")
+          cat response.json; echo
+          test "$status" = 200

@@ -4,6 +4,7 @@ const SECTIONS = [
   { key: "assignments", href: "/admin/assignments", label: "Assignments" },
   { key: "window", href: "/admin/window", label: "Window" },
   { key: "rewards", href: "/admin/rewards", label: "Rewards" },
+  { key: "sync", href: "/admin/sync", label: "Sync" },
 ] as const;
 
 export type AdminSection = (typeof SECTIONS)[number]["key"];
