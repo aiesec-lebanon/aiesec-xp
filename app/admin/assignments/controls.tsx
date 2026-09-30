@@ -6,6 +6,7 @@ import {
   addManagerAction,
   removeManagerAction,
   restoreManagerAction,
+  setMainManagerAction,
   runImportAction,
   type ActionState,
 } from "@/lib/admin/assignment-actions";
@@ -83,6 +84,40 @@ export function AddManagerForm({
         className={`${SECONDARY} px-3 py-1.5 text-xs`}
       >
         {pending ? "Adding…" : "Add"}
+      </button>
+    </form>
+  );
+}
+
+/** Makes a manager already on the EP its main manager (D-83). */
+export function MakeMainButton({
+  epPersonId,
+  epName,
+  memberId,
+  fullName,
+}: {
+  epPersonId: string;
+  epName: string | null;
+  memberId: string;
+  fullName: string;
+}) {
+  const [state, action, pending] = useActionState<ActionState | null, FormData>(setMainManagerAction, null);
+  useActionToast(state);
+  const label = `Make ${fullName} the main manager for ${epName ?? `EP ${epPersonId}`}`;
+
+  return (
+    <form action={action} className="flex">
+      <input type="hidden" name="epPersonId" value={epPersonId} />
+      <input type="hidden" name="epName" value={epName ?? ""} />
+      <input type="hidden" name="memberId" value={memberId} />
+      <button
+        type="submit"
+        disabled={pending}
+        aria-label={label}
+        title={label}
+        className="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold text-apl-ink transition-colors hover:bg-apl-wash disabled:opacity-40"
+      >
+        {pending ? "…" : "Make main"}
       </button>
     </form>
   );

@@ -141,7 +141,7 @@ export default async function HomePage() {
         next === null
           ? "nothing left to chase"
           : next.perWeek === null
-            ? `${next.remaining} ${unit(next.reward.thresholdType)} to go`
+            ? `${formatPoints(next.remaining)} ${unit(next.reward.thresholdType)} to go`
             : `to reach ${next.reward.label} before the period ends`,
       empty:
         next === null
@@ -162,11 +162,11 @@ export default async function HomePage() {
       value: null,
       headline: reward.label,
       caption: next
-        ? `${next.remaining} ${unit(reward.thresholdType)} to go`
+        ? `${formatPoints(next.remaining)} ${unit(reward.thresholdType)} to go`
         : "every reward earned",
       ladder: progress.rewards.map((step) => ({
         label: step.label,
-        detail: `${step.current} of ${step.threshold} ${unit(step.thresholdType)}`,
+        detail: `${formatPoints(step.current)} of ${formatPoints(step.threshold)} ${unit(step.thresholdType)}`,
         earned: step.earned,
       })),
     });
@@ -212,7 +212,7 @@ export default async function HomePage() {
           leading={leading}
           points={points}
           greetKey="dashboard"
-          ghost={<GhostNumber>{Math.round(points)}</GhostNumber>}
+          ghost={<GhostNumber>{formatPoints(points)}</GhostNumber>}
           left={
             <Rise delay={0.12} className="hero-column self-start">
               <p className="tabular text-[clamp(56px,7vw,96px)] font-bold leading-[0.9] text-ink">

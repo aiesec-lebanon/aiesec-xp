@@ -5,6 +5,8 @@ import { useState } from "react";
 
 import { GameIcon, ICON, STAGE_ICON } from "@/components/icons";
 import { useReduceMotion } from "@/components/motion/motion-provider";
+import { formatPoints } from "@/lib/design/points";
+
 import { CountUp, Lift } from "./motion";
 
 // The floor chips. One number is large on the stage above; these four carry the
@@ -83,7 +85,16 @@ export function StatChips({ chips }: { chips: Chip[] }) {
                 ) : (
                   <span className="mt-2 flex items-baseline gap-1.5">
                     <span className="tabular text-[42px] font-bold leading-[1.05] text-ink">
-                      {chip.value === null ? "—" : <CountUp value={chip.value} />}
+                      {chip.value === null ? (
+                        "—"
+                      ) : (
+                        // A count can be a share of a stage (D-83), so it keeps its decimals.
+                        <CountUp
+                          value={chip.value}
+                          decimals={Number.isInteger(chip.value) ? 0 : 2}
+                          format={formatPoints}
+                        />
+                      )}
                     </span>
                     {chip.valueSuffix ? (
                       <span className="text-sm font-semibold text-ink-secondary">

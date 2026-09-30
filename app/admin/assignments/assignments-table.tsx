@@ -7,7 +7,7 @@ import { SearchSelect, type SearchOption } from "@/components/studio/search-sele
 import { FUNNEL_STATUSES } from "@/lib/admin/ep-order";
 
 import { RunJobButton } from "../run-job-button";
-import { AddManagerForm, CreditToggle } from "./controls";
+import { AddManagerForm, CreditToggle, MakeMainButton } from "./controls";
 
 // D-04: the products in scope.
 const PROGRAMMES: Record<number, string> = { 7: "GV", 8: "GTa", 9: "GTe" };
@@ -61,8 +61,10 @@ export type ManagerChip = {
    * term, who can't be credited.
    */
   state: "active" | "removed" | "pending" | "outside";
+  /** The EP's main manager (D-83), who takes the full points. */
+  isMain: boolean;
   sources: CreditSource[];
-  /** Fraction of the EP's points, when more than one member shares them. */
+  /** Fraction of each of the EP's events this member takes, when more than one is on it. */
   share: number | null;
   role: string | null;
 };
@@ -374,15 +376,19 @@ function EpRow({ row, members }: { row: AssignmentRow; members: MemberOption[] }
 function Manager({ chip, epPersonId, epName }: { chip: ManagerChip; epPersonId: string; epName: string | null }) {
   const muted = chip.state !== "active";
   const note =
-    chip.state === "removed"
-      ? "Removed here. Refreshing won't add them back."
-      : chip.state === "pending"
-        ? "Manager in EXPA. Starts earning points at the next refresh."
-        : chip.state === "outside"
-          ? "Not a member this term, so can't earn points"
-          : chip.role
-            ? `${chip.role}${chip.share !== null ? `, ${Math.round(chip.share * 100)}% of this EP's points` : ""}`
-            : undefined;
+    chip.isMain && chip.state === "outside"
+      ? "Main manager, but no longer a member, so nobody gets the full points. Make someone else main, or remove them."
+      : chip.state === "removed"
+        ? "Removed here. Refreshing won't add them back."
+        : chip.state === "pending"
+          ? "Manager in EXPA. Starts earning points at the next refresh."
+          : chip.state === "outside"
+            ? "Not a member this term, so can't earn points"
+            : chip.isMain
+              ? "Main manager: gets the full points and counts each stage as 1."
+              : chip.role
+                ? `${chip.role}${chip.share !== null ? `, gets ${Math.round(chip.share * 100)}% of this EP's points` : ""}`
+                : undefined;
 
   return (
     <span
@@ -420,6 +426,8 @@ function Manager({ chip, epPersonId, epName }: { chip: ManagerChip; epPersonId: 
         </span>
       ) : null}
 
+      {chip.isMain ? <span className={`${CHIP} bg-apd-wash text-apd-ink`}>Main</span> : null}
+
       {chip.sources.map((source) => (
         <span
           key={source}
@@ -432,7 +440,11 @@ function Manager({ chip, epPersonId, epName }: { chip: ManagerChip; epPersonId: 
       {chip.state === "pending" ? <span className={`${CHIP} bg-surface text-ink-faint`}>From next refresh</span> : null}
       {chip.state === "outside" ? <span className={`${CHIP} bg-surface text-ink-faint`}>Not a member</span> : null}
 
-      {chip.state === "active" || chip.state === "pending" ? (
+      {chip.state === "active" && !chip.isMain ? (
+        <MakeMainButton epPersonId={epPersonId} epName={epName} memberId={chip.memberId} fullName={chip.fullName} />
+      ) : null}
+
+      {chip.state === "active" || chip.state === "pending" || (chip.isMain && chip.state === "outside") ? (
         <CreditToggle kind="remove" epPersonId={epPersonId} epName={epName} memberId={chip.memberId} fullName={chip.fullName} />
       ) : chip.state === "removed" ? (
         <CreditToggle kind="restore" epPersonId={epPersonId} epName={epName} memberId={chip.memberId} fullName={chip.fullName} />

@@ -1,142 +1,133 @@
 import { describe, expect, it } from "vitest";
 
 import { readRoleShares } from "@/lib/scoring/config";
-import { splitShares, validateRoleShares } from "@/lib/scoring/shares";
+import { creditShares, roleFraction, validateRoleShares } from "@/lib/scoring/shares";
 
-const SHARES = { TM: 50, TL: 30, LCVP: 20 };
+const SHARES = { TM: 40, TL: 30, LCVP: 25, MCP: 10 };
 
-const shareOf = (split: Map<string, number>, member: bigint) => split.get(String(member)) ?? 0;
+const shareOf = (split: Map<string, number>, member: bigint) => split.get(String(member));
 
-describe("splitShares (D-73)", () => {
-  it("gives a member alone on an EP all of it, whatever their role", () => {
-    for (const role of ["TM", "LCVP", "MCP", null]) {
-      expect(shareOf(splitShares([{ memberId: 1n, role }], SHARES), 1n)).toBe(1);
-    }
-  });
-
-  it("uses the configured shares when every role is present", () => {
-    const split = splitShares(
+describe("creditShares (D-83)", () => {
+  it("gives the main manager everything and everyone else their role's %", () => {
+    const split = creditShares(
       [
-        { memberId: 1n, role: "TM" },
+        { memberId: 1n, role: "MCP" },
         { memberId: 2n, role: "TL" },
         { memberId: 3n, role: "LCVP" },
       ],
-      SHARES
-    );
-    expect(shareOf(split, 1n)).toBeCloseTo(0.5);
-    expect(shareOf(split, 2n)).toBeCloseTo(0.3);
-    expect(shareOf(split, 3n)).toBeCloseTo(0.2);
-  });
-
-  it("rescales over the roles actually on the EP, so the points are paid in full", () => {
-    const split = splitShares(
-      [
-        { memberId: 1n, role: "TM" },
-        { memberId: 2n, role: "LCVP" },
-      ],
-      SHARES
-    );
-    expect(shareOf(split, 1n)).toBeCloseTo(50 / 70);
-    expect(shareOf(split, 2n)).toBeCloseTo(20 / 70);
-    expect([...split.values()].reduce((sum, share) => sum + share, 0)).toBeCloseTo(1);
-  });
-
-  it("splits a role's share evenly between the people holding it", () => {
-    const split = splitShares(
-      [
-        { memberId: 1n, role: "TM" },
-        { memberId: 2n, role: "TM" },
-        { memberId: 3n, role: "TL" },
-      ],
-      SHARES
-    );
-    expect(shareOf(split, 1n)).toBeCloseTo((50 / 80) / 2);
-    expect(shareOf(split, 2n)).toBeCloseTo((50 / 80) / 2);
-    expect(shareOf(split, 3n)).toBeCloseTo(30 / 80);
-  });
-
-  it("gives a role with no share nothing beside a role that has one", () => {
-    const split = splitShares(
-      [
-        { memberId: 1n, role: "TM" },
-        { memberId: 2n, role: "ESTL" },
-      ],
+      1n,
       SHARES
     );
     expect(shareOf(split, 1n)).toBe(1);
-    expect(shareOf(split, 2n)).toBe(0);
+    expect(shareOf(split, 2n)).toBe(0.3);
+    expect(shareOf(split, 3n)).toBe(0.25);
   });
 
-  it("splits evenly when nobody on the EP has a share, rather than paying out nothing", () => {
-    const split = splitShares(
+  it("gives everyone in a role the role's full %", () => {
+    const split = creditShares(
       [
-        { memberId: 1n, role: "ESTL" },
-        { memberId: 2n, role: null },
+        { memberId: 1n, role: "MCP" },
+        { memberId: 2n, role: "TM" },
+        { memberId: 3n, role: "TM" },
       ],
+      1n,
       SHARES
     );
-    expect(shareOf(split, 1n)).toBe(0.5);
-    expect(shareOf(split, 2n)).toBe(0.5);
+    expect(shareOf(split, 2n)).toBe(0.4);
+    expect(shareOf(split, 3n)).toBe(0.4);
+  });
+
+  it("gives everyone their role's % when no main is picked", () => {
+    const split = creditShares(
+      [
+        { memberId: 1n, role: "TM" },
+        { memberId: 2n, role: "TL" },
+      ],
+      null,
+      SHARES
+    );
+    expect(shareOf(split, 1n)).toBe(0.4);
+    expect(shareOf(split, 2n)).toBe(0.3);
+  });
+
+  it("gives a manager alone on the EP everything when no main is picked, whatever their role", () => {
+    for (const role of ["TM", "MCP", "ESTL", null]) {
+      expect(shareOf(creditShares([{ memberId: 1n, role }], null, SHARES), 1n)).toBe(1);
+    }
+  });
+
+  it("promotes nobody when the main can no longer be credited, even a manager left alone", () => {
+    expect(shareOf(creditShares([{ memberId: 2n, role: "TL" }], 9n, SHARES), 2n)).toBe(0.3);
+  });
+
+  it("gives a role with no % set nothing", () => {
+    const split = creditShares(
+      [
+        { memberId: 1n, role: "TM" },
+        { memberId: 2n, role: "ESTL" },
+        { memberId: 3n, role: null },
+      ],
+      1n,
+      SHARES
+    );
+    expect(shareOf(split, 2n)).toBe(0);
+    expect(shareOf(split, 3n)).toBe(0);
   });
 
   it("matches roles regardless of case and spacing", () => {
-    const split = splitShares(
+    const split = creditShares(
       [
         { memberId: 1n, role: " tm " },
         { memberId: 2n, role: "Tl" },
       ],
+      null,
       SHARES
     );
-    expect(shareOf(split, 1n)).toBeCloseTo(50 / 80);
+    expect(shareOf(split, 1n)).toBe(0.4);
+    expect(shareOf(split, 2n)).toBe(0.3);
   });
 
   it("counts a member listed twice once", () => {
-    const split = splitShares(
+    const split = creditShares(
       [
         { memberId: 1n, role: "TM" },
         { memberId: 1n, role: "TM" },
-        { memberId: 2n, role: "TM" },
       ],
+      null,
       SHARES
     );
-    expect(split.size).toBe(2);
-    expect(shareOf(split, 1n)).toBe(0.5);
-  });
-
-  it("ignores a negative or non-numeric share rather than paying it", () => {
-    const split = splitShares(
-      [
-        { memberId: 1n, role: "TM" },
-        { memberId: 2n, role: "TL" },
-      ],
-      { TM: 50, TL: -30 }
-    );
+    expect(split.size).toBe(1);
     expect(shareOf(split, 1n)).toBe(1);
-    expect(shareOf(split, 2n)).toBe(0);
   });
 
   it("is empty for nobody", () => {
-    expect(splitShares([], SHARES).size).toBe(0);
+    expect(creditShares([], 1n, SHARES).size).toBe(0);
+  });
+});
+
+describe("roleFraction", () => {
+  it("ignores a negative or non-numeric % rather than paying it", () => {
+    expect(roleFraction({ TL: -30 }, "TL")).toBe(0);
+    expect(roleFraction({ TL: Number.NaN }, "TL")).toBe(0);
+  });
+
+  it("caps a % above 100 at the whole event", () => {
+    expect(roleFraction({ TL: 150 }, "TL")).toBe(1);
   });
 });
 
 describe("validateRoleShares", () => {
-  it("accepts shares totalling 100", () => {
-    expect(validateRoleShares({ TM: 50, TL: 30, LCVP: 20 })).toEqual([]);
-    expect(validateRoleShares({ TM: 12.5, TL: 87.5 })).toEqual([]);
+  it("accepts any % from 0 to 100, with no total required", () => {
+    expect(validateRoleShares({ TM: 40, TL: 30, MCP: 10 })).toEqual([]);
+    expect(validateRoleShares({ TM: 0, TL: 100 })).toEqual([]);
   });
 
-  it("refuses a total other than 100, and says what it adds up to", () => {
-    const [problem] = validateRoleShares({ TM: 50, TL: 30 });
-    expect(problem.message).toMatch(/80%/);
+  it("refuses a % outside 0 to 100", () => {
+    expect(validateRoleShares({ TM: 120, TL: -20 })).toHaveLength(2);
   });
 
-  it("refuses a share outside 0 to 100", () => {
-    expect(validateRoleShares({ TM: 120, TL: -20 }).length).toBeGreaterThan(0);
-  });
-
-  it("refuses a share that is not a number", () => {
-    expect(validateRoleShares({ TM: Number.NaN, TL: 100 }).length).toBeGreaterThan(0);
+  it("refuses a % that is not a number", () => {
+    expect(validateRoleShares({ TM: Number.NaN })).toHaveLength(1);
   });
 });
 

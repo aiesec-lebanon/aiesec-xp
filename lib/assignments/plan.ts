@@ -10,6 +10,8 @@ export type RegisterRow = {
   fromExpa: boolean;
   fromSheet: boolean;
   fromAdmin: boolean;
+  /** The EP's main manager (D-83), which holds the row whatever the sources say. */
+  isMain: boolean;
   removedAt: Date | null;
 };
 
@@ -60,7 +62,7 @@ export function planSource(
     if (!members || members.has(String(row.memberId))) continue;
 
     const heldElsewhere =
-      row.fromAdmin || (source === "EXPA" ? row.fromSheet : row.fromExpa);
+      row.fromAdmin || row.isMain || (source === "EXPA" ? row.fromSheet : row.fromExpa);
     if (heldElsewhere || row.removedAt) plan.clear.push(row.id);
     else plan.drop.push(row.id);
   }
@@ -69,6 +71,8 @@ export function planSource(
 }
 
 /** A row counts while something still names it and no admin has removed it. */
-export function isActiveCredit(row: Pick<RegisterRow, "fromExpa" | "fromSheet" | "fromAdmin" | "removedAt">): boolean {
-  return row.removedAt === null && (row.fromExpa || row.fromSheet || row.fromAdmin);
+export function isActiveCredit(
+  row: Pick<RegisterRow, "fromExpa" | "fromSheet" | "fromAdmin" | "isMain" | "removedAt">
+): boolean {
+  return row.removedAt === null && (row.fromExpa || row.fromSheet || row.fromAdmin || row.isMain);
 }

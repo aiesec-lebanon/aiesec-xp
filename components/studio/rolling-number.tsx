@@ -4,6 +4,7 @@ import { m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
+import { formatPoints } from "@/lib/design/points";
 
 const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -33,7 +34,9 @@ export function RollingNumber({
     previous.current = value;
   }, [value]);
 
-  const text = String(Math.round(value));
+  // Not rounded to a whole number: a shared EP splits its points (D-73), and
+  // 0.5 shown as 1 is a score the member doesn't have.
+  const text = formatPoints(value);
 
   if (reduceMotion) return <span className={className}>{text}</span>;
 

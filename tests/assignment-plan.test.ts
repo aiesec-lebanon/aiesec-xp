@@ -16,6 +16,7 @@ function row(over: Partial<RegisterRow> = {}): RegisterRow {
     fromExpa: false,
     fromSheet: false,
     fromAdmin: false,
+    isMain: false,
     removedAt: null,
     ...over,
   };
@@ -84,6 +85,20 @@ describe("planSource (D-73)", () => {
   it("credits several managers of one EP at once", () => {
     const plan = planSource([], desired([[EP, [ALICE, BOB]]]), "EXPA");
     expect(plan.create).toHaveLength(2);
+  });
+});
+
+describe("a main pick (D-83)", () => {
+  it("keeps the main on the EP when EXPA drops them", () => {
+    const main = row({ fromExpa: true, isMain: true });
+    const plan = planSource([main], desired([[EP, []]]), "EXPA");
+    expect(plan.clear).toEqual([main.id]);
+    expect(plan.drop).toEqual([]);
+  });
+
+  it("counts as a credit on its own", () => {
+    expect(isActiveCredit(row({ isMain: true }))).toBe(true);
+    expect(isActiveCredit(row({ isMain: true, removedAt: new Date() }))).toBe(false);
   });
 });
 
