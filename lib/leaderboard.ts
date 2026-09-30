@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { defaultWindowRange, toDateInputValue } from "@/lib/admin/window";
 import { fetchEntityFunnelBreakdown, type ProductFunnelCounts } from "@/lib/analytics/aiesec-analytics";
 import { PROGRAMME_IDS, sumProducts } from "@/lib/analytics/funnel-tags";
-import { creditedAssignments } from "@/lib/assignments/register";
+import { creditRegister } from "@/lib/assignments/register";
 import { officeLabel, personName } from "@/lib/design/names";
 import { mcDirectEntityId, mcOfficeId } from "@/lib/env";
 import type { DateRange } from "@/lib/leaderboard-range";
@@ -85,6 +85,10 @@ export async function activeWindowRange(): Promise<DateRange> {
   return { startsAt: window.startsAt, endsAt: window.endsAt ?? new Date() };
 }
 
+function roundCount(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
 /**
  * Runs the scoring engine over one range and totals the result per member.
  *
@@ -94,14 +98,14 @@ export async function activeWindowRange(): Promise<DateRange> {
  * (D-28).
  */
 async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotals>> {
-  const [config, active, assignments] = await Promise.all([
+  const [config, active, register] = await Promise.all([
     db.scoreConfig.findFirst({ where: { isActive: true } }),
     db.exchangeEvent.findMany({
       where: { occurredAt: { gte: range.startsAt, lte: range.endsAt } },
       select: { applicationId: true },
       distinct: ["applicationId"],
     }),
-    creditedAssignments(),
+    creditRegister(),
   ]);
 
   const totals = new Map<string, MemberTotals>();
@@ -115,7 +119,8 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
   // replay, so evaluating them per request would be work nobody reads.
   const { ledger } = score({
     events,
-    assignments,
+    assignments: register.assignments,
+    mains: register.mains,
     config: toScoringConfig(config),
     window: range,
     rewards: [],
@@ -127,9 +132,10 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
       totals.get(key) ?? { points: 0, aplCount: 0, apdCount: 0, reCount: 0, reachedAt: null };
 
     current.points = Math.round((current.points + entry.points) * 10_000) / 10_000;
-    if (entry.stage === "APL") current.aplCount += entry.countDelta;
-    if (entry.stage === "APD") current.apdCount += entry.countDelta;
-    if (entry.stage === "RE") current.reCount += entry.countDelta;
+    // A count is a share of the stage too (D-83), so it is rounded like points.
+    if (entry.stage === "APL") current.aplCount = roundCount(current.aplCount + entry.countDelta);
+    if (entry.stage === "APD") current.apdCount = roundCount(current.apdCount + entry.countDelta);
+    if (entry.stage === "RE") current.reCount = roundCount(current.reCount + entry.countDelta);
     // The latest scored event is when the current total was reached, which is
     // what D-33 breaks a tie on.
     if (!current.reachedAt || entry.occurredAt > current.reachedAt) {
@@ -383,7 +389,7 @@ export async function personalProgress(memberId: bigint): Promise<PersonalProgre
     totalMembers: standings.length,
     nextUp: index > 0 ? standings[index - 1] : null,
     trail: entries.map((entry) => ({
-      eventType: trailLabel(entry.stage, entry.countDelta),
+      eventType: trailLabel(entry.stage, Number(entry.countDelta)),
       occurredAt: entry.occurredAt,
       points: Number(entry.points),
       share: Number(entry.share),

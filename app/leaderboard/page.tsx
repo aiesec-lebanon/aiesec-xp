@@ -197,7 +197,12 @@ export default async function LeaderboardPage({
               <span className="w-11 text-right">APL</span>
               <span className="w-11 text-right">APD</span>
               <span className="w-11 text-right">RE</span>
-              <span className="w-[70px] text-right">Points</span>
+              <span
+                className="w-[70px] text-right"
+                title="An EP shared by several members counts in each of their APL, APD and RE, and its points are split between them."
+              >
+                Points
+              </span>
             </div>
           </Rise>
 
@@ -283,7 +288,7 @@ export default async function LeaderboardPage({
             <span className="mr-auto font-mono text-[10px] text-ink-faint">
               {pageCount > 1
                 ? `Page ${page} of ${pageCount} · ${PER_PAGE} per page`
-                : "Ranked on points, then realizations, then approvals"}
+                : "Ranked on points, then realizations, then approvals. Points from a shared EP are split between everyone on it."}
             </span>
             {pageCount > 1 ? (
               <>

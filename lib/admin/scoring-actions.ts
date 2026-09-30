@@ -17,7 +17,7 @@ function sameShares(a: Record<string, number>, b: Record<string, number>): boole
 }
 
 /**
- * Saves how an EP's points are split between roles (D-73), as a new config
+ * Saves each role's percentage of an event (D-83), as a new config
  * version rather than an edit: every ledger entry names the version that
  * produced it, and a replay recomputes history against the new one (D-15).
  */

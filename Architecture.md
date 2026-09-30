@@ -201,7 +201,8 @@ model EpAssignment {
   fromExpa   Boolean   // mirrors Person.managers (D-74)
   fromSheet  Boolean   // mirrors the MC sign-up sheet's EP manager (D-80)
   fromAdmin  Boolean   // added on the console; nothing automatic clears it
-  removedAt  DateTime? // an admin removal, which outranks every source
+  isMain     Boolean   // the EP's main manager (D-83); holds the row whatever the sources say
+  removedAt  DateTime? // an admin removal, which outranks every source and clears isMain
   removedBy  BigInt?
   createdBy  BigInt
   createdAt  DateTime
@@ -270,7 +271,7 @@ model ScoreConfig {
   productWeights   Json                        // { "7": 1, "8": 1, "9": 1 }
   directionWeights Json                        // { "OUTGOING": 1, "INCOMING": 1 }
   scopeSides       Json                        // ["PERSON"] today, ["PERSON","OPPORTUNITY"] for incoming (D-27)
-  roleShares       Json                        // { "TM": 40, "TL": 30, ... } = 100, per role (D-73)
+  roleShares       Json                        // { "TM": 40, "MCP": 10, ... } 0-100 each, % of an event for a non-main (D-83)
   isActive         Boolean
   createdBy        BigInt
   createdAt        DateTime
@@ -317,8 +318,8 @@ model ScoreLedgerEntry {
   stage           ScoredStage                   // the event's stage, or the one a break takes back
   configVersion   Int
   points          Decimal                       // negative on break
-  share           Decimal                       // this member's part of the EP (D-73)
-  countDelta      Int
+  share           Decimal                       // 1 for the main or a sole manager, else the role's % (D-83)
+  countDelta      Decimal                       // the same share of the stage's count, negative on break
   occurredAt      DateTime
   @@unique([memberId, exchangeEventId])
   @@index([memberId, occurredAt])
@@ -464,10 +465,11 @@ dropped silently.
 
 Attribution is per EP, so APL, APD and RE for one EP credit the same members by
 construction. The engine is handed the credits that count
-(`creditedAssignments()`, `lib/assignments/register.ts`): register rows not
-removed, named by a live source, held by a member this term (D-71), each with
-the role that member shares under -- their most senior in-term position, ranked
-as D-32 ranks them. An EP nobody is credited with is recorded, scored to nobody,
+(`creditRegister()`, `lib/assignments/register.ts`): register rows not
+removed, named by a live source or picked as main, held by a member this term
+(D-71), each with the role that member is weighted by -- their most senior
+in-term position, ranked as D-32 ranks them -- plus each EP's main pick, whether
+or not the main is still a member (D-83). An EP nobody is credited with is recorded, scored to nobody,
 and surfaced as `UNATTRIBUTED`.
 
 ### What scores (D-75)
@@ -496,13 +498,17 @@ points = basePoints(stage)
        × share(member)
 ```
 
-`share` splits an EP's points between everyone credited with it (D-73,
-`lib/scoring/shares.ts`). Alone on an EP, a member's share is 1. Otherwise each
-role present takes its `ScoreConfig.roleShares` percentage, rescaled over the
-roles actually on the EP so the EP always pays out in full, and members holding
-one role split its part evenly; a role without a share takes nothing beside one
-that has one, and when nobody present has a share they split evenly. Counts are
-not shared: everyone on the EP is counted for the stage.
+`share` is what each member credited with an EP takes of every one of its
+events (D-83, `creditShares()` in `lib/scoring/shares.ts`). The main manager an
+admin picked takes 1; everyone else takes their role's
+`ScoreConfig.roleShares` percentage, each in full however many hold the role,
+so an EP can pay out more than its points. With no pick, a manager alone on the
+EP takes 1 and several take their role's percentage each. A pick whose main is
+no longer a member promotes nobody. A role with no percentage takes nothing,
+and no ledger entry is written for it. The count is the same share of the
+stage (`countDelta`), so the main counts an APD as 1 and a manager at 15% as
+0.15, and a break takes back exactly the share its stage paid. Reward goals
+based on counts measure these decimal totals.
 
 A programme with no entry in `productWeights` scores zero and is returned as an
 anomaly, never scored at an assumed weight of 1 (D-30). Remote and physical
@@ -607,8 +613,8 @@ the simplest correct option. Replays are audited.
 ## 8. Admin surface (`/admin`)
 
 - **Scoring** (`/admin/scoring`) — the manager shares: a percentage per
-  position role, totalling 100, for splitting an EP's points between everyone
-  credited with it (D-73). Saving creates a new `ScoreConfig` version and
+  position role, 0-100 each with no total, that a manager who is not the EP's
+  main takes of each event (D-83). Saving creates a new `ScoreConfig` version and
   replays. APL/APD/RE points, product and direction multipliers, the APL
   reversal toggle and scope sides are shown for reference and stay seeded
   configuration for now.
@@ -620,8 +626,9 @@ the simplest correct option. Replays are audited.
 - **Assignments** — every EP updated since the current window opened, by
   their own record or any application, latest first (D-76), each with EXPA's status (D-78) and one Managers column:
   everyone credited, with their portrait (D-79), share and sources (EXPA, sheet,
-  admin), a searchable picker to add a member and a control to remove or
-  restore one (D-73). Managers EXPA names who are not members this term are
+  admin), a searchable picker to add a member, a control to remove or
+  restore one (D-73), and "Make main" on each manager to pick the EP's main
+  manager, marked Main (D-83). Managers EXPA names who are not members this term are
   shown, not credited. Above the table, the MC sign-up sheet: what it lists and
   matched, anything in it to correct, a preview and a run-now button, and every
   EP manager name it uses with who that name matches -- an admin picks the

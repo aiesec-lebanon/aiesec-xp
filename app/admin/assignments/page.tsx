@@ -12,7 +12,7 @@ import { expaEpDirectory, type ExpaEp } from "@/lib/gis/expa-ep-context";
 import { importAssignments } from "@/lib/import/run-import";
 import { inTermRoles } from "@/lib/org/members";
 import { readRoleShares } from "@/lib/scoring/config";
-import { splitShares } from "@/lib/scoring/shares";
+import { creditShares } from "@/lib/scoring/shares";
 import { syncJobState } from "@/lib/sync/jobs";
 import { currentWindow } from "@/lib/term";
 
@@ -39,6 +39,7 @@ type Credit = {
   fromExpa: boolean;
   fromSheet: boolean;
   fromAdmin: boolean;
+  isMain: boolean;
   removedAt: Date | null;
 };
 
@@ -82,6 +83,7 @@ export default async function AssignmentsAdminPage() {
         fromExpa: true,
         fromSheet: true,
         fromAdmin: true,
+        isMain: true,
         removedAt: true,
       },
     }),
@@ -131,10 +133,14 @@ export default async function AssignmentsAdminPage() {
   function managersFor(epPersonId: string, context: ExpaEp | undefined): ManagerChip[] {
     const held = creditsByEp.get(epPersonId) ?? [];
     const counting = held.filter((credit) => isActiveCredit(credit) && roles.has(String(credit.memberId)));
-    const shares = splitShares(
+    const main = held.find((credit) => credit.isMain && credit.removedAt === null)?.memberId ?? null;
+    const shares = creditShares(
       counting.map((credit) => ({ memberId: credit.memberId, role: roles.get(String(credit.memberId)) ?? null })),
+      main,
       roleShares
     );
+    // A lone manager with no pick takes everything, which needs no label.
+    const showShares = counting.length > 1 || main !== null;
 
     const chips: ManagerChip[] = held
       .filter((credit) => credit.removedAt !== null || isActiveCredit(credit))
@@ -146,8 +152,9 @@ export default async function AssignmentsAdminPage() {
           fullName: memberName.get(id) ?? `Member ${id}`,
           characterId: characterOf(id),
           state: credit.removedAt ? "removed" : creditable ? "active" : "outside",
+          isMain: credit.isMain && credit.removedAt === null,
           sources: sourcesOf(credit),
-          share: counting.length > 1 && creditable && !credit.removedAt ? (shares.get(id) ?? null) : null,
+          share: showShares && creditable && !credit.removedAt ? (shares.get(id) ?? null) : null,
           role: roles.get(id) ?? null,
         };
       });
@@ -163,6 +170,7 @@ export default async function AssignmentsAdminPage() {
         fullName: memberName.get(id) ?? manager.fullName,
         characterId: known ? characterOf(id) : null,
         state: roles.has(id) ? "pending" : "outside",
+        isMain: false,
         sources: ["EXPA"],
         share: null,
         role: roles.get(id) ?? null,
@@ -170,7 +178,10 @@ export default async function AssignmentsAdminPage() {
     }
 
     const order: Record<ManagerChip["state"], number> = { active: 0, pending: 1, removed: 2, outside: 3 };
-    return chips.sort((a, b) => order[a.state] - order[b.state] || a.fullName.localeCompare(b.fullName));
+    return chips.sort(
+      (a, b) =>
+        Number(b.isMain) - Number(a.isMain) || order[a.state] - order[b.state] || a.fullName.localeCompare(b.fullName)
+    );
   }
 
   // Everyone updated since the current window opened (D-76). An EP who scores
