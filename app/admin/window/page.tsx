@@ -25,7 +25,7 @@ export default async function WindowAdminPage() {
     return (
       <main className="flex min-h-full shrink-0 flex-col items-center justify-center gap-3 bg-wall px-6 text-center">
         <h1 className="font-display text-2xl font-semibold text-ink">Not available</h1>
-        <p className="text-sm text-ink-secondary">This console is for MCP and MCVP IM.</p>
+        <p className="text-sm text-ink-secondary">Only the MC&rsquo;s admins can open this page.</p>
         <Link href="/" className="mt-2 text-sm font-semibold text-apl-ink">
           Back to your dashboard
         </Link>
@@ -61,10 +61,10 @@ export default async function WindowAdminPage() {
       <Rise className="flex flex-col gap-7 rounded-[28px] bg-surface p-7 shadow-e3 sm:p-12">
         <header className="flex flex-wrap items-center justify-between gap-5">
           <div>
-            <h1 className="font-display text-[28px] font-semibold text-ink">Display window</h1>
+            <h1 className="font-display text-[28px] font-semibold text-ink">Dates</h1>
             <p className="mt-1.5 max-w-140 text-sm text-ink-secondary">
-              The date range everyone is measured in (D-07). Saving replays every score and reward
-              grant against the new bounds.
+              Set the scoring period members compete in. When you save new dates, everyone&rsquo;s
+              points and rewards are recalculated for them.
             </p>
           </div>
 
@@ -74,11 +74,11 @@ export default async function WindowAdminPage() {
         <section className="flex flex-col gap-4 rounded-[22px] bg-surface-raised px-7 py-6.5">
           <div className="flex items-baseline justify-between gap-4">
             <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">
-              Current window
+              Scoring period
             </h2>
             {form.isDefault ? (
               <span className="rounded-full bg-apl-wash px-3 py-1 text-[11px] font-bold tracking-[0.05em] text-apl-ink">
-                No window set — showing this month
+                Not set yet. Showing this month
               </span>
             ) : null}
           </div>
@@ -92,9 +92,9 @@ export default async function WindowAdminPage() {
               Term start
             </h2>
             <p className="mt-1 max-w-140 text-[13px] text-ink-secondary">
-              The floor under everything (D-58). Sync collects nothing earlier, and the leaderboards
-              open on this date through today when nobody has picked a range. Moving it does not
-              replay the ledger — the window above is what scores are measured in.
+              The earliest date the platform keeps data for. Leaderboards show from this date to
+              today unless someone picks other dates. Changing it doesn&rsquo;t change anyone&rsquo;s
+              points: those follow the scoring period above.
             </p>
           </div>
 
@@ -104,11 +104,11 @@ export default async function WindowAdminPage() {
         <section className="flex flex-col gap-4 rounded-[22px] bg-surface-raised px-7 py-6.5">
           <div>
             <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">
-              AIESEC analytics, entity {String(officeId)}
+              AIESEC in Lebanon, official totals
             </h2>
             <p className="mt-1 text-[13px] text-ink-secondary">
-              Live totals from AIESEC&rsquo;s own analytics API for the dates above — a sanity check
-              against the ledger, not what scores it.
+              AIESEC&rsquo;s own figures for the dates above, to compare with the leaderboard.
+              They don&rsquo;t affect anyone&rsquo;s points.
             </p>
           </div>
 
@@ -116,7 +116,7 @@ export default async function WindowAdminPage() {
             <FunnelTable analytics={analytics} />
           ) : (
             <p className="rounded-2xl bg-break-wash px-5 py-4 text-sm font-semibold text-ink">
-              Could not reach the AIESEC analytics API just now. The window can still be saved.
+              AIESEC&rsquo;s figures aren&rsquo;t available right now. You can still save the dates.
             </p>
           )}
 
@@ -124,7 +124,7 @@ export default async function WindowAdminPage() {
             <span className="tabular font-bold text-ink">
               {memberCount === null ? "—" : memberCount}
             </span>{" "}
-            member{memberCount === 1 ? "" : "s"} with an active role in entity {String(officeId)}.
+            {memberCount === 1 ? "member holds" : "members hold"} a position this term.
           </p>
         </section>
       </Rise>

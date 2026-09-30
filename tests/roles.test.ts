@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   canActInOffice,
   chooseScoringOffice,
+  isInTermPosition,
+  parseGisDate,
+  primaryRole,
   resolveAccess,
   type Matcher,
   type PositionInput,
@@ -13,6 +16,8 @@ const MATCHERS: Matcher[] = [
   { field: "ROLE_NAME", pattern: "MCP" },
   { field: "TITLE", pattern: "MCVP IM" },
   { field: "TITLE", pattern: "MCM IM" },
+  { field: "TITLE", pattern: "MCVP oGX" },
+  { field: "TITLE", pattern: "MCVP TM" },
 ];
 
 const MC = 182n;
@@ -22,13 +27,26 @@ const CLOSED = 5853n; // Haigazian: in the tree, not operating
 const OUTSIDE = 2107n; // Global Teams: outside the 182 subtree entirely
 
 const OPERATING = [MC, AUB, LAU, 1735n];
+const TERM_START = new Date("2026-08-01T00:00:00Z");
 
 function position(over: Partial<PositionInput> = {}): PositionInput {
-  return { officeId: AUB, roleName: "TM", title: "Member", status: "active", ...over };
+  return {
+    officeId: AUB,
+    roleName: "TM",
+    title: "Member",
+    status: "active",
+    endDate: null,
+    ...over,
+  };
 }
 
 function resolve(positions: PositionInput[]) {
-  return resolveAccess({ positions, matchers: MATCHERS, operatingOfficeIds: OPERATING });
+  return resolveAccess({
+    positions,
+    matchers: MATCHERS,
+    operatingOfficeIds: OPERATING,
+    termStart: TERM_START,
+  });
 }
 
 describe("scope", () => {
@@ -65,6 +83,58 @@ describe("scope", () => {
   });
 });
 
+describe("term (D-71)", () => {
+  it("denies a position that ended before the term, though EXPA still calls it active", () => {
+    const ended = position({ endDate: new Date("2026-07-31T00:00:00Z") });
+    expect(resolve([ended]).role).toBe("DENIED");
+  });
+
+  it("does not let a departed president keep admin", () => {
+    const ended = position({
+      officeId: MC,
+      roleName: "MCP",
+      title: "President",
+      endDate: new Date("2026-01-31T00:00:00Z"),
+    });
+    expect(resolve([ended]).role).toBe("DENIED");
+  });
+
+  it("counts a position ending on the term start day", () => {
+    expect(resolve([position({ endDate: TERM_START })]).role).toBe("MEMBER");
+  });
+
+  it("counts a position ending later in the term", () => {
+    expect(resolve([position({ endDate: new Date("2027-01-31T00:00:00Z") })]).role).toBe("MEMBER");
+  });
+
+  it("counts a position with no end date as not ended", () => {
+    expect(resolve([position({ endDate: null })]).role).toBe("MEMBER");
+  });
+
+  it("is the same test isInTermPosition applies on its own", () => {
+    const operating = new Set(OPERATING.map(String));
+    expect(isInTermPosition(position(), operating, TERM_START)).toBe(true);
+    expect(isInTermPosition(position({ status: "terminated" }), operating, TERM_START)).toBe(false);
+    expect(isInTermPosition(position({ officeId: CLOSED }), operating, TERM_START)).toBe(false);
+    expect(
+      isInTermPosition(position({ endDate: new Date("2026-07-31T00:00:00Z") }), operating, TERM_START)
+    ).toBe(false);
+  });
+});
+
+describe("parseGisDate", () => {
+  it("parses a GIS date string", () => {
+    expect(parseGisDate("2027-01-31")).toEqual(new Date("2027-01-31T00:00:00Z"));
+  });
+
+  it("treats a missing or unparseable date as absent", () => {
+    expect(parseGisDate(null)).toBeNull();
+    expect(parseGisDate(undefined)).toBeNull();
+    expect(parseGisDate("")).toBeNull();
+    expect(parseGisDate("not a date")).toBeNull();
+  });
+});
+
 describe("admin matching", () => {
   it("matches MCP on role name", () => {
     expect(resolve([position({ officeId: MC, roleName: "MCP", title: "President" })]).role).toBe(
@@ -74,6 +144,12 @@ describe("admin matching", () => {
 
   it("matches the IM on either title spelling", () => {
     for (const title of ["MCVP IM", "MCM IM"]) {
+      expect(resolve([position({ officeId: MC, roleName: "MCVP", title })]).role).toBe("ADMIN");
+    }
+  });
+
+  it("matches MCVP oGX and MCVP TM on title", () => {
+    for (const title of ["MCVP oGX", "MCVP TM"]) {
       expect(resolve([position({ officeId: MC, roleName: "MCVP", title })]).role).toBe("ADMIN");
     }
   });
@@ -101,6 +177,7 @@ describe("admin matching", () => {
       positions: [position({ roleName: null, title: null })],
       matchers: [{ field: "TITLE", pattern: "" }],
       operatingOfficeIds: OPERATING,
+      termStart: TERM_START,
     });
     expect(access.role).not.toBe("ADMIN");
   });
@@ -192,5 +269,27 @@ describe("scoring office (D-32)", () => {
       position({ officeId: LAU, roleName: "TM" }),
     ]);
     expect(access.scoringOfficeId).toBe(LAU);
+  });
+});
+
+describe("primaryRole (D-73)", () => {
+  it("shares under the most senior role a member holds", () => {
+    // Measured: an LCP who is also LCVP MKT, and a TL who is also LCVP MoGX.
+    expect(primaryRole([{ roleName: "LCVP" }, { roleName: "LCP" }])).toBe("LCP");
+    expect(primaryRole([{ roleName: "TL" }, { roleName: "LCVP" }])).toBe("LCVP");
+  });
+
+  it("normalises the role name, since shares are keyed by it", () => {
+    expect(primaryRole([{ roleName: " tm " }])).toBe("TM");
+  });
+
+  it("ranks an unknown role after every known one", () => {
+    expect(primaryRole([{ roleName: "SOMETHING NEW" }, { roleName: "TM" }])).toBe("TM");
+    expect(primaryRole([{ roleName: "SOMETHING NEW" }])).toBe("SOMETHING NEW");
+  });
+
+  it("is null for a member with no role", () => {
+    expect(primaryRole([])).toBeNull();
+    expect(primaryRole([{ roleName: null }])).toBeNull();
   });
 });

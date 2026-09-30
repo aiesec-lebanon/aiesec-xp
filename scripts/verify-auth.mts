@@ -5,6 +5,7 @@ import { gis } from "@/lib/gis/client";
 import { recordLogin } from "@/lib/auth/login";
 import { resolveAccess } from "@/lib/auth/roles";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
+import { termStart } from "@/lib/term";
 
 const offices = await db.office.findMany({ orderBy: { id: "asc" } });
 console.log("Offices:");
@@ -18,18 +19,20 @@ if (!currentPerson) throw new Error("no currentPerson");
 const result = await recordLogin(currentPerson);
 console.log(`\nrecordLogin -> member ${result.memberId}, role ${result.role}`);
 
-const [member, matchers, operating] = await Promise.all([
+const [member, matchers, operating, floor] = await Promise.all([
   db.member.findUnique({ where: { id: result.memberId }, include: { positions: true } }),
   db.adminMatcher.findMany(),
   operatingOfficeIds(),
+  termStart(),
 ]);
 
 const access = resolveAccess({
   positions: (member?.positions ?? []).map((p) => ({
-    officeId: p.officeId, roleName: p.roleName, title: p.title, status: p.status,
+    officeId: p.officeId, roleName: p.roleName, title: p.title, status: p.status, endDate: p.endDate,
   })),
   matchers,
   operatingOfficeIds: operating,
+  termStart: floor,
 });
 
 console.log(`stored positions: ${member?.positions.length}`);

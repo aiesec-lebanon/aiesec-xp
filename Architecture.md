@@ -1,6 +1,6 @@
 # Architecture.md — AIESEC in Lebanon | AIESEC XP
 
-Companion: `Context.md` (domain, glossary, decisions D-01…D-66; open items O-09, O-10, O-13)
+Companion: `Context.md` (domain, glossary, decisions D-01…D-79; open items O-09, O-13)
 
 ---
 
@@ -8,14 +8,15 @@ Companion: `Context.md` (domain, glossary, decisions D-01…D-66; open items O-0
 
 1. **GIS is the source of truth for exchange events; this system is a read-only
    projection.** No writes to EXPA.
-2. **The dashboard reads EP-to-member assignment; it does not perform it.** The
-   MC assigns in a Google Sheet, which this product imports, because EXPA does
-   not record the assignment at sign-up time (D-44). See `Context.md` sections 4
-   and 5.
+2. **The dashboard mirrors EP-to-member assignment; it only corrects it.** The
+   MC assigns EP managers in EXPA and responsible members in a Google Sheet,
+   and this product mirrors both; an admin can add a member to an EP or remove
+   one, and a removal outlasts every sync (D-73, D-74, D-77). See `Context.md`
+   sections 4 and 5.
 2a. **Scope discipline.** This is a rewards and ranking product. It does not
-   assign EPs and does not display EP data; a Google Sheet and EXPA already do
-   those. Every stored column and every requested GIS field has to earn its
-   place against that scope.
+   assign EPs and does not display EP data beyond the admin console; EXPA and a
+   Google Sheet already do those. Every stored column and every requested GIS
+   field has to earn its place against that scope.
 3. **Event-sourced scoring.** Immutable events in, derived score out. A config
    change is a replay, not a patch — this is what makes D-15 cheap. The events
    record what happened, not who it happened to: EP personal data stays in EXPA
@@ -106,14 +107,18 @@ for a missing in-scope position.
 
 | Role | Derivation | Capability |
 |---|---|---|
-| `ADMIN` | Active position matching a configured `AdminMatcher` — seeded `ROLE_NAME: MCP`, `TITLE: MCVP IM`, `TITLE: MCM IM` (D-14, O-03). `role.name = MCVP` is deliberately not a matcher: it also matches MXP and MKT | Everything: config, assignments anywhere, overrides, sync control |
+| `ADMIN` | Active position matching a configured `AdminMatcher` — seeded `ROLE_NAME: MCP`, `TITLE: MCVP IM`, `TITLE: MCM IM`, `TITLE: MCVP oGX`, `TITLE: MCVP TM` (D-14, O-03, D-50). `role.name = MCVP` is deliberately not a matcher: it also matches MXP and MKT | Everything: config, assignments anywhere, overrides, sync control |
 | `LEAD` | Active LCP / LCVP / TL position | Assign EPs within own LC, view all |
 | `MEMBER` | Any other active position in scope (D-02) | Own progress, leaderboards |
 | `DENIED` | Authenticated but holding no active position inside the office 182 subtree | No access (D-16, D-31) |
 
 Scope is office 182 plus descendants, resolved from GIS into an `Office` table
 with a parent pointer. Access derives from live GIS positions, so next term's
-officers inherit it automatically (D-23) and terminated officers lose it.
+officers inherit it automatically (D-23) and terminated officers lose it. A
+position counts only while it is `active`, in an operating office, and had not
+ended before the term start (D-71): EXPA often leaves a departed officer's
+position `active`, so status alone would keep them in. The same rule decides
+who can be credited with an EP and who appears on a leaderboard.
 
 ### 4.3 Sync identity — entity-wide service token (D-13)
 
@@ -188,33 +193,56 @@ model Position {
   endDate   DateTime?
 }
 
-// ── EP assignment: owned by this system, not EXPA ────────────────────
-enum AssignmentState  { PENDING LINKED NEEDS_REVIEW }
-enum AssignmentSource { MANUAL IMPORT GIS_FALLBACK }
-
+// ── EP assignment: who is credited with an EP (D-73) ─────────────────
 model EpAssignment {
-  id            String   @id @default(cuid())
-  epPersonId    BigInt?                 // null only on an unresolved import row
-  epFullName    String?                 // held only while unresolved, cleared on link
-  state         AssignmentState @default(PENDING)
-  memberId      BigInt
-  effectiveFrom DateTime
-  effectiveTo   DateTime?               // null = current (O-01)
-  source        AssignmentSource
-  createdBy     BigInt
-  createdAt     DateTime
-  @@index([epPersonId, effectiveFrom])
-  @@index([state])
+  id         String    @id @default(cuid())
+  epPersonId BigInt
+  memberId   BigInt
+  fromExpa   Boolean   // mirrors Person.managers (D-74)
+  fromSheet  Boolean   // mirrors the MC sign-up sheet's EP manager (D-80)
+  fromAdmin  Boolean   // added on the console; nothing automatic clears it
+  removedAt  DateTime? // an admin removal, which outranks every source
+  removedBy  BigInt?
+  createdBy  BigInt
+  createdAt  DateTime
+  updatedAt  DateTime
+  @@unique([epPersonId, memberId])
+}
+
+model AssignmentSheet {                          // D-80: the MC sign-up sheet, one active row
+  id              String @id
+  label           String
+  spreadsheetId   String @unique
+  tabName         String                         // "MasterSheet": EP ID, EP Manager, LC Assigned To, Function Assigned to
+  managersTabName String @default("Sheet7")      // LC, Team, EP Manager Name -> EXPA ID
+  isActive        Boolean
+  lastImportAt    DateTime?
+}
+
+model SheetManagerMapping {                      // D-80: a sheet name matched on the console
+  id        String @id
+  nameKey   String                               // normalised; unique with lcKey and teamKey
+  lcKey     String
+  teamKey   String
+  name      String                               // as the sheet spells it
+  lc        String
+  team      String
+  memberId  BigInt
+  createdBy BigInt
+  @@unique([nameKey, lcKey, teamKey])
 }
 ```
 
-An assignment can be created before the EP exists in GIS. A reconciliation pass
-resolves it. Only `LINKED` assignments attribute points; `PENDING` and
-`NEEDS_REVIEW` are visible work items, not silent failures.
+A row counts while any source flag is set and it has not been removed. Each
+automatic source rewrites only its own flag, and only for the EPs it could
+read, so an unreadable sheet or a failed GIS page takes nobody's credit away.
+A removal is kept as a row, not a delete, so the next sync cannot recreate it.
+There is no effective date: credit is whoever holds the EP now.
 
 ```prisma
 // ── Raw exchange events from GIS ─────────────────────────────────────
 enum FunnelEvent { APL APD RE APD_BROKEN RE_BROKEN }
+enum ScoredStage { APL APD RE }
 enum Direction   { OUTGOING INCOMING }
 
 model ExchangeEvent {
@@ -226,7 +254,7 @@ model ExchangeEvent {
                                               // only EP datum held (D-42)
   programmeId         Int                     // 7 | 8 | 9
   direction           Direction
-  applicationStatus   String?                 // net APL is a status check (D-41)
+  applicationStatus   String?                 // current, on every event (D-41, D-76)
   fetchedAt           DateTime
   @@unique([applicationId, eventType])        // idempotency key
 }
@@ -242,6 +270,7 @@ model ScoreConfig {
   productWeights   Json                        // { "7": 1, "8": 1, "9": 1 }
   directionWeights Json                        // { "OUTGOING": 1, "INCOMING": 1 }
   scopeSides       Json                        // ["PERSON"] today, ["PERSON","OPPORTUNITY"] for incoming (D-27)
+  roleShares       Json                        // { "TM": 40, "TL": 30, ... } = 100, per role (D-73)
   isActive         Boolean
   createdBy        BigInt
   createdAt        DateTime
@@ -285,10 +314,13 @@ model ScoreLedgerEntry {
   id              String   @id @default(cuid())
   memberId        BigInt
   exchangeEventId String
+  stage           ScoredStage                   // the event's stage, or the one a break takes back
   configVersion   Int
   points          Decimal                       // negative on break
+  share           Decimal                       // this member's part of the EP (D-73)
   countDelta      Int
   occurredAt      DateTime
+  @@unique([memberId, exchangeEventId])
   @@index([memberId, occurredAt])
 }
 
@@ -342,40 +374,33 @@ incoming exchange is a configuration change (D-27). Results from both sides
 converge on the same idempotency key, so an application that is Lebanese on both
 sides is stored once, as `OUTGOING` (D-25).
 
-| Pass | GIS filter | Produces |
+The EP data job runs three passes (D-76, `lib/sync/run.ts`), then rebuilds the
+ledger:
+
+| Pass | Reads | Writes |
 |---|---|---|
-| 1 | `created_at` | `APL` |
-| 2 | `date_approved` | `APD` |
-| 3 | `date_realized` + `date_remote_realized` | `RE` |
-| 4 | `date_approval_broken` | `APD_BROKEN` |
-| 5 | `date_realisation_broke` | `RE_BROKEN` |
-| 5b | `statuses` = rejected / withdrawn | `applicationStatus` on the existing `APL` row (D-41) |
+| `applications` | `allOpportunityApplication` sorted `updated_at` desc, until older than the watermark less 48h, floored at the term start | Every stage date an application carries as its own event -- `APL`, `APD`, `RE`, `APD_BROKEN`, `RE_BROKEN` -- plus its current status on every one of its events |
+| `managers` | `people` sorted `updated_at` desc back to the current window's start, and by id every EP with a scored event | The register's `fromExpa` flags: each EP's `Person.managers` who are members this term (D-74) |
+| `sheets` | The MC sign-up sheet's MasterSheet and Sheet7 tabs, plus `SheetManagerMapping` | The register's `fromSheet` flags for every EP whose manager resolves, or that the sheet lists with no manager (D-80) |
 
-Pass 5b is not a break pass and emits no event. It has no date filter to
-watermark against, because GIS exposes none for rejection or withdrawal, so it
-re-reads the status of applications already in the ledger and updates
-`ExchangeEvent.applicationStatus` in place. That field is raw observed state from
-GIS, not a derived value, so writing it is not a ledger patch.
+One application row carries every stage date, so one pass replaces a pass per
+date filter, and a withdrawal, rejection or break moves the row's `updated_at`,
+so there is no separate status refresh re-reading everything the ledger holds.
+GIS documents no `updated_at` filter but sorts on it; the read stops at the
+first row older than it needs. The `applications` read continues back to the
+current window's start without writing events there, only to collect
+`person.managers` for everyone the console lists. Pages are 100 rows, which measured about 2s
+against a 15s client timeout.
 
-Each pass paginates to `paging.total_pages`, sorted ascending on its date field,
-and upserts on `(applicationId, eventType)`, so reruns are idempotent. A 48-hour
-overlap behind the watermark absorbs back-dated records. The watermark advances
-only on a fully successful pass.
+Events upsert on `(applicationId, eventType)`, so reruns are idempotent, and a
+break the stage has since overtaken is not ingested (D-28). A 48-hour overlap
+behind the watermark absorbs back-dated records, and the watermark advances only
+on a fully successful pass. Nothing dated before the term start is written
+(D-58). Each source pass reconciles only the EPs it actually read, so a failed
+page or an unreadable sheet takes nobody's credit away, and none of them undoes
+an admin's removal.
 
-**Pass 6 — import reconciliation.** Assignments made through the UI are `LINKED`
-on creation, because the LCVP picks the EP out of the GIS directory and the row
-stores `epPersonId` (D-40). This pass exists only for rows from the bulk CSV
-import, which arrive as typed names. Each is resolved by exact full name within
-the LC; anything that is not a single unambiguous hit becomes `NEEDS_REVIEW` for
-admin confirmation, never applied silently, because a wrong match sends someone
-else's reward to the wrong person. No contact detail is used or stored: GIS
-exposes only a relay alias in place of an EP's email, which identifies nobody.
-
-**Pass 7 — nightly reconciliation of ledger applications.** `ApplicationFilter`
-has no `updated_at` filter, so applications already ingested are re-read nightly
-to repair silent drift.
-
-**Pass 8 — roster and office tree refresh**, monthly (D-66).
+**Roster and office tree refresh**, monthly (D-66).
 
 Every pass writes a `SyncRun` row. Repeated failures raise an alert and the
 UI shows a staleness banner with the last successful sync time.
@@ -387,8 +412,8 @@ cron at most once a day and refuses to deploy a more frequent one:
 
 | Job | Passes | Schedule | Route |
 |---|---|---|---|
-| EP data (`events`) | 1–5, 5b, then the ledger rebuild | Daily; every 5 minutes while hackathon mode is on | `/api/cron/events` |
-| Members (`roster`) | 8 | Monthly, on the 1st | `/api/cron/roster` |
+| EP data (`events`) | `applications`, `managers`, `sheets`, then the ledger rebuild | Daily; every 5 minutes while hackathon mode is on | `/api/cron/events` |
+| Members (`roster`) | Office tree, roster | Monthly, on the 1st | `/api/cron/roster` |
 
 The workflows (`.github/workflows/sync-ep-data.yml`, `sync-members.yml`) only
 call the routes, carrying `CRON_SECRET` as a bearer token; the work runs on
@@ -435,47 +460,53 @@ score(
 programme weight (D-30), a break with no matching stage event — so nothing is
 dropped silently.
 
-### Attribution chain
+### Attribution
 
-One interface, strategies tried in order:
+Attribution is per EP, so APL, APD and RE for one EP credit the same members by
+construction. The engine is handed the credits that count
+(`creditedAssignments()`, `lib/assignments/register.ts`): register rows not
+removed, named by a live source, held by a member this term (D-71), each with
+the role that member shares under -- their most senior in-term position, ranked
+as D-32 ranks them. An EP nobody is credited with is recorded, scored to nobody,
+and surfaced as `UNATTRIBUTED`.
 
-1. `EpAssignmentStrategy` — `LINKED` assignment matched on `epPersonId`, using
-   whichever assignment was effective at `occurredAt` (O-01). Multiple concurrent
-   assignees each receive **full** points (D-06).
-2. `GisPersonManagerStrategy` — `Person.managers`, if the MC later adopts EXPA
-   assignment.
-3. `GisApplicationManagerStrategy` — `application.managers`, populated only
-   post-approval.
-4. `UnattributedStrategy` — recorded, scored to nobody, surfaced in the admin
-   unattributed queue.
+### What scores (D-75)
 
-Attribution keyed on the EP means APL, APD and RE for one EP credit the same
-member by construction.
+An APL, APD or RE scores in the range its own date falls in, and each is
+evaluated on its own (D-08): an application from before the range does not come
+back when its approval lands inside it, and a status past realization --
+finished, completed -- is not a stage. The engine groups an application's
+events only to apply its breaks and its status.
 
-### Points
+An application withdrawn or rejected never earns its APL, whenever that
+happened (D-41). This is evaluated against
+`applicationStatus`, the current observed state, rather than as a dated
+reversal, because GIS dates neither transition. One consequence is deliberate
+and worth stating: an application rejected after the display window closes
+removes its point from that window retrospectively. That is consistent with a
+system whose ledger is rebuilt rather than patched (D-15), and it is what
+"final APL count" means.
+
+### Points and shares
 
 ```
-points = basePoints(eventType)
+points = basePoints(stage)
        × productWeight(programmeId)
        × directionWeight(direction)
+       × share(member)
 ```
 
-An `APL` scores only while its application is neither withdrawn nor rejected
-(D-41). This is evaluated against `applicationStatus`, the current observed state,
-rather than as a dated reversal, because GIS dates neither transition. One
-consequence is deliberate and worth stating: an application rejected after the
-display window closes removes its point from that window retrospectively. That is
-consistent with a system whose ledger is rebuilt rather than patched (D-15), and
-it is what "final APL count" means. At spike volumes it is the difference between
-432 gross applications and 71 net.
+`share` splits an EP's points between everyone credited with it (D-73,
+`lib/scoring/shares.ts`). Alone on an EP, a member's share is 1. Otherwise each
+role present takes its `ScoreConfig.roleShares` percentage, rescaled over the
+roles actually on the EP so the EP always pays out in full, and members holding
+one role split its part evenly; a role without a share takes nothing beside one
+that has one, and when nobody present has a share they split evenly. Counts are
+not shared: everyone on the EP is counted for the stage.
 
-An event whose `programmeId` has no entry in `productWeights` scores zero and is
-returned as an anomaly, never scored at an assumed weight of 1 (D-30). Remote and
-physical realization share one weight; where both dates exist the earlier wins
-(D-29).
-
-Only events whose `occurredAt` falls inside the scored range contribute to a
-board, and each event is evaluated independently (D-08).
+A programme with no entry in `productWeights` scores zero and is returned as an
+anomaly, never scored at an assumed weight of 1 (D-30). Remote and physical
+realization share one weight; where both dates exist the earlier wins (D-29).
 
 ### The scored range is the caller's, not always the window (D-58)
 
@@ -492,8 +523,9 @@ surface answers for itself:
 That last row is why the individual board cannot read the ledger for a historic
 range: the replay bakes the window in, so the ledger only ever holds rows inside
 it. `individualStandings(range)` therefore runs this engine on the request that
-renders the board, over events narrowed to the range in the query — the same set
-the engine would have kept anyway. It is the same shape as the office path below,
+renders the board, over every event of each application with activity in the
+range -- the rest of an application's events are what tell a re-approval from a
+break (D-28). It is the same shape as the office path below,
 and it keeps every rule in this section correct by construction instead of
 re-deriving break netting and APL reversal in a query. `lib/scoring/config.ts`
 maps the stored row for both callers, so the two cannot drift.
@@ -550,14 +582,16 @@ come from its own analytics key, configured as the optional
 `MC_DIRECT_ENTITY_ID` env var. Left unset, that row simply reads zero funnel
 activity rather than crashing.
 
-Breaks emit negated points and `countDelta = -1` (D-10), under two constraints
-that keep a visible score defensible:
+Breaks emit negated points and `countDelta = -1` (D-10), shared the way the
+stage was, under two constraints that keep a visible score defensible:
 
 - A break scores only if the event it reverses is **also inside the window**
   (D-26). A break of pre-window work reduces nothing, because nothing was
   credited.
 - A break is ignored if the stage date it reverses is **later** than the break
-  date (D-28), so approve, break, re-approve nets out as approved.
+  date (D-28), so approve, break, re-approve nets out as approved. Sync skips
+  such a break at ingest; the engine also ignores one ingested before the
+  re-approval.
 
 Ranking ties break on RE count, then APD, then APL, then the earliest timestamp
 at which the current score was reached (D-33).
@@ -572,25 +606,35 @@ the simplest correct option. Replays are audited.
 
 ## 8. Admin surface (`/admin`)
 
-- **Scoring config** — APL/APD/RE points, product and direction multipliers, APL
-  reversal toggle, scope sides. Saving creates a new version and shows a
-  leaderboard diff preview before committing.
+- **Scoring** (`/admin/scoring`) — the manager shares: a percentage per
+  position role, totalling 100, for splitting an EP's points between everyone
+  credited with it (D-73). Saving creates a new `ScoreConfig` version and
+  replays. APL/APD/RE points, product and direction multipliers, the APL
+  reversal toggle and scope sides are shown for reference and stay seeded
+  configuration for now.
 - **Display window** — the range the reward race is measured in. Saving replays.
 - **Term start** — the floor under everything (D-58): sync collects nothing
   earlier and the leaderboards open on it. Saving does not replay, because the
   ledger is still derived against the window above.
 - **Rewards** — create, edit, activate.
-- **Assignments** — import the MC's sheet, with a dry-run preview and a per-row
-  error report. There is no EP picker and no browsable directory: assignment is
-  decided in the sheet, and this is only where it is read (D-44). The EP table
-  lists the newest application first and carries a Refresh that runs the EP data
-  job there and then (D-66).
+- **Assignments** — every EP updated since the current window opened, by
+  their own record or any application, latest first (D-76), each with EXPA's status (D-78) and one Managers column:
+  everyone credited, with their portrait (D-79), share and sources (EXPA, sheet,
+  admin), a searchable picker to add a member and a control to remove or
+  restore one (D-73). Managers EXPA names who are not members this term are
+  shown, not credited. Above the table, the MC sign-up sheet: what it lists and
+  matched, anything in it to correct, a preview and a run-now button, and every
+  EP manager name it uses with who that name matches -- an admin picks the
+  member for a name that matches nobody or several people (D-80). The import
+  itself also runs after every sync. The table's Refresh runs the EP data job
+  there and then (D-66).
 - **Offices** — which offices are operating (D-39), seeded from the alignments
   list and editable without a deploy.
-- **Match review queue** — `NEEDS_REVIEW` assignments awaiting confirmation.
-- **Unattributed queue** — events with no assignment.
-- **Sync** (`/admin/sync`) — hackathon mode, and for each job its schedule, last
-  success, last run and its error, and a button that runs it now (D-66).
+- **Unattributed queue** — events with no assignment; on the console, the
+  "Nobody credited" manager filter.
+- **Updates** (`/admin/sync`) — hackathon mode, and for each job its schedule, last
+  success, last run, which step failed in plain words, and a button that runs it
+  now (D-66, D-82). The technical error stays in `SyncJob.lastError` and the logs.
 - **Admin matchers** — role-name and title patterns.
 
 Every mutation writes an `AuditLog` row with before/after JSON.
@@ -730,6 +774,24 @@ remembered:
   the operating system's `prefers-reduced-motion` is deliberately not consulted
   (D-46). WCAG 2.2.2 is satisfied by the control, not by the OS default.
 - Skeletons, never spinners.
+
+### Copy and names (D-81, D-82)
+
+- An LC is shown through `officeLabel()` (`lib/design/names.ts`): EXPA's
+  "(EXP)" suffix is dropped, and the MC -- office 182 or its sibling analytics
+  entity -- reads "MC". A person's name goes through `personName()`, where it
+  is written (sign-in, the roster sync) and where it is read (live EXPA names,
+  the current user, the leaderboards, the console), so a stored name that
+  predates the rule still shows correctly.
+- The admins are users, not developers. No screen shows a decision id, a
+  document, a table, field, environment variable, job or step name, an API, GIS,
+  GitHub, or a raw error; those stay in comments, logs and `SyncJob.lastError`.
+  Messages say what happened and what to do next, in full sentences.
+- One word per idea: **refresh** (never sync or import for the EP data job),
+  **earns points** (not credited or attributed), **scoring period** (the
+  display window), **LC** (not office or entity), and the sources **EXPA**,
+  **sign-up sheet** and **added here**. APL, APD and RE stay: every member uses
+  them.
 
 ---
 

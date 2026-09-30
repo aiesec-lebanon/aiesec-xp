@@ -76,7 +76,7 @@ export function HackathonSwitch({ on }: { on: boolean }) {
             for
             <select
               name="hours"
-              aria-label="How long hackathon mode stays on"
+              aria-label="How long to keep hackathon mode on"
               defaultValue={String(DEFAULT_HACKATHON_HOURS)}
               className={FIELD}
             >

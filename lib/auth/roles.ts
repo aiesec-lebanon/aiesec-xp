@@ -10,6 +10,8 @@ export type PositionInput = {
   roleName: string | null;
   title: string | null;
   status: string | null;
+  /** Null when EXPA set no end date, which counts as not ended. */
+  endDate: Date | null;
 };
 
 export type Matcher = {
@@ -24,11 +26,38 @@ const ACTIVE_STATUS = "active";
 const LEAD_ROLE_NAMES = new Set(["LCP", "LCVP", "TL"]);
 
 // Ranked most senior first. Used to pick one scoring office for a member who
-// holds several positions, so their points land in exactly one LC total (D-32).
-const ROLE_SENIORITY = ["MCP", "MCVP", "LCP", "LCVP", "TL", "ESTL", "ESTM", "TM"];
+// holds several positions, so their points land in exactly one LC total (D-32),
+// and the one role they share an EP's points under (D-73).
+export const ROLE_SENIORITY: readonly string[] = ["MCP", "MCVP", "LCP", "LCVP", "TL", "ESTL", "ESTM", "TM"];
 
-function isActive(position: PositionInput): boolean {
+function isActive(position: Pick<PositionInput, "status">): boolean {
   return position.status?.toLowerCase() === ACTIVE_STATUS;
+}
+
+/**
+ * The one test of "holds a member position this term" (D-71): active, in an
+ * operating office, and not ended before the term start. Status alone is not
+ * enough -- EXPA routinely leaves a departed member's position "active" after
+ * its end date. `inTermMemberWhere()` (lib/org/members.ts) is the same rule as
+ * a Prisma filter; change them together.
+ */
+export function isInTermPosition(
+  position: Pick<PositionInput, "status" | "officeId" | "endDate">,
+  operatingOfficeIds: ReadonlySet<string>,
+  termStart: Date
+): boolean {
+  return (
+    isActive(position) &&
+    operatingOfficeIds.has(String(position.officeId)) &&
+    (position.endDate === null || position.endDate >= termStart)
+  );
+}
+
+/** GIS dates arrive as strings; an unparseable one is treated as absent. */
+export function parseGisDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function normalise(value: string | null): string {
@@ -44,6 +73,7 @@ export type ResolveInput = {
   positions: readonly PositionInput[];
   matchers: readonly Matcher[];
   operatingOfficeIds: readonly bigint[];
+  termStart: Date;
 };
 
 export type ResolvedAccess = {
@@ -59,14 +89,16 @@ export function resolveAccess({
   positions,
   matchers,
   operatingOfficeIds,
+  termStart,
 }: ResolveInput): ResolvedAccess {
   const operating = new Set(operatingOfficeIds.map(String));
 
-  // Scope is applied before anything else. A position in a closed office, or in
-  // an office outside the subtree entirely, confers nothing -- the service token
-  // is entity-wide, so GIS grants no isolation of its own (Architecture 4.4).
-  const inScope = positions.filter(
-    (position) => isActive(position) && operating.has(String(position.officeId))
+  // Scope is applied before anything else. A position in a closed office, in an
+  // office outside the subtree entirely, or one that ended before this term
+  // confers nothing -- the service token is entity-wide, so GIS grants no
+  // isolation of its own (Architecture 4.4).
+  const inScope = positions.filter((position) =>
+    isInTermPosition(position, operating, termStart)
   );
 
   if (inScope.length === 0) {
@@ -106,7 +138,18 @@ export function chooseScoringOffice(positions: readonly PositionInput[]): bigint
   return ranked[0].officeId;
 }
 
-function rank(position: PositionInput): number {
+/**
+ * The role a member takes a share of an EP's points under (D-73): the role of
+ * their most senior position, ranked as D-32 ranks them, so an LCP who is also
+ * an LCVP shares as an LCP. Pass only in-term positions.
+ */
+export function primaryRole(positions: readonly Pick<PositionInput, "roleName">[]): string | null {
+  const ranked = [...positions].sort((a, b) => rank(a) - rank(b));
+  const role = ranked[0]?.roleName?.trim().toUpperCase();
+  return role ? role : null;
+}
+
+function rank(position: Pick<PositionInput, "roleName">): number {
   const index = ROLE_SENIORITY.indexOf((position.roleName ?? "").trim().toUpperCase());
   return index === -1 ? ROLE_SENIORITY.length : index;
 }

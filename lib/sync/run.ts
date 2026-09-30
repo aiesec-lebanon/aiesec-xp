@@ -3,24 +3,32 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import { applySource, SYSTEM_ACTOR } from "@/lib/assignments/register";
 import { mcOfficeId } from "@/lib/env";
 import { gis } from "@/lib/gis/client";
+import { importAssignments } from "@/lib/import/run-import";
 import { logger } from "@/lib/logger";
 import {
-  dedupe,
-  mapRow,
-  PASSES,
+  managerIds,
+  mapApplication,
+  parseDate,
   type ApplicationRow,
   type MappedEvent,
-  type PassDefinition,
   type ScopeSide,
 } from "@/lib/sync/passes";
 import { syncRoster } from "@/lib/sync/roster";
-import { advanceWatermark, formatDate, OVERLAP_MS, windowFor } from "@/lib/sync/watermark";
+import { advanceWatermark, windowFor } from "@/lib/sync/watermark";
 import { syncOfficeTree } from "@/lib/org/office-tree";
+import { currentWindow, termStart } from "@/lib/term";
 
-const PAGE_SIZE = 250;
-const MAX_PAGES = 200;
+// Measured against GIS: 100 applications with every stage date and the EP's
+// managers answer in about 2s, 200 in 2.5-5s against a 15s client timeout.
+const PAGE_SIZE = 100;
+const MAX_PAGES = 100;
+const PEOPLE_PAGE_SIZE = 200;
+const PEOPLE_BATCH_SIZE = 200;
+
+export const APPLICATIONS_PASS = "applications";
 
 export type PassResult = {
   pass: string;
@@ -35,6 +43,9 @@ type SyncScope = {
   sides: ScopeSide[];
   allowedProgrammeIds: Set<number>;
 };
+
+/** EP id to who manages them in EXPA, as the scans below find it (D-74). */
+type ManagersByEp = Map<string, Set<string>>;
 
 /**
  * Sync scope comes from the active config, not from constants. The programmes
@@ -65,76 +76,89 @@ async function resolveScope(): Promise<SyncScope> {
   return { sides, allowedProgrammeIds };
 }
 
-function scopeFilter(side: ScopeSide, officeId: bigint): Record<string, unknown> {
+function scopeFilter(side: ScopeSide, officeId: bigint) {
   return side === "PERSON"
     ? { person_home_mc: [Number(officeId)] }
     : { opportunity_home_mc: [Number(officeId)] };
 }
 
-async function* readPages(
-  pass: PassDefinition,
+/**
+ * Pages newest last action first and stops at the first row older than
+ * `since` (D-76). GIS has no filter on `updated_at` it documents, but it sorts
+ * on it, and a sorted read that stops is the same set.
+ */
+async function scanApplications(
   side: ScopeSide,
   officeId: bigint,
-  from: Date,
-  to: Date,
-  programmes: number[]
-): AsyncGenerator<ApplicationRow[]> {
+  programmes: number[],
+  since: Date,
+  visit: (row: ApplicationRow) => Promise<void>
+): Promise<number> {
+  let seen = 0;
+
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const result = await gis().Applications({
-      filters: {
-        [pass.filterField]: { from: formatDate(from), to: formatDate(to) },
-        programmes,
-        ...scopeFilter(side, officeId),
-        ...(pass.sortField ? { sort: pass.sortField, sort_direction: "asc" } : {}),
-      },
-      page,
-      perPage: PAGE_SIZE,
+      filters: { programmes, ...scopeFilter(side, officeId), sort: "updated_at", sort_direction: "desc" },
+      pagination: { page, per_page: PAGE_SIZE },
     });
-
     const body = result.allOpportunityApplication;
-    const rows = (body?.data ?? []).filter((row): row is ApplicationRow => row !== null);
-    if (rows.length > 0) yield rows;
 
-    const totalPages = body?.paging?.total_pages ?? 0;
-    if (page >= totalPages) return;
+    for (const row of body?.data ?? []) {
+      if (!row) continue;
+      const updatedAt = parseDate(row.updated_at);
+      if (updatedAt && updatedAt < since) return seen;
+      seen += 1;
+      await visit(row);
+    }
+
+    if (page >= (body?.paging?.total_pages ?? 0)) return seen;
   }
 
-  logger.warn("Sync pass hit the page ceiling; some records were not read", {
-    pass: pass.name,
-    maxPages: MAX_PAGES,
-  });
+  throw new Error(`Applications pass hit the ${MAX_PAGES}-page ceiling before reaching ${since.toISOString()}`);
 }
 
-async function writeEvents(events: readonly MappedEvent[]): Promise<number> {
-  let written = 0;
+function remember(managers: ManagersByEp, epPersonId: string | null | undefined, ids: bigint[] | null): void {
+  // Null is "GIS did not say", which must not read as "nobody manages them".
+  if (!epPersonId || ids === null) return;
+  managers.set(epPersonId, new Set(ids.map(String)));
+}
 
+async function writeApplication(events: readonly MappedEvent[], applicationId: bigint, status: string | null) {
   for (const event of events) {
     const data: Prisma.ExchangeEventUncheckedCreateInput = { ...event };
-    // Upsert on the idempotency key, so a rerun over the overlap window updates
-    // in place instead of duplicating.
     await db.exchangeEvent.upsert({
-      where: {
-        applicationId_eventType: {
-          applicationId: event.applicationId,
-          eventType: event.eventType,
-        },
-      },
+      where: { applicationId_eventType: { applicationId: event.applicationId, eventType: event.eventType } },
       create: data,
       update: data,
     });
-    written += 1;
   }
-
-  return written;
+  // Every event of the application carries its status, including ones this
+  // row no longer dates (D-76) -- that is what makes a withdrawal net the APL.
+  await db.exchangeEvent.updateMany({ where: { applicationId }, data: { applicationStatus: status } });
 }
 
-export async function runPass(pass: PassDefinition, now = new Date()): Promise<PassResult> {
+/**
+ * The EP data pass (D-76): one read of applications by last action replaces a
+ * pass per stage date and the status refresh. An application whose last action
+ * is newer than the watermark has its every stage date, break and status
+ * written; anything that happened to it moved that timestamp.
+ *
+ * The same read goes back further, to the current window's start, only to
+ * collect who manages each EP in EXPA, because the managers mirrored for the
+ * console have to cover everyone it lists and not just who changed today.
+ */
+async function runApplicationsPass(now: Date, managers: ManagersByEp): Promise<PassResult> {
   const scope = await resolveScope();
   const officeId = mcOfficeId();
-  const { from, to } = await windowFor(pass.name, now);
+  const [{ from }, floor, window] = await Promise.all([
+    windowFor(APPLICATIONS_PASS, now),
+    termStart(),
+    currentWindow(),
+  ]);
+  const scanFrom = from < window.startsAt ? from : window.startsAt;
   const programmes = [...scope.allowedProgrammeIds];
 
-  const run = await db.syncRun.create({ data: { pass: pass.name, status: "RUNNING" } });
+  const run = await db.syncRun.create({ data: { pass: APPLICATIONS_PASS, status: "RUNNING" } });
 
   let rowsSeen = 0;
   let rowsSkipped = 0;
@@ -142,149 +166,155 @@ export async function runPass(pass: PassDefinition, now = new Date()): Promise<P
 
   try {
     for (const side of scope.sides) {
-      for await (const rows of readPages(pass, side, officeId, from, to, programmes)) {
-        rowsSeen += rows.length;
+      rowsSeen += await scanApplications(side, officeId, programmes, scanFrom, async (row) => {
+        if (side === "PERSON") {
+          remember(managers, row.person?.id, row.person?.managers ? managerIds(row.person.managers) : null);
+        }
 
-        const mapped = rows.flatMap((row) => {
-          const event = mapRow(row, pass.eventType, {
-            side,
-            allowedProgrammeIds: scope.allowedProgrammeIds,
-          });
-          if (!event) rowsSkipped += 1;
-          return event ? [event] : [];
-        });
+        const updatedAt = parseDate(row.updated_at);
+        if (updatedAt && updatedAt < from) return;
 
-        eventsWritten += await writeEvents(dedupe(mapped));
-      }
+        const applicationId = row.id ? BigInt(row.id) : null;
+        const events = mapApplication(row, { side, allowedProgrammeIds: scope.allowedProgrammeIds });
+        if (!applicationId || events.length === 0) {
+          rowsSkipped += 1;
+          if (applicationId) {
+            await db.exchangeEvent.updateMany({ where: { applicationId }, data: { applicationStatus: row.status ?? null } });
+          }
+          return;
+        }
+
+        // Nothing before the term start is held (D-43, D-58): an application
+        // updated this term keeps only the stage changes this term saw.
+        const kept = events.filter((event) => event.occurredAt >= floor);
+        await writeApplication(kept, applicationId, row.status ?? null);
+        eventsWritten += kept.length;
+      });
     }
 
     // Only now, with every page of every side read: a watermark advanced on a
     // partial pass would silently skip whatever was missed.
-    await advanceWatermark(pass.name, to);
-
+    await advanceWatermark(APPLICATIONS_PASS, now);
     await db.syncRun.update({
       where: { id: run.id },
       data: { status: "SUCCESS", finishedAt: new Date(), eventsSeen: eventsWritten },
     });
 
-    return { pass: pass.name, rowsSeen, eventsWritten, rowsSkipped, status: "SUCCESS" };
+    return { pass: APPLICATIONS_PASS, rowsSeen, eventsWritten, rowsSkipped, status: "SUCCESS" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("Sync pass failed", { pass: pass.name, error });
-
+    logger.error("Applications pass failed", { error });
     await db.syncRun.update({
       where: { id: run.id },
       data: { status: "FAILED", finishedAt: new Date(), eventsSeen: eventsWritten, error: message },
     });
-
-    return { pass: pass.name, rowsSeen, eventsWritten, rowsSkipped, status: "FAILED", error: message };
+    return { pass: APPLICATIONS_PASS, rowsSeen, eventsWritten, rowsSkipped, status: "FAILED", error: message };
   }
 }
 
 /**
- * Pass 5b. Not a break pass and it emits no event: it refreshes the observed
- * status of applications already in the ledger, which is what makes the APL
- * count net (D-41). GIS offers no date filter for rejection or withdrawal, so
- * there is nothing to watermark and the pass re-reads what it already holds.
+ * Mirrors who manages each EP in EXPA into the register (D-74): everyone the
+ * console lists -- updated since the current window opened, read by last
+ * action -- plus by id any EP who can score whose record has not moved since
+ * then. Only EPs actually read are reconciled, so a failed read takes nobody's
+ * credit away.
  */
-export async function refreshApplicationStatuses(now = new Date()): Promise<PassResult> {
-  const scope = await resolveScope();
-  const officeId = mcOfficeId();
-  const run = await db.syncRun.create({ data: { pass: "status", status: "RUNNING" } });
-
+async function runManagersPass(managers: ManagersByEp): Promise<PassResult> {
+  const run = await db.syncRun.create({ data: { pass: "managers", status: "RUNNING" } });
   let rowsSeen = 0;
-  let updated = 0;
 
   try {
-    const known = await db.exchangeEvent.findMany({
-      where: { eventType: "APL" },
-      select: { applicationId: true, occurredAt: true },
-    });
-    if (known.length === 0) {
-      await db.syncRun.update({
-        where: { id: run.id },
-        data: { status: "SUCCESS", finishedAt: new Date(), eventsSeen: 0 },
+    const { startsAt: listedFrom } = await currentWindow();
+
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const result = await gis().EpManagers({
+        filters: { home_committee: [Number(mcOfficeId())], sort: "updated_at", sort_direction: "desc" },
+        pagination: { page, per_page: PEOPLE_PAGE_SIZE },
       });
-      return { pass: "status", rowsSeen: 0, eventsWritten: 0, rowsSkipped: 0, status: "SUCCESS" };
+      let reachedFloor = false;
+      for (const person of result.people?.data ?? []) {
+        if (!person) continue;
+        const updatedAt = parseDate(person.updated_at);
+        if (updatedAt && updatedAt < listedFrom) {
+          reachedFloor = true;
+          break;
+        }
+        rowsSeen += 1;
+        remember(managers, person.id, person.managers ? managerIds(person.managers) : null);
+      }
+      if (reachedFloor || page >= (result.people?.paging?.total_pages ?? 0)) break;
     }
 
-    const knownIds = new Set(known.map((row) => String(row.applicationId)));
+    const floor = await termStart();
+    const scorable = await db.exchangeEvent.findMany({
+      where: { occurredAt: { gte: floor } },
+      select: { epPersonId: true },
+      distinct: ["epPersonId"],
+    });
+    const unseen = scorable.map((row) => String(row.epPersonId)).filter((id) => !managers.has(id));
 
-    const statusPass: PassDefinition = {
-      name: "status",
-      filterField: "created_at",
-      eventType: "APL",
-      sortField: "created_at",
-    };
-
-    // Spans what the ledger actually holds, not a watermark window. An
-    // application can be withdrawn years after it was created, and the APL
-    // watermark has already advanced past it by the time this pass runs.
-    const oldest = known.reduce(
-      (earliest, row) => (row.occurredAt < earliest ? row.occurredAt : earliest),
-      known[0].occurredAt
-    );
-    const from = new Date(oldest.getTime() - OVERLAP_MS);
-
-    for (const side of scope.sides) {
-      for await (const rows of readPages(
-        statusPass,
-        side,
-        officeId,
-        from,
-        now,
-        [...scope.allowedProgrammeIds]
-      )) {
-        rowsSeen += rows.length;
-
-        for (const row of rows) {
-          const applicationId = row?.id ? BigInt(row.id) : null;
-          if (!applicationId || !knownIds.has(String(applicationId))) continue;
-
-          await db.exchangeEvent.updateMany({
-            where: { applicationId, eventType: "APL" },
-            data: { applicationStatus: row?.status ?? null },
-          });
-          updated += 1;
-        }
+    for (let index = 0; index < unseen.length; index += PEOPLE_BATCH_SIZE) {
+      const batch = unseen.slice(index, index + PEOPLE_BATCH_SIZE);
+      const result = await gis().EpManagers({
+        filters: { ids: batch },
+        pagination: { page: 1, per_page: batch.length },
+      });
+      for (const person of result.people?.data ?? []) {
+        if (!person) continue;
+        rowsSeen += 1;
+        remember(managers, person.id, person.managers ? managerIds(person.managers) : null);
       }
     }
 
+    const changes = await applySource("EXPA", managers);
+    const changed = changes.created + changes.flagged + changes.cleared + changes.dropped;
+
     await db.syncRun.update({
       where: { id: run.id },
-      data: { status: "SUCCESS", finishedAt: new Date(), eventsSeen: updated },
+      data: { status: "SUCCESS", finishedAt: new Date(), eventsSeen: changed },
     });
-
-    return { pass: "status", rowsSeen, eventsWritten: updated, rowsSkipped: 0, status: "SUCCESS" };
+    return { pass: "managers", rowsSeen, eventsWritten: changed, rowsSkipped: 0, status: "SUCCESS" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("Status refresh failed", { error });
-
+    logger.error("Managers pass failed", { error });
     await db.syncRun.update({
       where: { id: run.id },
       data: { status: "FAILED", finishedAt: new Date(), error: message },
     });
-
-    return {
-      pass: "status",
-      rowsSeen,
-      eventsWritten: updated,
-      rowsSkipped: 0,
-      status: "FAILED",
-      error: message,
-    };
+    return { pass: "managers", rowsSeen, eventsWritten: 0, rowsSkipped: 0, status: "FAILED", error: message };
   }
 }
 
 /**
- * Passes 1-5 and 5b: the EP data. One pass failing does not stop the others;
- * each owns its own watermark.
+ * The MC sign-up sheet's EP managers, credited after every sync (D-80) so a new
+ * sign-up does not wait for an admin to press Import. A sheet that cannot be
+ * read is an issue for the console, not a failed sync.
  */
+async function runSheetPass(): Promise<PassResult> {
+  try {
+    const result = await importAssignments(SYSTEM_ACTOR, { dryRun: false });
+    return {
+      pass: "sheets",
+      rowsSeen: result.epsListed,
+      eventsWritten: result.assignmentsWritten,
+      rowsSkipped: result.epsListed - result.epsMatched - result.epsUnassigned,
+      status: "SUCCESS",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error("Sheet import failed during sync", { error });
+    return { pass: "sheets", rowsSeen: 0, eventsWritten: 0, rowsSkipped: 0, status: "FAILED", error: message };
+  }
+}
+
+/** The EP data: applications, then who manages each EP, then the sheets. */
 export async function runEventPasses(now = new Date()): Promise<PassResult[]> {
-  const results: PassResult[] = [];
-  for (const pass of PASSES) results.push(await runPass(pass, now));
-  results.push(await refreshApplicationStatuses(now));
-  return results;
+  const managers: ManagersByEp = new Map();
+  return [
+    await runApplicationsPass(now, managers),
+    await runManagersPass(managers),
+    await runSheetPass(),
+  ];
 }
 
 /**

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { formatPoints } from "@/lib/design/points";
+
 import { Character, ContactShadow } from "./character";
 import { beatFor, facingFor, useGroupExchange } from "./group-exchange";
 import { GhostNumber } from "./motion";
@@ -178,14 +180,14 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
             </p>
             <p className="mt-1 truncate text-[13px] font-semibold text-ink">{place.name}</p>
             <p className="truncate text-[11px] text-ink-secondary">
-              {place.office ?? "No office"}
+              {place.office ?? "No LC"}
             </p>
             <p
               className={`tabular mt-1.5 font-bold leading-none text-ink ${
                 place.rank === 1 ? "text-[26px]" : "text-[21px]"
               }`}
             >
-              {place.points}
+              {formatPoints(place.points)}
             </p>
           </li>
         ))}

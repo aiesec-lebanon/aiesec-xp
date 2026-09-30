@@ -2,16 +2,20 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import type { GisIdentity } from "@/lib/auth/identity";
-import { resolveAccess, type PositionInput, type Role } from "@/lib/auth/roles";
+import { parseGisDate, resolveAccess, type PositionInput, type Role } from "@/lib/auth/roles";
+import { personName } from "@/lib/design/names";
 import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
+import { termStart } from "@/lib/term";
 
 export type LoginResult = {
   memberId: bigint;
   role: Role;
 };
 
-function toPositionInputs(identity: GisIdentity): Array<PositionInput & { id: bigint }> {
+function toPositionInputs(
+  identity: GisIdentity
+): Array<PositionInput & { id: bigint; startDate: Date | null }> {
   return (identity.current_positions ?? []).flatMap((position) => {
     if (!position?.id || !position.office?.id) return [];
     return [
@@ -21,6 +25,8 @@ function toPositionInputs(identity: GisIdentity): Array<PositionInput & { id: bi
         roleName: position.role?.name ?? null,
         title: position.title ?? null,
         status: position.status ?? null,
+        startDate: parseGisDate(position.start_date),
+        endDate: parseGisDate(position.end_date),
       },
     ];
   });
@@ -41,18 +47,24 @@ export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
   const memberId = BigInt(identity.id);
   const positions = toPositionInputs(identity);
 
-  const [matchers, operating] = await Promise.all([
+  const [matchers, operating, floor] = await Promise.all([
     db.adminMatcher.findMany(),
     operatingOfficeIds(),
+    termStart(),
   ]);
 
-  const access = resolveAccess({ positions, matchers, operatingOfficeIds: operating });
+  const access = resolveAccess({
+    positions,
+    matchers,
+    operatingOfficeIds: operating,
+    termStart: floor,
+  });
 
   const homeOfficeId = identity.current_office?.id ? BigInt(identity.current_office.id) : null;
   const knownOffices = new Set(operating.map(String));
 
   const profile = {
-    fullName: identity.full_name ?? `Person ${memberId}`,
+    fullName: personName(identity.full_name ?? `Person ${memberId}`),
     profilePhotoUrl: identity.profile_photo ?? null,
     // Only set when the office is one we actually hold, since these columns
     // carry a foreign key and GIS will report offices outside the subtree.
@@ -76,6 +88,8 @@ export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
         roleName: position.roleName,
         title: position.title,
         status: position.status ?? "unknown",
+        startDate: position.startDate,
+        endDate: position.endDate,
       })),
       skipDuplicates: true,
     }),

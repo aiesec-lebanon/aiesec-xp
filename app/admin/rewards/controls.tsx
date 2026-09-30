@@ -17,9 +17,9 @@ const DANGER =
 
 const THRESHOLD_LABEL: Record<string, string> = {
   POINTS: "Points",
-  APL_COUNT: "APL count",
-  APD_COUNT: "APD count",
-  RE_COUNT: "RE count",
+  APL_COUNT: "Number of APLs",
+  APD_COUNT: "Number of APDs",
+  RE_COUNT: "Number of REs",
 };
 
 function Message({ state }: { state: ActionState | null }) {
@@ -89,7 +89,7 @@ export function RewardForm({
           />
         </Field>
 
-        <Field label="Threshold type">
+        <Field label="Earned by">
           <select name="thresholdType" defaultValue={values.thresholdType} className={FIELD}>
             {Object.entries(THRESHOLD_LABEL).map(([value, label]) => (
               <option key={value} value={value}>
@@ -99,7 +99,7 @@ export function RewardForm({
           </select>
         </Field>
 
-        <Field label="Threshold">
+        <Field label="Amount needed">
           <input
             name="threshold"
             type="number"
@@ -111,7 +111,7 @@ export function RewardForm({
           />
         </Field>
 
-        <Field label="Value">
+        <Field label="Value (optional)">
           <input
             name="valueAmount"
             type="number"
@@ -126,11 +126,11 @@ export function RewardForm({
           <input name="valueCurrency" defaultValue={values.valueCurrency} className={`${FIELD} w-20`} />
         </Field>
 
-        <Field label="Icon key">
+        <Field label="Icon (optional)">
           <input name="iconKey" defaultValue={values.iconKey} className={`${FIELD} w-32`} />
         </Field>
 
-        <Field label="Sort">
+        <Field label="Order">
           <input
             name="sortOrder"
             type="number"
@@ -178,7 +178,7 @@ export function DeleteRewardButton({ id, label }: { id: string; label: string })
         disabled={pending}
         className={DANGER}
         onClick={(event) => {
-          if (!confirm(`Remove ${label}? This deletes any grants it earned.`)) {
+          if (!confirm(`Remove ${label}? Members who earned it will lose it.`)) {
             event.preventDefault();
           }
         }}

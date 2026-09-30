@@ -1,8 +1,9 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { personName } from "@/lib/design/names";
 import type { DateRange } from "@/lib/leaderboard-range";
-import { individualStandings, type PersonalProgress } from "@/lib/leaderboard";
+import { individualStandings, trailLabel, type PersonalProgress } from "@/lib/leaderboard";
 
 // What the member-facing screens need on top of the rankings: the window they
 // are being measured in, the weekly shape of their own points, and the pace that
@@ -68,7 +69,7 @@ export function pace(progress: PersonalProgress, window: ActiveWindow | null): P
 /**
  * The smallest single scored event that would close a points gap.
  *
- * The comp writes "one approval closes it" as copy. It is read here from the
+ * The comp writes "one approval to catch up" as copy. It is read here from the
  * active `ScoreConfig` instead, because a member who acts on a promise the
  * scoring rules do not keep stops believing the rest of the page -- and the
  * point values are admin-editable (D-15), so the sentence cannot be a constant.
@@ -90,13 +91,13 @@ export async function closingMove(gap: number): Promise<string | null> {
     .sort((a, b) => a.points - b.points);
 
   const enough = options.find((option) => option.points >= gap);
-  if (enough) return `one ${enough.label} closes it`;
+  if (enough) return `one ${enough.label} to catch up`;
 
   const best = options.at(-1);
   if (!best) return null;
 
   const needed = Math.ceil(gap / best.points);
-  return `${needed} ${best.label}${needed === 1 ? "" : "s"} closes it`;
+  return `${needed} ${best.label}${needed === 1 ? "" : "s"} to catch up`;
 }
 
 export type Week = { label: string; startsAt: Date; points: number };
@@ -167,17 +168,18 @@ export async function recentActivity(limit = 12): Promise<ActivityItem[]> {
     take: limit,
     select: {
       memberId: true,
+      stage: true,
       points: true,
+      countDelta: true,
       occurredAt: true,
       member: { select: { fullName: true } },
-      event: { select: { eventType: true } },
     },
   });
 
   return entries.map((entry) => ({
     memberId: entry.memberId,
-    fullName: entry.member.fullName,
-    eventType: entry.event.eventType,
+    fullName: personName(entry.member.fullName),
+    eventType: trailLabel(entry.stage, entry.countDelta),
     points: Number(entry.points),
     occurredAt: entry.occurredAt,
   }));

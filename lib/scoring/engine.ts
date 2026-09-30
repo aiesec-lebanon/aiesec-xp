@@ -1,10 +1,5 @@
-import {
-  attribute,
-  indexAssignments,
-  type Assignment,
-  type AttributionStrategy,
-  DEFAULT_CHAIN,
-} from "@/lib/scoring/attribution";
+import { indexAssignments, type Assignment } from "@/lib/scoring/attribution";
+import { splitShares, type RoleShares } from "@/lib/scoring/shares";
 
 // The scoring engine. Pure: no database, no network, no clock. Everything it
 // needs arrives as an argument, so the same inputs always produce the same
@@ -13,6 +8,7 @@ import {
 // This is the part that must never be wrong (Architecture.md 7).
 
 export type FunnelEventType = "APL" | "APD" | "RE" | "APD_BROKEN" | "RE_BROKEN";
+export type ScoredStageValue = "APL" | "APD" | "RE";
 export type DirectionValue = "OUTGOING" | "INCOMING";
 
 export type ScorableEvent = {
@@ -35,6 +31,7 @@ export type ScoringConfig = {
   aplReversingStatuses: readonly string[];
   productWeights: Readonly<Record<string, number>>;
   directionWeights: Readonly<Record<string, number>>;
+  roleShares: RoleShares;
 };
 
 export type Window = { startsAt: Date; endsAt: Date | null };
@@ -50,8 +47,12 @@ export type RewardDefinition = {
 export type LedgerEntry = {
   memberId: bigint;
   exchangeEventId: string;
+  /** What the entry pays for: the event's own stage, or the stage a break takes back. */
+  stage: ScoredStageValue;
   configVersion: number;
   points: number;
+  /** This member's fraction of the EP's points (D-73). */
+  share: number;
   countDelta: number;
   occurredAt: Date;
 };
@@ -75,7 +76,6 @@ export type ScoreInput = {
   config: ScoringConfig;
   window: Window;
   rewards: readonly RewardDefinition[];
-  chain?: readonly AttributionStrategy[];
 };
 
 export type ScoreOutput = {
@@ -84,42 +84,35 @@ export type ScoreOutput = {
   anomalies: Anomaly[];
 };
 
-const STAGE_FOR_BREAK: Partial<Record<FunnelEventType, FunnelEventType>> = {
+const STAGE_OF: Partial<Record<FunnelEventType, ScoredStageValue>> = {
+  APL: "APL",
+  APD: "APD",
+  RE: "RE",
+};
+
+const REVERSES: Partial<Record<FunnelEventType, ScoredStageValue>> = {
   APD_BROKEN: "APD",
   RE_BROKEN: "RE",
 };
+
+const STAGE_ORDER: Record<ScoredStageValue, number> = { APL: 0, APD: 1, RE: 2 };
+
+type Credit = { stage: ScoredStageValue; at: Date; source: ScorableEvent; sign: 1 | -1 };
 
 function inWindow(occurredAt: Date, window: Window): boolean {
   if (occurredAt < window.startsAt) return false;
   return window.endsAt === null || occurredAt <= window.endsAt;
 }
 
-function basePoints(eventType: FunnelEventType, config: ScoringConfig): number {
-  switch (eventType) {
+function basePoints(stage: ScoredStageValue, config: ScoringConfig): number {
+  switch (stage) {
     case "APL":
       return config.aplPoints;
     case "APD":
-    case "APD_BROKEN":
       return config.apdPoints;
     case "RE":
-    case "RE_BROKEN":
       return config.rePoints;
   }
-}
-
-function isBreak(eventType: FunnelEventType): boolean {
-  return eventType === "APD_BROKEN" || eventType === "RE_BROKEN";
-}
-
-/**
- * A withdrawn or rejected application never counted, whenever that happened
- * (D-41). Evaluated against current status rather than as a dated reversal,
- * because GIS dates neither transition in a way that can be filtered.
- */
-function isReversedApl(event: ScorableEvent, config: ScoringConfig): boolean {
-  if (event.eventType !== "APL" || !config.reverseApl) return false;
-  const status = event.applicationStatus?.trim().toLowerCase() ?? "";
-  return config.aplReversingStatuses.some((value) => value.trim().toLowerCase() === status);
 }
 
 /**
@@ -130,140 +123,164 @@ function round(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
-export function score({
-  events,
-  assignments,
-  config,
-  window,
-  rewards,
-  chain = DEFAULT_CHAIN,
-}: ScoreInput): ScoreOutput {
-  const assignmentsByEp = indexAssignments(assignments);
-  const ledger: LedgerEntry[] = [];
-  const anomalies: Anomaly[] = [];
-
-  // A break scores only if the event it reverses is also inside the window
-  // (D-26), so a visible score can never fall for work that was never credited.
-  const stagesInWindow = new Set(
-    events
-      .filter((event) => !isBreak(event.eventType) && inWindow(event.occurredAt, window))
-      .map((event) => `${event.applicationId}:${event.eventType}`)
-  );
-
-  for (const event of events) {
-    if (!inWindow(event.occurredAt, window)) continue;
-
-    if (isBreak(event.eventType)) {
-      const stage = STAGE_FOR_BREAK[event.eventType];
-      if (!stage || !stagesInWindow.has(`${event.applicationId}:${stage}`)) {
-        anomalies.push({
-          exchangeEventId: event.id,
-          kind: "BREAK_WITHOUT_STAGE_EVENT",
-          detail: `${event.eventType} has no in-window ${stage ?? "stage"} to reverse`,
-        });
-        continue;
-      }
-    }
-
-    if (isReversedApl(event, config)) continue;
-
-    const { memberIds } = attribute(event, { assignmentsByEp }, chain);
-    if (memberIds.length === 0) {
-      anomalies.push({
-        exchangeEventId: event.id,
-        kind: "UNATTRIBUTED",
-        detail: `No assignment covers EP ${event.epPersonId} at ${event.occurredAt.toISOString()}`,
-      });
-      continue;
-    }
-
-    const productWeight = config.productWeights[String(event.programmeId)];
-    if (productWeight === undefined) {
-      // Never assumed to be 1: an invented weight is a wrong score that looks
-      // right (D-30).
-      anomalies.push({
-        exchangeEventId: event.id,
-        kind: "UNKNOWN_PROGRAMME_WEIGHT",
-        detail: `Programme ${event.programmeId} has no configured weight`,
-      });
-      continue;
-    }
-
-    const directionWeight = config.directionWeights[event.direction] ?? 0;
-    const magnitude = basePoints(event.eventType, config) * productWeight * directionWeight;
-    const signed = isBreak(event.eventType) ? -magnitude : magnitude;
-
-    // Full points to each concurrent assignee (D-06).
-    for (const memberId of memberIds) {
-      ledger.push({
-        memberId,
-        exchangeEventId: event.id,
-        configVersion: config.version,
-        points: round(signed),
-        countDelta: isBreak(event.eventType) ? -1 : 1,
-        occurredAt: event.occurredAt,
-      });
-    }
-  }
-
-  return { ledger, grants: evaluateRewards(ledger, events, rewards), anomalies };
+function roundShare(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
 }
 
-export type EpStatus = "APL" | "APD" | "RE" | "BROKEN";
-
-type StatusEvent = Pick<ScorableEvent, "applicationId" | "eventType" | "occurredAt">;
-
-const STATUS_RANK: Record<EpStatus, number> = { RE: 3, APD: 2, APL: 1, BROKEN: 0 };
-
-function latestOccurrence(events: readonly StatusEvent[], eventType: FunnelEventType): Date | null {
-  let latest: Date | null = null;
-  for (const event of events) {
-    if (event.eventType !== eventType) continue;
-    if (!latest || event.occurredAt > latest) latest = event.occurredAt;
-  }
-  return latest;
-}
-
-/**
- * One application's current stage, net of a break superseded by a later
- * re-approval (D-28) — an approve, break, re-approve sequence reads as
- * approved, not broken.
- */
-function applicationStage(events: readonly StatusEvent[]): EpStatus | null {
-  const re = latestOccurrence(events, "RE");
-  const reBroken = latestOccurrence(events, "RE_BROKEN");
-  if (re && (!reBroken || re > reBroken)) return "RE";
-
-  const apd = latestOccurrence(events, "APD");
-  const apdBroken = latestOccurrence(events, "APD_BROKEN");
-  if (apd && (!apdBroken || apd > apdBroken)) return "APD";
-
-  if (latestOccurrence(events, "APL")) return "APL";
-
-  return re || apd ? "BROKEN" : null;
-}
-
-/**
- * The highest stage an EP currently sits at across all their applications —
- * a display label for the assignments admin console, not a scoring input.
- * Unlike `score()`, this is not windowed: it reads whatever the EP's events
- * say right now.
- */
-export function epFunnelStatus(events: readonly StatusEvent[]): EpStatus | null {
-  const byApplication = new Map<string, StatusEvent[]>();
+function groupByApplication(events: readonly ScorableEvent[]): ScorableEvent[][] {
+  const byApplication = new Map<string, ScorableEvent[]>();
   for (const event of events) {
     const key = String(event.applicationId);
     const bucket = byApplication.get(key);
     if (bucket) bucket.push(event);
     else byApplication.set(key, [event]);
   }
+  return [...byApplication.values()];
+}
 
-  let best: EpStatus | null = null;
-  for (const appEvents of byApplication.values()) {
-    const stage = applicationStage(appEvents);
-    if (stage && (!best || STATUS_RANK[stage] > STATUS_RANK[best])) best = stage;
+/**
+ * Every event of an application carries its current status. The APL row's is
+ * preferred because it is the one the status refresh always kept current,
+ * which matters for rows written before every event was rewritten (D-76).
+ */
+function applicationStatus(application: readonly ScorableEvent[]): string | null {
+  const apl = application.find((event) => event.eventType === "APL" && event.applicationStatus);
+  return (apl ?? application.find((event) => event.applicationStatus))?.applicationStatus ?? null;
+}
+
+/**
+ * A withdrawn or rejected application never counted, whenever that happened
+ * (D-41). Evaluated against current status rather than as a dated reversal,
+ * because GIS dates neither transition in a way that can be filtered.
+ */
+function isReversedApl(status: string | null, config: ScoringConfig): boolean {
+  if (!config.reverseApl) return false;
+  const normalised = status?.trim().toLowerCase() ?? "";
+  return config.aplReversingStatuses.some((value) => value.trim().toLowerCase() === normalised);
+}
+
+/**
+ * What one application earns inside the window: each of its APL, APD and RE
+ * whose own date falls inside it, and nothing else (D-75). A stage from before
+ * the window earned its points in the window it happened in, so a later stage
+ * does not bring it back -- and a status past realization (finished,
+ * completed) is not a stage at all.
+ */
+function stageCredits(
+  application: readonly ScorableEvent[],
+  window: Window,
+  config: ScoringConfig
+): Credit[] {
+  const aplReversed = isReversedApl(applicationStatus(application), config);
+
+  return application
+    .flatMap((event): Credit[] => {
+      const stage = STAGE_OF[event.eventType];
+      if (!stage || !inWindow(event.occurredAt, window)) return [];
+      if (stage === "APL" && aplReversed) return [];
+      return [{ stage, at: event.occurredAt, source: event, sign: 1 }];
+    })
+    .sort((a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage]);
+}
+
+/**
+ * A break inside the window takes back the stage it breaks, if that stage was
+ * credited inside the window before it (D-26) -- a break of work the window
+ * never paid for reduces nothing, so a visible score cannot fall for it.
+ *
+ * A break the stage has since overtaken is ignored (D-28): approve, break,
+ * re-approve scores as approved. Sync already skips such a break at ingest;
+ * this covers one ingested before the re-approval happened.
+ */
+function breakReversals(
+  application: readonly ScorableEvent[],
+  credits: readonly Credit[],
+  window: Window,
+  report: (event: ScorableEvent, kind: AnomalyKindValue, detail: string) => void
+): Credit[] {
+  const reversals: Credit[] = [];
+
+  for (const event of application) {
+    const stage = REVERSES[event.eventType];
+    if (!stage || !inWindow(event.occurredAt, window)) continue;
+
+    const overtaken = application.some(
+      (other) => other.eventType === stage && other.occurredAt > event.occurredAt
+    );
+    if (overtaken) continue;
+
+    if (!credits.some((credit) => credit.stage === stage)) {
+      report(event, "BREAK_WITHOUT_STAGE_EVENT", `${event.eventType} has no in-window ${stage} to reverse`);
+      continue;
+    }
+
+    reversals.push({ stage, at: event.occurredAt, source: event, sign: -1 });
   }
-  return best;
+
+  return reversals;
+}
+
+export function score({ events, assignments, config, window, rewards }: ScoreInput): ScoreOutput {
+  const creditsByEp = indexAssignments(assignments);
+  const ledger: LedgerEntry[] = [];
+  const anomalies: Anomaly[] = [];
+
+  const reported = new Set<string>();
+  const report = (event: ScorableEvent, kind: AnomalyKindValue, detail: string) => {
+    const key = `${event.id}:${kind}`;
+    if (reported.has(key)) return;
+    reported.add(key);
+    anomalies.push({ exchangeEventId: event.id, kind, detail });
+  };
+
+  for (const application of groupByApplication(events)) {
+    const gains = stageCredits(application, window, config);
+    const credits = [...gains, ...breakReversals(application, gains, window, report)];
+    if (credits.length === 0) continue;
+
+    const { epPersonId, programmeId, direction } = application[0]!;
+
+    const creditees = creditsByEp.get(String(epPersonId)) ?? [];
+    if (creditees.length === 0) {
+      for (const credit of credits) {
+        report(credit.source, "UNATTRIBUTED", `Nobody is credited with EP ${epPersonId}`);
+      }
+      continue;
+    }
+
+    const productWeight = config.productWeights[String(programmeId)];
+    if (productWeight === undefined) {
+      // Never assumed to be 1: an invented weight is a wrong score that looks
+      // right (D-30).
+      for (const credit of credits) {
+        report(credit.source, "UNKNOWN_PROGRAMME_WEIGHT", `Programme ${programmeId} has no configured weight`);
+      }
+      continue;
+    }
+
+    const directionWeight = config.directionWeights[direction] ?? 0;
+    const shares = splitShares(creditees, config.roleShares);
+
+    for (const credit of credits) {
+      const magnitude = basePoints(credit.stage, config) * productWeight * directionWeight;
+      for (const [member, share] of shares) {
+        ledger.push({
+          memberId: BigInt(member),
+          exchangeEventId: credit.source.id,
+          stage: credit.stage,
+          configVersion: config.version,
+          points: round(credit.sign * magnitude * share),
+          share: roundShare(share),
+          // Counts are whole: everyone on the EP passed the stage with it, and
+          // only its points are shared (D-73).
+          countDelta: credit.sign,
+          occurredAt: credit.at,
+        });
+      }
+    }
+  }
+
+  return { ledger, grants: evaluateRewards(ledger, rewards), anomalies };
 }
 
 export type OfficeFunnelCounts = Record<number, { APL: number; APD: number; RE: number }>;
@@ -304,30 +321,25 @@ export type MemberTotals = {
 
 const EMPTY_TOTALS: MemberTotals = { points: 0, aplCount: 0, apdCount: 0, reCount: 0 };
 
+function add(totals: MemberTotals, entry: LedgerEntry): void {
+  totals.points = round(totals.points + entry.points);
+  if (entry.stage === "APL") totals.aplCount += entry.countDelta;
+  if (entry.stage === "APD") totals.apdCount += entry.countDelta;
+  if (entry.stage === "RE") totals.reCount += entry.countDelta;
+}
+
 /**
- * Counts are net of breaks (D-20), which is what lets a threshold be lost again
+ * Counts are net of breaks (D-10), which is what lets a threshold be lost again
  * rather than only reached.
  */
-export function totalsByMember(
-  ledger: readonly LedgerEntry[],
-  events: readonly ScorableEvent[]
-): Map<string, MemberTotals> {
-  const typeById = new Map(events.map((event) => [event.id, event.eventType]));
+export function totalsByMember(ledger: readonly LedgerEntry[]): Map<string, MemberTotals> {
   const totals = new Map<string, MemberTotals>();
-
   for (const entry of ledger) {
     const key = String(entry.memberId);
     const current = totals.get(key) ?? { ...EMPTY_TOTALS };
-    const eventType = typeById.get(entry.exchangeEventId);
-
-    current.points = round(current.points + entry.points);
-    if (eventType === "APL") current.aplCount += entry.countDelta;
-    if (eventType === "APD" || eventType === "APD_BROKEN") current.apdCount += entry.countDelta;
-    if (eventType === "RE" || eventType === "RE_BROKEN") current.reCount += entry.countDelta;
-
+    add(current, entry);
     totals.set(key, current);
   }
-
   return totals;
 }
 
@@ -353,7 +365,6 @@ function measure(totals: MemberTotals, kind: ThresholdKind): number {
  */
 export function evaluateRewards(
   ledger: readonly LedgerEntry[],
-  events: readonly ScorableEvent[],
   rewards: readonly RewardDefinition[]
 ): Grant[] {
   if (rewards.length === 0) return [];
@@ -369,29 +380,19 @@ export function evaluateRewards(
   const grants: Grant[] = [];
 
   for (const [memberKey, entries] of byMember) {
-    const finalTotals = totalsByMember(entries, events).get(memberKey) ?? EMPTY_TOTALS;
-
-    const ordered = [...entries].sort(
-      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime()
-    );
+    const finalTotals = totalsByMember(entries).get(memberKey) ?? EMPTY_TOTALS;
+    const ordered = [...entries].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
 
     for (const reward of rewards) {
       if (measure(finalTotals, reward.thresholdType) < reward.threshold) continue;
 
-      let running: LedgerEntry[] = [];
-      let earnedAt: Date | null = null;
-
+      const running = { ...EMPTY_TOTALS };
       for (const entry of ordered) {
-        running = [...running, entry];
-        const soFar = totalsByMember(running, events).get(memberKey) ?? EMPTY_TOTALS;
-        if (measure(soFar, reward.thresholdType) >= reward.threshold) {
-          earnedAt = entry.occurredAt;
+        add(running, entry);
+        if (measure(running, reward.thresholdType) >= reward.threshold) {
+          grants.push({ memberId: BigInt(memberKey), rewardId: reward.id, earnedAt: entry.occurredAt });
           break;
         }
-      }
-
-      if (earnedAt) {
-        grants.push({ memberId: BigInt(memberKey), rewardId: reward.id, earnedAt });
       }
     }
   }

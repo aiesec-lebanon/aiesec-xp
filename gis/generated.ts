@@ -166,6 +166,80 @@ export type PartnerTypes =
   | 'global'
   | 'regional';
 
+export type PeopleFilter = {
+  age?: RangeInput | null | undefined;
+  background_ids?: Array<number | null | undefined> | null | undefined;
+  campaign_ids?: Array<number | null | undefined> | null | undefined;
+  committee_scope?: Array<number | null | undefined> | null | undefined;
+  contacted_at?: DateInput | null | undefined;
+  contacted_by?: number | null | undefined;
+  current_committee?: Array<number | null | undefined> | null | undefined;
+  duration?: RangeInput | null | undefined;
+  earliest_start_date?: DateInput | null | undefined;
+  employee_created_via?: string | null | undefined;
+  follow_ups?: Array<number | null | undefined> | null | undefined;
+  followed_up?: boolean | null | undefined;
+  followed_up_at?: DateInput | null | undefined;
+  gender?: string | null | undefined;
+  graduation_date?: DateInput | null | undefined;
+  has_managers?: boolean | null | undefined;
+  has_opportunity_applications?: boolean | null | undefined;
+  home_committee?: Array<number | null | undefined> | null | undefined;
+  ids?: Array<string | number> | null | undefined;
+  interviewed?: boolean | null | undefined;
+  interviewed_by?: number | null | undefined;
+  invitation_accepted_at?: DateInput | null | undefined;
+  is_aiesecer?: boolean | null | undefined;
+  is_interviewed?: boolean | null | undefined;
+  is_ixp?: boolean | null | undefined;
+  is_pop_user?: boolean | null | undefined;
+  language_ids?: Array<number | null | undefined> | null | undefined;
+  last_interaction?: DateInput | null | undefined;
+  latest_end_date?: DateInput | null | undefined;
+  lc_alignment_ids?: Array<number | null | undefined> | null | undefined;
+  managers?: Array<number | null | undefined> | null | undefined;
+  mcs?: Array<number | null | undefined> | null | undefined;
+  name?: string | null | undefined;
+  nationalities?: Array<number | null | undefined> | null | undefined;
+  organisation_type?: Array<number | null | undefined> | null | undefined;
+  pop_enabled?: boolean | null | undefined;
+  programmes?: Array<number | null | undefined> | null | undefined;
+  q?: string | null | undefined;
+  referral_type?: Array<string | null | undefined> | null | undefined;
+  registered?: DateInput | null | undefined;
+  selected_programmes?: Array<number | null | undefined> | null | undefined;
+  skill_ids?: Array<number | null | undefined> | null | undefined;
+  sort?: PeopleSortOption | null | undefined;
+  sort_direction?: BaseSortDirection | null | undefined;
+  status?: string | null | undefined;
+  statuses?: Array<string | null | undefined> | null | undefined;
+  study_levels?: Array<number | null | undefined> | null | undefined;
+  tags?: Array<number | null | undefined> | null | undefined;
+};
+
+export type PeopleSortOption =
+  | 'aiesecer'
+  | 'application'
+  | 'contacted_at'
+  | 'contacted_by_name'
+  | 'created_at'
+  | 'dob'
+  | 'follow_up_name'
+  | 'followed_up_at'
+  | 'full_name'
+  | 'gender'
+  | 'home_lc_name'
+  | 'home_mc_name'
+  | 'interviewed'
+  | 'interviewed_at'
+  | 'last_active_at'
+  | 'lc_alignment_name'
+  | 'professional_experience_in_years'
+  | 'referral_type'
+  | 'selected_programmes'
+  | 'status'
+  | 'updated_at';
+
 export type RangeInput = {
   from?: number | null | undefined;
   max?: number | null | undefined;
@@ -195,21 +269,35 @@ export type MemberPositionsQuery = { memberPositions: { data: Array<{ id: number
 
 export type ApplicationsQueryVariables = Exact<{
   filters?: ApplicationFilter | null | undefined;
-  page: number;
-  perPage: number;
+  pagination?: Pagination | null | undefined;
 }>;
 
 
-export type ApplicationsQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, created_at: string | null, person: { id: string } | null, opportunity: { id: string, programme: { id: string | null } | null } | null, meta: { date_approved: string | null, date_approval_broken: string | null, date_realized: string | null, date_realisation_broke: string | null, remote_realized_at: string | null, date_rejected: string | null, date_withdrawn: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
+export type ApplicationsQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, created_at: string | null, updated_at: string | null, person: { id: string, managers: Array<{ id: string } | null> | null } | null, opportunity: { id: string, programme: { id: string | null } | null } | null, meta: { date_approved: string | null, date_approval_broken: string | null, date_realized: string | null, date_realisation_broke: string | null, remote_realized_at: string | null, date_remote_realization_broken_at: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
+
+export type EpManagersQueryVariables = Exact<{
+  filters?: PeopleFilter | null | undefined;
+  pagination?: Pagination | null | undefined;
+}>;
+
+
+export type EpManagersQuery = { people: { data: Array<{ id: string, updated_at: string | null, managers: Array<{ id: string } | null> | null } | null> | null, paging: { total_pages: number | null } | null } | null };
 
 export type ApplicationContextQueryVariables = Exact<{
   filters?: ApplicationFilter | null | undefined;
-  page: number;
-  perPage: number;
+  pagination?: Pagination | null | undefined;
 }>;
 
 
-export type ApplicationContextQuery = { allOpportunityApplication: { data: Array<{ id: string | null, person: { id: string, full_name: string | null } | null, managers: Array<{ id: string, full_name: string | null } | null> | null } | null> | null, paging: { total_pages: number | null } | null } | null };
+export type ApplicationContextQuery = { allOpportunityApplication: { data: Array<{ id: string | null, status: string | null, updated_at: string | null, person: { id: string } | null, opportunity: { programme: { id: string | null } | null } | null } | null> | null, paging: { total_pages: number | null } | null } | null };
+
+export type PeopleQueryVariables = Exact<{
+  filters?: PeopleFilter | null | undefined;
+  pagination?: Pagination | null | undefined;
+}>;
+
+
+export type PeopleQuery = { people: { data: Array<{ id: string, full_name: string | null, status: string | null, created_at: string | null, updated_at: string | null, has_opportunity_applications: boolean | null, managers: Array<{ id: string, full_name: string | null } | null> | null, current_positions: Array<{ status: string | null, end_date: string | null, office: { id: string } | null }> | null } | null> | null, paging: { total_pages: number | null } | null } | null };
 
 
 export const CurrentPersonDocument = gql`
@@ -292,14 +380,18 @@ export const MemberPositionsDocument = gql`
 }
     `;
 export const ApplicationsDocument = gql`
-    query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
-  allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
+    query Applications($filters: ApplicationFilter, $pagination: Pagination) {
+  allOpportunityApplication(filters: $filters, pagination: $pagination) {
     data {
       id
       status
       created_at
+      updated_at
       person {
         id
+        managers {
+          id
+        }
       }
       opportunity {
         id
@@ -313,8 +405,7 @@ export const ApplicationsDocument = gql`
         date_realized
         date_realisation_broke
         remote_realized_at
-        date_rejected
-        date_withdrawn
+        date_remote_realization_broken_at
       }
     }
     paging {
@@ -325,18 +416,64 @@ export const ApplicationsDocument = gql`
   }
 }
     `;
-export const ApplicationContextDocument = gql`
-    query ApplicationContext($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
-  allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
+export const EpManagersDocument = gql`
+    query EpManagers($filters: PeopleFilter, $pagination: Pagination) {
+  people(filters: $filters, pagination: $pagination) {
     data {
       id
+      updated_at
+      managers {
+        id
+      }
+    }
+    paging {
+      total_pages
+    }
+  }
+}
+    `;
+export const ApplicationContextDocument = gql`
+    query ApplicationContext($filters: ApplicationFilter, $pagination: Pagination) {
+  allOpportunityApplication(filters: $filters, pagination: $pagination) {
+    data {
+      id
+      status
+      updated_at
       person {
         id
-        full_name
       }
+      opportunity {
+        programme {
+          id
+        }
+      }
+    }
+    paging {
+      total_pages
+    }
+  }
+}
+    `;
+export const PeopleDocument = gql`
+    query People($filters: PeopleFilter, $pagination: Pagination) {
+  people(filters: $filters, pagination: $pagination) {
+    data {
+      id
+      full_name
+      status
+      created_at
+      updated_at
+      has_opportunity_applications
       managers {
         id
         full_name
+      }
+      current_positions {
+        status
+        end_date
+        office {
+          id
+        }
       }
     }
     paging {
@@ -362,11 +499,17 @@ export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = 
     MemberPositions(variables?: MemberPositionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<MemberPositionsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<MemberPositionsQuery>({ document: MemberPositionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'MemberPositions', 'query', variables);
     },
-    Applications(variables: ApplicationsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ApplicationsQuery> {
+    Applications(variables?: ApplicationsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ApplicationsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<ApplicationsQuery>({ document: ApplicationsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'Applications', 'query', variables);
     },
-    ApplicationContext(variables: ApplicationContextQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ApplicationContextQuery> {
+    EpManagers(variables?: EpManagersQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<EpManagersQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<EpManagersQuery>({ document: EpManagersDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'EpManagers', 'query', variables);
+    },
+    ApplicationContext(variables?: ApplicationContextQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ApplicationContextQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<ApplicationContextQuery>({ document: ApplicationContextDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'ApplicationContext', 'query', variables);
+    },
+    People(variables?: PeopleQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<PeopleQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<PeopleQuery>({ document: PeopleDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'People', 'query', variables);
     }
   };
 }

@@ -68,6 +68,18 @@ describe("the sync query does not request what it must not store", () => {
   });
 });
 
+describe("the manager sync reads ids only (D-74)", () => {
+  const body = operationBody("EpManagers");
+
+  it("selects no name for the EP or their managers", () => {
+    expect(body).not.toMatch(FORBIDDEN);
+  });
+
+  it("still selects the manager ids the register mirrors", () => {
+    expect(body).toMatch(/managers \{\s*\n\s*id/);
+  });
+});
+
 describe("no operation reads EP data for display", () => {
   it("has no EpDetails query: viewing EP data is EXPA's job (D-44)", () => {
     expect(operations).not.toMatch(/query EpDetails/);
@@ -95,7 +107,7 @@ describe("the assignment register holds no EP personal data", () => {
 });
 
 describe("no other model stores EP contact details", () => {
-  it.each(["ScoreLedgerEntry", "RewardGrant", "ScoringAnomaly", "ManagerAlias"])("%s", (model) => {
+  it.each(["ScoreLedgerEntry", "RewardGrant", "ScoringAnomaly"])("%s", (model) => {
     expect(modelBody(model)).not.toMatch(FORBIDDEN);
   });
 });

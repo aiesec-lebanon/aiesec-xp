@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireMemberPage } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
+import { officeLabel } from "@/lib/design/names";
 import { mcDirectEntityId, mcOfficeId } from "@/lib/env";
 import { individualStandings } from "@/lib/leaderboard";
 import { resolveRange } from "@/lib/leaderboard-range";
@@ -31,14 +32,13 @@ export default async function LeaderboardPage({
   const user = await requireMemberPage("/leaderboard");
   const params = await searchParams;
 
-  const [offices, floor] = await Promise.all([
+  const [officeRows, floor] = await Promise.all([
     // isMc excluded: 182 is the query/country root, not a distinct filterable
     // entity -- filtering by it would just repeat "Everyone" (D-57), the same
     // reason it's excluded from the LC leaderboard's ranked rows.
     db.office.findMany({
       where: { isOperating: true, isMc: false },
       select: { id: true, name: true },
-      orderBy: { name: "asc" },
     }),
     termStart(),
   ]);
@@ -49,6 +49,9 @@ export default async function LeaderboardPage({
   // it would filter to nobody (D-57).
   const directEntityId = mcDirectEntityId();
   const filterOfficeId = (officeId: bigint) => (officeId === directEntityId ? mcOfficeId() : officeId);
+  const offices = officeRows
+    .map((office) => ({ id: office.id, label: officeLabel(office.name, { isMc: office.id === directEntityId }) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   // Unfiltered is the whole term to today (D-58), not the active display
   // window: the window is the reward race, this board is the record.
@@ -149,7 +152,7 @@ export default async function LeaderboardPage({
                     aria-current={selected === id ? "true" : undefined}
                     className={chip(selected === id)}
                   >
-                    {office.name}
+                    {office.label}
                   </Link>
                 );
               })}
@@ -175,7 +178,7 @@ export default async function LeaderboardPage({
             <Podium places={places} />
           ) : (
             <p className="flex h-full items-center justify-center rounded-[26px] bg-surface-raised px-6 text-center text-sm text-ink-secondary shadow-e2">
-              Nobody is in scope for this filter yet.
+              No members here yet.
             </p>
           )}
         </section>
@@ -184,7 +187,7 @@ export default async function LeaderboardPage({
           <Rise className="flex shrink-0 items-end justify-between gap-4 px-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
               {rest.length === 0
-                ? "No one below the podium yet"
+                ? "No one else on the board yet"
                 : `Ranks ${(page - 1) * PER_PAGE + 4}–${Math.min(rest.length, page * PER_PAGE) + 3} of ${standings.length}`}
             </span>
             <div
@@ -247,7 +250,7 @@ export default async function LeaderboardPage({
                   <span
                     className={`block text-xs ${isSelf ? "text-ink-faint" : "text-ink-secondary"}`}
                   >
-                    {standing.officeName ?? "No office"}
+                    {standing.officeName ?? "No LC"}
                   </span>
                 </span>
 
@@ -285,7 +288,7 @@ export default async function LeaderboardPage({
             {pageCount > 1 ? (
               <>
                 <PageLink href={href({ page: page - 1 })} disabled={page === 1}>
-                  Prev
+                  Previous
                 </PageLink>
                 <PageLink
                   href={href({ page: page + 1 })}

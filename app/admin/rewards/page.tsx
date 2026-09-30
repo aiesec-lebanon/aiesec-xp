@@ -29,7 +29,7 @@ export default async function RewardsAdminPage() {
     return (
       <main className="flex min-h-full shrink-0 flex-col items-center justify-center gap-3 bg-wall px-6 text-center">
         <h1 className="font-display text-2xl font-semibold text-ink">Not available</h1>
-        <p className="text-sm text-ink-secondary">This console is for MCP and MCVP IM.</p>
+        <p className="text-sm text-ink-secondary">Only the MC&rsquo;s admins can open this page.</p>
         <Link href="/" className="mt-2 text-sm font-semibold text-apl-ink">
           Back to your dashboard
         </Link>
@@ -55,8 +55,9 @@ export default async function RewardsAdminPage() {
           <div>
             <h1 className="font-display text-[28px] font-semibold text-ink">Rewards</h1>
             <p className="mt-1.5 max-w-140 text-sm text-ink-secondary">
-              Threshold, label, and an optional value (D-09). No winner cap, no budget ceiling.
-              Saving replays grants against every member&rsquo;s current score.
+              Set what members can earn and what it takes to earn it. Everyone who reaches a
+              reward gets it, with no limit on winners. When you save, members&rsquo; progress
+              is checked again straight away.
             </p>
           </div>
 
@@ -65,11 +66,11 @@ export default async function RewardsAdminPage() {
 
         <section className="flex flex-col gap-5 rounded-[22px] bg-surface-raised px-7 py-6.5">
           <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">
-            Existing rewards ({rewards.length})
+            Rewards ({rewards.length})
           </h2>
 
           {rewards.length === 0 ? (
-            <p className="text-[13px] text-ink-secondary">No reward is configured yet.</p>
+            <p className="text-[13px] text-ink-secondary">No rewards yet. Add the first one below.</p>
           ) : (
             <ul className="flex flex-col gap-4">
               {rewards.map((reward) => (
@@ -102,7 +103,7 @@ export default async function RewardsAdminPage() {
           <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">
             Add a reward
           </h2>
-          <RewardForm submitLabel="Create" values={EMPTY} />
+          <RewardForm submitLabel="Add reward" values={EMPTY} />
         </section>
       </Rise>
     </main>

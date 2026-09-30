@@ -37,11 +37,11 @@ const optionalText = (max: number) =>
 
 const rewardSchema = z.object({
   id: z.string().trim().optional(),
-  label: z.string().trim().min(1, "A label is required"),
+  label: z.string().trim().min(1, "Give the reward a name."),
   description: optionalText(500),
   thresholdType: z.enum(["POINTS", "APL_COUNT", "APD_COUNT", "RE_COUNT"]),
-  threshold: z.coerce.number().positive("Threshold must be greater than zero"),
-  valueAmount: z.union([z.coerce.number().nonnegative(), z.literal("")]).optional(),
+  threshold: z.coerce.number().positive("The amount needed must be more than zero."),
+  valueAmount: z.union([z.coerce.number().nonnegative("The value can't be negative."), z.literal("")]).optional(),
   valueCurrency: optionalText(8),
   iconKey: optionalText(64),
   isActive: z.coerce.boolean(),
@@ -74,7 +74,7 @@ export async function saveRewardAction(
   const data = { ...rest, valueAmount: valueAmount === "" || valueAmount === undefined ? null : valueAmount };
 
   const before = id ? await db.reward.findUnique({ where: { id } }) : null;
-  if (id && !before) return { ok: false, message: "That reward no longer exists." };
+  if (id && !before) return { ok: false, message: "This reward was already removed. Reload the page to see the latest." };
 
   const after = id
     ? await db.reward.update({ where: { id }, data })
@@ -96,10 +96,10 @@ export async function deleteRewardAction(
 ): Promise<ActionState> {
   const admin = await requireAdminLive();
   const id = String(formData.get("id") ?? "");
-  if (!id) return { ok: false, message: "A reward id is required." };
+  if (!id) return { ok: false, message: "Something went wrong. Reload the page and try again." };
 
   const before = await db.reward.findUnique({ where: { id } });
-  if (!before) return { ok: false, message: "That reward no longer exists." };
+  if (!before) return { ok: false, message: "This reward was already removed. Reload the page to see the latest." };
 
   await db.reward.delete({ where: { id } });
   await audit(admin.id, id, before, null);

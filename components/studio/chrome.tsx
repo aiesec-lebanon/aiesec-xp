@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import type { CurrentUser } from "@/lib/auth/current-user";
+import { firstName } from "@/lib/design/names";
 
 import { DockSlot } from "./dock-slot";
 import { ProfileMenu } from "./profile-menu";
@@ -72,7 +73,7 @@ export function Header({
       <div className="order-2 flex items-center gap-2.5 sm:order-3">
         <ProfileMenu
           name={user.fullName}
-          short={user.fullName.split(" ")[0] ?? user.fullName}
+          short={firstName(user.fullName)}
           isAdmin={user.role === "ADMIN"}
           characterId={characterId}
         />

@@ -1,37 +1,15 @@
-// End-to-end proof of the chain: alias -> import -> replay -> leaderboard.
-// Maps only labels with a single unambiguous candidate; ambiguous ones are left
-// for an admin, which is the point of the queue.
-import { db } from "@/lib/db";
+// End-to-end proof of the chain: sheet import -> replay -> leaderboard. The
+// import resolves EP managers through the MC sheet's directory tab and the
+// console's matches (D-80).
 import { importAssignments } from "@/lib/import/run-import";
-import { normalise, suggestMembers } from "@/lib/import/name-matching";
 import { activeWindowRange, individualStandings, officeStandings } from "@/lib/leaderboard";
 import { replay } from "@/lib/scoring/replay";
 
-const members = await db.member.findMany({
-  where: { positions: { some: {} } },
-  select: { id: true, fullName: true },
-});
-
-const preview = await importAssignments(0n, { dryRun: true });
-let mapped = 0;
-for (const entry of preview.unmappedLabels) {
-  const s = suggestMembers(entry.label, members);
-  if (s.length !== 1) {
-    console.log(`  left for admin: ${entry.label} (${s.length} candidates)`);
-    continue;
-  }
-  await db.managerAlias.upsert({
-    where: { label: normalise(entry.label) },
-    create: { label: normalise(entry.label), memberId: s[0].member.id },
-    update: { memberId: s[0].member.id },
-  });
-  console.log(`  mapped: ${entry.label} -> ${s[0].member.fullName}`);
-  mapped += 1;
-}
-console.log(`\naliases mapped: ${mapped}`);
-
 const result = await importAssignments(0n, { dryRun: false });
-console.log(`assignments written: ${result.assignmentsWritten}`);
+console.log(`EPs credited from the sheet: ${result.assignmentsWritten}`);
+for (const issue of result.issues) {
+  console.log(`  ${issue.lineNumber ? `line ${issue.lineNumber}: ` : ""}${issue.detail}`);
+}
 
 const rebuilt = await replay(0n);
 console.log(`ledger: ${rebuilt.ledgerEntries} entries, ${rebuilt.grants} grants, ${rebuilt.anomalies} anomalies`);

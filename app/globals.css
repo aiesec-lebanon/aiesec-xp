@@ -197,6 +197,17 @@ body {
   }
 }
 
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+.toast-pop {
+  animation: toast-in 0.18s ease-out;
+}
+
 /* D-46: motion is on for everyone; the member's own switch turns it down, and
    the operating system's prefers-reduced-motion is deliberately not consulted.
    The React layer reads the same state through useReduceMotion; this is the

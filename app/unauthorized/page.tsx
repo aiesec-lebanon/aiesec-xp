@@ -34,19 +34,19 @@ export default async function UnauthorizedPage() {
           <p className="mb-5 inline-flex items-center gap-2 rounded-full bg-surface py-1.5 pl-3 pr-4">
             <span aria-hidden className="size-2 rounded-full bg-stage-re" />
             <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink">
-              Signed in, no position
+              No member position found
             </span>
           </p>
 
           <h1 className="font-display text-2xl font-semibold leading-tight text-ink">
-            We know who you are, not where you sit
+            You&rsquo;re signed in, but we can&rsquo;t find your position
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
-            AIESEC XP is for members of AIESEC in Lebanon. Your account holds no active position in
-            an operating office, so there is nothing to show yet.
+            AIESEC XP is for members of AIESEC in Lebanon. Your EXPA account doesn&rsquo;t show a
+            current position in an LC or the MC, so there&rsquo;s nothing to show you yet.
           </p>
           <p className="mt-2.5 text-[13px] leading-relaxed text-ink-secondary">
-            Ask your LCP or the MCVP IM to check your position in EXPA.
+            Ask your LCP or the MCVP IM to add your position in EXPA, then sign in again.
           </p>
 
           <div className="mt-5">

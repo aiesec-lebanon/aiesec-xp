@@ -1,6 +1,7 @@
 import type { ScoreConfig } from "@prisma/client";
 
 import type { ScoringConfig } from "@/lib/scoring/engine";
+import { normaliseRole, type RoleShares } from "@/lib/scoring/shares";
 
 /**
  * The stored config row as the pure engine wants it.
@@ -19,5 +20,17 @@ export function toScoringConfig(config: ScoreConfig): ScoringConfig {
     aplReversingStatuses: config.aplReversingStatuses as string[],
     productWeights: config.productWeights as Record<string, number>,
     directionWeights: config.directionWeights as Record<string, number>,
+    roleShares: readRoleShares(config.roleShares),
   };
+}
+
+/** Keys normalised, anything that is not a number dropped rather than trusted. */
+export function readRoleShares(value: unknown): RoleShares {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const shares: Record<string, number> = {};
+  for (const [role, share] of Object.entries(value as Record<string, unknown>)) {
+    const key = normaliseRole(role);
+    if (key && typeof share === "number" && Number.isFinite(share)) shares[key] = share;
+  }
+  return shares;
 }

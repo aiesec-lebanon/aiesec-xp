@@ -5,6 +5,7 @@ import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, weeklyPoints } from "@/lib/dashboard";
 import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, stageColour } from "@/lib/design/tokens";
+import { formatPoints, formatSignedPoints } from "@/lib/design/points";
 
 import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
 import { GrowBar, Rise } from "@/components/studio/motion";
@@ -59,7 +60,7 @@ export default async function MePage({
   return (
     <main className="page-end flex min-h-full shrink-0 flex-col bg-wall">
       <div className="px-6 pt-8 sm:px-16">
-        <h1 className="font-display text-[30px] font-semibold text-ink">Your history</h1>
+        <h1 className="font-display text-[30px] font-semibold text-ink">Your profile</h1>
       </div>
 
       <Rise
@@ -77,7 +78,7 @@ export default async function MePage({
 
         {weeks.length === 0 ? (
           <p className="mt-6 text-[13px] text-ink-secondary">
-            Nothing has scored for you yet, so there is no shape to draw.
+            Nothing counts for you yet. Your progress will show here as your EPs move forward.
           </p>
         ) : (
           <ul className="mt-6 flex h-35 items-end gap-4">
@@ -90,7 +91,7 @@ export default async function MePage({
                   className="tabular text-xs font-bold"
                   style={{ color: week.points > 0 ? STAGE_TINT.APL.ink : "var(--ink-faint)" }}
                 >
-                  {week.points}
+                  {formatPoints(week.points)}
                 </span>
                 <GrowBar
                   height={tallest === 0 ? 0 : week.points / tallest}
@@ -117,8 +118,8 @@ export default async function MePage({
 
         {events.length === 0 ? (
           <p className="px-3 py-6 text-[13px] text-ink-secondary">
-            Points appear once an EP assigned to you reaches a funnel stage inside the current
-            window.
+            Points show up here when one of your EPs applies, is approved or is realized during
+            this period.
           </p>
         ) : (
           events.map((entry, index) => (
@@ -146,7 +147,7 @@ export default async function MePage({
                 className="tabular text-right text-base font-bold"
                 style={{ color: entry.points < 0 ? STAGE_TINT.BREAK.ink : "var(--ink-primary)" }}
               >
-                {entry.points > 0 ? `+${entry.points}` : entry.points}
+                {formatSignedPoints(entry.points)}
               </span>
             </div>
           ))
@@ -159,7 +160,7 @@ export default async function MePage({
               {progress.trail.length}
             </span>
             <PageLink href={`/me?page=${page - 1}`} disabled={page === 1}>
-              Prev
+              Previous
             </PageLink>
             <PageLink href={`/me?page=${page + 1}`} disabled={page === pageCount}>
               Next
@@ -175,7 +176,7 @@ export default async function MePage({
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 className="font-display text-xl font-semibold text-ink">Character lab</h2>
           <span className="text-xs text-ink-faint">
-            this is who you appear as across AIESEC XP
+            This is you on every leaderboard in AIESEC XP.
           </span>
         </div>
         <CharacterLab name={user.fullName} initialCharacter={avatar.character.id} />

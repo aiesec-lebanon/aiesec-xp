@@ -4,10 +4,13 @@ import { db } from "@/lib/db";
 import { defaultWindowRange, toDateInputValue } from "@/lib/admin/window";
 import { fetchEntityFunnelBreakdown, type ProductFunnelCounts } from "@/lib/analytics/aiesec-analytics";
 import { PROGRAMME_IDS, sumProducts } from "@/lib/analytics/funnel-tags";
+import { creditedAssignments } from "@/lib/assignments/register";
+import { officeLabel, personName } from "@/lib/design/names";
 import { mcDirectEntityId, mcOfficeId } from "@/lib/env";
 import type { DateRange } from "@/lib/leaderboard-range";
+import { inTermMemberWhere } from "@/lib/org/members";
 import { toScoringConfig } from "@/lib/scoring/config";
-import { officePoints, score, type ScorableEvent } from "@/lib/scoring/engine";
+import { officePoints, score } from "@/lib/scoring/engine";
 
 // Both boards are scored on the request that renders them, over whatever range
 // they were asked for (D-58).
@@ -16,9 +19,9 @@ import { officePoints, score, type ScorableEvent } from "@/lib/scoring/engine";
 // requested range as its window. They used to read the derived ledger, which
 // cannot answer a historic question at all: the replay bakes the active display
 // window in, so the ledger only ever holds rows inside it. Scoring live keeps
-// every rule the engine owns -- break netting (D-26), APL reversal (D-41),
-// effective-dated assignment (D-36) -- correct by construction, rather than
-// re-deriving them in a query.
+// every rule the engine owns -- break netting (D-26), APL reversal (D-41), role
+// shares (D-73) -- correct by construction, rather than re-deriving them in a
+// query.
 //
 // Office/LC rankings (D-56) read AIESEC's own analytics API, which takes the
 // same range as two dates: an office total doesn't need the per-EP attribution
@@ -85,45 +88,48 @@ export async function activeWindowRange(): Promise<DateRange> {
 /**
  * Runs the scoring engine over one range and totals the result per member.
  *
- * Events are narrowed to the range in the query, which the engine would do
- * anyway -- it drops out-of-window events and builds its break lookup from the
- * in-window ones only -- so this is the same set it would have kept, fetched
- * rather than filtered.
+ * Every event of an application with activity in the range is read, not only
+ * the in-range ones: the engine still scores only what falls inside the range,
+ * but needs the application's other events to tell a re-approval from a break
+ * (D-28).
  */
 async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotals>> {
-  const [config, events, assignments] = await Promise.all([
+  const [config, active, assignments] = await Promise.all([
     db.scoreConfig.findFirst({ where: { isActive: true } }),
     db.exchangeEvent.findMany({
       where: { occurredAt: { gte: range.startsAt, lte: range.endsAt } },
+      select: { applicationId: true },
+      distinct: ["applicationId"],
     }),
-    db.epAssignment.findMany(),
+    creditedAssignments(),
   ]);
 
   const totals = new Map<string, MemberTotals>();
-  if (!config) return totals;
+  if (!config || active.length === 0) return totals;
+
+  const events = await db.exchangeEvent.findMany({
+    where: { applicationId: { in: active.map((row) => row.applicationId) } },
+  });
 
   // No rewards: grants belong to the active window and are derived by the
   // replay, so evaluating them per request would be work nobody reads.
   const { ledger } = score({
-    events: events as unknown as ScorableEvent[],
+    events,
     assignments,
     config: toScoringConfig(config),
     window: range,
     rewards: [],
   });
 
-  const eventTypeById = new Map(events.map((event) => [event.id, event.eventType as string]));
-
   for (const entry of ledger) {
     const key = String(entry.memberId);
     const current =
       totals.get(key) ?? { points: 0, aplCount: 0, apdCount: 0, reCount: 0, reachedAt: null };
-    const eventType = eventTypeById.get(entry.exchangeEventId) ?? "";
 
     current.points = Math.round((current.points + entry.points) * 10_000) / 10_000;
-    if (eventType === "APL") current.aplCount += entry.countDelta;
-    if (eventType.startsWith("APD")) current.apdCount += entry.countDelta;
-    if (eventType.startsWith("RE")) current.reCount += entry.countDelta;
+    if (entry.stage === "APL") current.aplCount += entry.countDelta;
+    if (entry.stage === "APD") current.apdCount += entry.countDelta;
+    if (entry.stage === "RE") current.reCount += entry.countDelta;
     // The latest scored event is when the current total was reached, which is
     // what D-33 breaks a tie on.
     if (!current.reachedAt || entry.occurredAt > current.reachedAt) {
@@ -150,27 +156,32 @@ export async function individualStandings(
   const [members, totals] = await Promise.all([
     db.member.findMany({
       where: {
-        positions: { some: {} },
+        ...(await inTermMemberWhere()),
         ...(officeId === undefined ? {} : { scoringOfficeId: officeId }),
       },
       select: {
         id: true,
         fullName: true,
         scoringOfficeId: true,
-        scoringOffice: { select: { name: true } },
+        scoringOffice: { select: { name: true, isMc: true } },
       },
     }),
     totalsForRange(range),
   ]);
+  const directEntityId = mcDirectEntityId();
 
   return rank(
     members.map((member) => {
       const total = totals.get(String(member.id));
       return {
         memberId: member.id,
-        fullName: member.fullName,
+        fullName: personName(member.fullName),
         officeId: member.scoringOfficeId,
-        officeName: member.scoringOffice?.name ?? null,
+        officeName: member.scoringOffice
+          ? officeLabel(member.scoringOffice.name, {
+              isMc: member.scoringOffice.isMc || member.scoringOfficeId === directEntityId,
+            })
+          : null,
         points: total?.points ?? 0,
         aplCount: total?.aplCount ?? 0,
         apdCount: total?.apdCount ?? 0,
@@ -206,7 +217,7 @@ const EMPTY_PRODUCT_COUNTS: ProductFunnelCounts = Object.fromEntries(
 
 async function memberCountsByOffice(): Promise<Map<string, number>> {
   const members = await db.member.findMany({
-    where: { positions: { some: {} } },
+    where: await inTermMemberWhere(),
     select: { scoringOfficeId: true },
   });
 
@@ -272,7 +283,7 @@ export async function officeStandings(range: DateRange): Promise<OfficeStandings
       return {
         rank: 0,
         officeId,
-        officeName: office.name,
+        officeName: officeLabel(office.name, { isMc: office.id === directEntityId }),
         memberCount: memberCounts.get(String(officeId)) ?? 0,
         points: weights ? officePoints(counts, weights) : 0,
         aplCount: totals.APL,
@@ -299,9 +310,12 @@ export type PersonalProgress = {
   /** The rank immediately above, for a concrete next target. */
   nextUp: Standing | null;
   trail: {
+    /** The stage credited, or `<stage>_BROKEN` for a break taking it back. */
     eventType: string;
     occurredAt: Date;
     points: number;
+    /** This member's part of the EP's points, 1 when nobody shares it (D-73). */
+    share: number;
     programmeId: number;
   }[];
   rewards: {
@@ -315,6 +329,11 @@ export type PersonalProgress = {
   }[];
 };
 
+/** A ledger entry as the member-facing screens name it: the stage, or its break. */
+export function trailLabel(stage: string, countDelta: number): string {
+  return countDelta < 0 ? `${stage}_BROKEN` : stage;
+}
+
 /**
  * Always the active display window, never a browsed range: what this returns
  * has to agree with the `RewardGrant` rows the replay derived, and those are
@@ -327,9 +346,12 @@ export async function personalProgress(memberId: bigint): Promise<PersonalProgre
       where: { memberId },
       orderBy: { occurredAt: "desc" },
       select: {
+        stage: true,
         points: true,
+        share: true,
+        countDelta: true,
         occurredAt: true,
-        event: { select: { eventType: true, programmeId: true } },
+        event: { select: { programmeId: true } },
       },
     }),
     db.reward.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
@@ -361,9 +383,10 @@ export async function personalProgress(memberId: bigint): Promise<PersonalProgre
     totalMembers: standings.length,
     nextUp: index > 0 ? standings[index - 1] : null,
     trail: entries.map((entry) => ({
-      eventType: entry.event.eventType,
+      eventType: trailLabel(entry.stage, entry.countDelta),
       occurredAt: entry.occurredAt,
       points: Number(entry.points),
+      share: Number(entry.share),
       programmeId: entry.event.programmeId,
     })),
     rewards: rewards.map((reward) => ({

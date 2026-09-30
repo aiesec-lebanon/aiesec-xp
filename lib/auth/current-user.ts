@@ -4,9 +4,11 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { db } from "@/lib/db";
+import { personName } from "@/lib/design/names";
 import { readSession, SESSION_COOKIE } from "@/lib/auth/session";
 import { resolveAccess, type ResolvedAccess } from "@/lib/auth/roles";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
+import { termStart } from "@/lib/term";
 
 export type CurrentUser = ResolvedAccess & {
   id: bigint;
@@ -32,13 +34,14 @@ export const currentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const memberId = BigInt(session.sub);
 
-  const [member, matchers, operating] = await Promise.all([
+  const [member, matchers, operating, floor] = await Promise.all([
     db.member.findUnique({
       where: { id: memberId },
       include: { positions: true },
     }),
     db.adminMatcher.findMany(),
     operatingOfficeIds(),
+    termStart(),
   ]);
 
   if (!member) return null;
@@ -49,15 +52,17 @@ export const currentUser = cache(async (): Promise<CurrentUser | null> => {
       roleName: position.roleName,
       title: position.title,
       status: position.status,
+      endDate: position.endDate,
     })),
     matchers,
     operatingOfficeIds: operating,
+    termStart: floor,
   });
 
   return {
     ...access,
     id: member.id,
-    fullName: member.fullName,
+    fullName: personName(member.fullName),
     profilePhotoUrl: member.profilePhotoUrl,
   };
 });
