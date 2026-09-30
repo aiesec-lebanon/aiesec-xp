@@ -96,8 +96,10 @@ function hash(value: string): number {
   return h >>> 0;
 }
 
+// Case-folded, so correcting how a name is capitalised never swaps the body a
+// member without a saved character is drawn as.
 export function characterFor(name: string): CharacterDefinition {
-  return CHARACTERS[hash(name) % CHARACTERS.length]!;
+  return CHARACTERS[hash(name.toLowerCase()) % CHARACTERS.length]!;
 }
 
 export function characterById(id: string | null | undefined): CharacterDefinition | undefined {

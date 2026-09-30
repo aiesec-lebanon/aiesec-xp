@@ -22,14 +22,14 @@ export function formatOfficeTime(date: Date): string {
   return `${part.weekday} ${part.day} ${part.month}, ${part.hour}:${part.minute}`;
 }
 
-/** "just now", "4 min ago", "5 h ago", "3 days ago". */
+/** "just now", "4 min ago", "5 hours ago", "3 days ago". */
 export function timeAgo(date: Date, now: Date = new Date()): string {
   const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes} min ago`;
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
+  if (hours < 48) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
 
   return `${Math.floor(hours / 24)} days ago`;
 }

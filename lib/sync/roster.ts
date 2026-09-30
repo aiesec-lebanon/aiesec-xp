@@ -2,7 +2,8 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { toDateInputValue } from "@/lib/admin/window";
-import { chooseScoringOffice, type PositionInput } from "@/lib/auth/roles";
+import { chooseScoringOffice, parseGisDate, type PositionInput } from "@/lib/auth/roles";
+import { personName } from "@/lib/design/names";
 import { gis } from "@/lib/gis/client";
 import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
@@ -32,6 +33,8 @@ type GisPosition = {
   roleName: string | null;
   title: string | null;
   status: string;
+  startDate: Date | null;
+  endDate: Date | null;
   fullName: string;
   profilePhotoUrl: string | null;
 };
@@ -61,7 +64,9 @@ async function readOffice(officeId: bigint, endDateFrom: string): Promise<GisPos
         roleName: position.role?.name ?? null,
         title: position.title ?? null,
         status: position.status ?? "active",
-        fullName: position.person.full_name ?? `Person ${position.person.id}`,
+        startDate: parseGisDate(position.start_date),
+        endDate: parseGisDate(position.end_date),
+        fullName: personName(position.person.full_name ?? `Person ${position.person.id}`),
         profilePhotoUrl: position.person.profile_photo ?? null,
       });
     }
@@ -122,6 +127,7 @@ export async function syncRoster(): Promise<RosterSyncResult> {
         roleName: position.roleName,
         title: position.title,
         status: position.status,
+        endDate: position.endDate,
       }));
 
       const scoringOfficeId = chooseScoringOffice(inputs);
@@ -142,27 +148,34 @@ export async function syncRoster(): Promise<RosterSyncResult> {
       });
     }
 
-    // Anything outside the operating offices is out of scope by definition, and
-    // would otherwise linger from a period when an office was still open.
-    await db.position.deleteMany({ where: { officeId: { notIn: officeIds } } });
+    // An empty read is a GIS failure, not a term with no members: replacing the
+    // roster with it would take away everyone's access at once.
+    if (positions.length === 0) {
+      throw new Error("GIS returned no active positions for any operating office; roster left unchanged");
+    }
 
-    // Replaced rather than merged: a position that has gone from GIS must go
-    // from here, or a terminated officer keeps the access it still grants.
-    const memberIds = [...byMember.keys()].map(BigInt);
-    await db.position.deleteMany({
-      where: { memberId: { in: memberIds }, officeId: { in: officeIds } },
-    });
-    await db.position.createMany({
-      data: positions.map((position) => ({
-        id: position.id,
-        memberId: position.memberId,
-        officeId: position.officeId,
-        roleName: position.roleName,
-        title: position.title,
-        status: position.status,
-      })),
-      skipDuplicates: true,
-    });
+    // The whole table is replaced with what GIS reports now (D-71). Replacing
+    // only the members this run saw left everyone else's rows in place: an
+    // officer whose term ended stops appearing in the floored query above, so
+    // under the old rule their stored "active" position -- and the access,
+    // leaderboard row and credit-to entry it grants -- simply never went away.
+    // One transaction, so no request ever sees the roster half-rebuilt.
+    await db.$transaction([
+      db.position.deleteMany({}),
+      db.position.createMany({
+        data: positions.map((position) => ({
+          id: position.id,
+          memberId: position.memberId,
+          officeId: position.officeId,
+          roleName: position.roleName,
+          title: position.title,
+          status: position.status,
+          startDate: position.startDate,
+          endDate: position.endDate,
+        })),
+        skipDuplicates: true,
+      }),
+    ]);
 
     await db.syncRun.update({
       where: { id: run.id },

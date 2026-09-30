@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/lib/db";
 import { currentUser, type CurrentUser } from "@/lib/auth/current-user";
-import { canActInOffice, resolveAccess } from "@/lib/auth/roles";
+import { canActInOffice, parseGisDate, resolveAccess } from "@/lib/auth/roles";
 import { gis } from "@/lib/gis/client";
 import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
+import { termStart } from "@/lib/term";
 
 // Every route, page and server action calls one of these for itself. Nothing is
 // inherited from the proxy, which only makes an optimistic cookie check, and
@@ -33,7 +34,7 @@ export async function requireMemberPage(returnTo: string): Promise<CurrentUser> 
 export async function requireMember(): Promise<CurrentUser> {
   const user = await currentUser();
   if (!user || user.role === "DENIED") {
-    throw new AuthorizationError("Authentication required");
+    throw new AuthorizationError("Please sign in again.");
   }
   return user;
 }
@@ -41,7 +42,7 @@ export async function requireMember(): Promise<CurrentUser> {
 export async function requireLead(): Promise<CurrentUser> {
   const user = await requireMember();
   if (user.role !== "ADMIN" && user.role !== "LEAD") {
-    throw new AuthorizationError("This action requires a LEAD or ADMIN position");
+    throw new AuthorizationError("Only LC leaders and MC admins can do this.");
   }
   return user;
 }
@@ -49,7 +50,7 @@ export async function requireLead(): Promise<CurrentUser> {
 export async function requireAdmin(): Promise<CurrentUser> {
   const user = await requireMember();
   if (user.role !== "ADMIN") {
-    throw new AuthorizationError("This action requires an ADMIN position");
+    throw new AuthorizationError("Only the MC's admins can do this.");
   }
   return user;
 }
@@ -66,7 +67,7 @@ export async function requireOfficeAccess(officeId: bigint): Promise<CurrentUser
       role: user.role,
       requestedOfficeId: String(officeId),
     });
-    throw new AuthorizationError("You may only act within your own LC");
+    throw new AuthorizationError("You can only make changes for your own LC.");
   }
   return user;
 }
@@ -84,20 +85,18 @@ export async function requireOfficeAccess(officeId: bigint): Promise<CurrentUser
 export async function requireAdminLive(): Promise<CurrentUser> {
   const user = await requireAdmin();
 
-  const [matchers, operating] = await Promise.all([
+  const [matchers, operating, floor] = await Promise.all([
     db.adminMatcher.findMany(),
     operatingOfficeIds(),
+    termStart(),
   ]);
 
   let livePositions;
   try {
-    // No end_date floor here, unlike the roster and the member count (D-60).
-    // This asks whether one named person's position has been revoked since the
-    // last sync, and status is what carries a revocation; filtering on a date
-    // as well would refuse an admin their own console over a position EXPA
-    // left without an end date. The expired-position case is already gone by
-    // this point, because requireAdmin() above reads the synced roster, which
-    // does apply the floor.
+    // No server-side end_date filter: the term rule is applied locally by
+    // resolveAccess below (D-71), where a position with no end date counts as
+    // not ended -- so an admin can never be locked out by how GIS happens to
+    // treat a null in a filter.
     const result = await gis().MemberPositions({
       filters: { person_ids: [String(user.id)], status: ["active"] },
       pagination: { page: 1, per_page: 100 },
@@ -108,7 +107,7 @@ export async function requireAdminLive(): Promise<CurrentUser> {
       actorId: String(user.id),
       error,
     });
-    throw new AuthorizationError("Could not verify your position with GIS. Try again.");
+    throw new AuthorizationError("We couldn't confirm your position with EXPA. Try again in a moment.");
   }
 
   const live = resolveAccess({
@@ -120,12 +119,14 @@ export async function requireAdminLive(): Promise<CurrentUser> {
               roleName: position.role?.name ?? null,
               title: position.title ?? null,
               status: position.status ?? null,
+              endDate: parseGisDate(position.end_date),
             },
           ]
         : []
     ),
     matchers,
     operatingOfficeIds: operating,
+    termStart: floor,
   });
 
   if (live.role !== "ADMIN") {
@@ -134,7 +135,7 @@ export async function requireAdminLive(): Promise<CurrentUser> {
       storedRole: user.role,
       liveRole: live.role,
     });
-    throw new AuthorizationError("This action requires an ADMIN position");
+    throw new AuthorizationError("Only the MC's admins can do this.");
   }
 
   return user;

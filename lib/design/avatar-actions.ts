@@ -23,7 +23,7 @@ export async function saveCharacter(input: SaveCharacterInput): Promise<SaveChar
 
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "That character is not valid" };
+    return { ok: false, error: "That character isn't available. Choose another one." };
   }
 
   const { character } = parsed.data;

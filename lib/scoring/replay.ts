@@ -1,8 +1,10 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { creditedAssignments } from "@/lib/assignments/register";
 import { logger } from "@/lib/logger";
-import { score, type RewardDefinition, type ScorableEvent, type ScoringConfig } from "@/lib/scoring/engine";
+import { toScoringConfig } from "@/lib/scoring/config";
+import { score, type RewardDefinition } from "@/lib/scoring/engine";
 
 // Rebuilds the derived tables from events, assignments and config (D-15).
 //
@@ -23,22 +25,11 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
     db.displayWindow.findFirst({ where: { isActive: true } }),
     db.reward.findMany({ where: { isActive: true } }),
     db.exchangeEvent.findMany(),
-    db.epAssignment.findMany(),
+    creditedAssignments(),
   ]);
 
   if (!config) throw new Error("No active ScoreConfig");
   if (!window) throw new Error("No active DisplayWindow");
-
-  const scoringConfig: ScoringConfig = {
-    version: config.version,
-    aplPoints: Number(config.aplPoints),
-    apdPoints: Number(config.apdPoints),
-    rePoints: Number(config.rePoints),
-    reverseApl: config.reverseApl,
-    aplReversingStatuses: config.aplReversingStatuses as string[],
-    productWeights: config.productWeights as Record<string, number>,
-    directionWeights: config.directionWeights as Record<string, number>,
-  };
 
   const definitions: RewardDefinition[] = rewards.map((reward) => ({
     id: reward.id,
@@ -47,9 +38,9 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
   }));
 
   const result = score({
-    events: events as unknown as ScorableEvent[],
+    events,
     assignments,
-    config: scoringConfig,
+    config: toScoringConfig(config),
     window: { startsAt: window.startsAt, endsAt: window.endsAt },
     rewards: definitions,
   });
@@ -64,8 +55,10 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
       data: result.ledger.map((entry) => ({
         memberId: entry.memberId,
         exchangeEventId: entry.exchangeEventId,
+        stage: entry.stage,
         configVersion: entry.configVersion,
         points: entry.points,
+        share: entry.share,
         countDelta: entry.countDelta,
         occurredAt: entry.occurredAt,
       })),

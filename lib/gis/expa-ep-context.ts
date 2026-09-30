@@ -1,92 +1,197 @@
 import "server-only";
 
+import { displayStatus, isLiveApplication, isMemberNotEp, lastAction } from "@/lib/admin/ep-order";
+import { parseGisDate } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
+import { personName } from "@/lib/design/names";
 import { mcOfficeId } from "@/lib/env";
 import { gis } from "@/lib/gis/client";
+import type { PeopleQuery } from "@/gis/generated";
 import { logger } from "@/lib/logger";
+import { operatingOfficeIds } from "@/lib/org/office-tree";
 import { termStart } from "@/lib/term";
 
-// The EP behind an id, and what EXPA records as the application's manager, read
-// at display time so an admin can tell who a row is about and see where EXPA
-// and the imported sheet disagree. Nothing here is stored (D-42). EXPA
-// populates the manager field only after approval, so it is absent for most
-// applications.
+// What EXPA says about each EP on the assignment console, read at display time
+// so it matches EXPA by construction. Nothing here is stored (D-42): names are
+// read per view and discarded, which is the path D-61 carves out for this
+// console.
 
 export type ExpaManager = { id: bigint; fullName: string };
 
-export type ExpaEpContext = {
+export type ExpaEp = {
   fullName: string | null;
-  managers: ExpaManager[];
+  /** EXPA's status, never behind any of the EP's applications (D-78). */
+  status: string | null;
+  signedUpAt: Date | null;
+  /** The EP's record or any application, whichever moved last (D-76). */
+  lastActionAt: Date | null;
+  /** A member this term who has never applied -- not an EP, so no row. */
+  isMemberNotEp: boolean;
+  /** Who manages them in EXPA (D-74); null when EXPA did not say. */
+  managers: ExpaManager[] | null;
+  /** Products of their applications that are not withdrawn or rejected. */
+  activeProgrammeIds: number[];
 };
 
-const PAGE_SIZE = 250;
+export type ExpaEpDirectory = {
+  byEp: Map<string, ExpaEp>;
+  /** False when a GIS read failed part way: what is here is partial, and the
+   * page should say so rather than present missing EPs as none. */
+  ok: boolean;
+};
+
+type Person = NonNullable<NonNullable<NonNullable<PeopleQuery["people"]>["data"]>[number]>;
+type Application = { status: string | null; updatedAt: Date | null; programmeId: number | null };
+
+const PAGE_SIZE = 200;
 const MAX_PAGES = 20;
 
 /**
- * EP id to the name and managers EXPA records, across the whole term.
- *
- * One query per page rather than one per EP: the admin screen lists many EPs at
- * once and a per-row lookup would be a request storm against GIS. The range is
- * the term (D-58), because that is the floor the events themselves are
- * collected from — a display-window range would leave older rows nameless.
+ * Everyone with a last action since `floor`, by two reads newest first -- the
+ * people themselves, and their applications, because an application moving
+ * does not move its person's `updated_at` (measured: 40 of 73 EPs had an
+ * application newer than their own record) -- plus by id anyone in `alsoIds`,
+ * the EPs who can score, whatever their last action.
  */
-export async function expaEpContext(): Promise<Map<string, ExpaEpContext>> {
-  const byEp = new Map<string, ExpaEpContext>();
+export async function expaEpDirectory({
+  floor,
+  alsoIds,
+}: {
+  floor: Date;
+  alsoIds: readonly bigint[];
+}): Promise<ExpaEpDirectory> {
+  const byEp = new Map<string, ExpaEp>();
+  const people = new Map<string, Person>();
+  const applications = new Map<string, Application[]>();
 
-  const [config, from] = await Promise.all([
+  const [config, operating, term] = await Promise.all([
     db.scoreConfig.findFirst({ where: { isActive: true } }),
+    operatingOfficeIds(),
     termStart(),
   ]);
-  if (!config) return byEp;
+  if (!config) return { byEp, ok: false };
 
+  const operatingSet = new Set(operating.map(String));
   const programmes = Object.keys(config.productWeights as Record<string, unknown>)
     .map(Number)
     .filter(Number.isInteger);
+  const reversingStatuses = config.aplReversingStatuses as string[];
+  const office = Number(mcOfficeId());
 
-  const filters = {
-    created_at: {
-      from: from.toISOString().slice(0, 10),
-      to: new Date().toISOString().slice(0, 10),
-    },
-    programmes,
-    person_home_mc: [Number(mcOfficeId())],
-  };
+  let ok = true;
 
-  try {
+  const scanApplications = async () => {
     for (let page = 1; page <= MAX_PAGES; page += 1) {
-      const result = await gis().ApplicationContext({ filters, page, perPage: PAGE_SIZE });
+      const result = await gis().ApplicationContext({
+        filters: { programmes, person_home_mc: [office], sort: "updated_at", sort_direction: "desc" },
+        pagination: { page, per_page: PAGE_SIZE },
+      });
       const body = result.allOpportunityApplication;
 
       for (const row of body?.data ?? []) {
         const epId = row?.person?.id;
-        if (!epId) continue;
-
-        const key = String(epId);
-        const entry = byEp.get(key) ?? { fullName: null, managers: [] };
-
-        entry.fullName ??= row.person?.full_name ?? null;
-
-        const managers = (row.managers ?? []).flatMap((manager) =>
-          manager?.id
-            ? [{ id: BigInt(manager.id), fullName: manager.full_name ?? `Person ${manager.id}` }]
-            : []
-        );
-        // The same EP can hold several applications, each with its own manager.
-        const merged = [...entry.managers, ...managers];
-        entry.managers = merged.filter(
-          (manager, index) => merged.findIndex((m) => m.id === manager.id) === index
-        );
-
-        byEp.set(key, entry);
+        if (!row || !epId) continue;
+        const updatedAt = parseGisDate(row.updated_at);
+        if (updatedAt && updatedAt < floor) return;
+        const programmeId = Number(row.opportunity?.programme?.id);
+        const bucket = applications.get(epId) ?? [];
+        bucket.push({
+          status: row.status ?? null,
+          updatedAt,
+          programmeId: Number.isInteger(programmeId) ? programmeId : null,
+        });
+        applications.set(epId, bucket);
       }
 
-      if (page >= (body?.paging?.total_pages ?? 0)) break;
+      if (page >= (body?.paging?.total_pages ?? 0)) return;
+    }
+  };
+
+  const scanPeople = async () => {
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const result = await gis().People({
+        filters: { home_committee: [office], sort: "updated_at", sort_direction: "desc" },
+        pagination: { page, per_page: PAGE_SIZE },
+      });
+
+      for (const person of result.people?.data ?? []) {
+        if (!person?.id) continue;
+        const updatedAt = parseGisDate(person.updated_at);
+        if (updatedAt && updatedAt < floor) return;
+        people.set(person.id, person);
+      }
+
+      if (page >= (result.people?.paging?.total_pages ?? 0)) return;
+    }
+  };
+
+  try {
+    // Independent reads, so in parallel: each is a few seconds of GIS. Settled
+    // rather than raced, so a failure in one never leaves the other still
+    // writing into the maps while they are read below.
+    const scans = await Promise.allSettled([scanApplications(), scanPeople()]);
+    const failed = scans.find((scan): scan is PromiseRejectedResult => scan.status === "rejected");
+    if (failed) throw failed.reason;
+
+    const unseen = [...new Set([...applications.keys(), ...alsoIds.map(String)])].filter(
+      (id) => !people.has(id)
+    );
+    for (let index = 0; index < unseen.length; index += PAGE_SIZE) {
+      const batch = unseen.slice(index, index + PAGE_SIZE);
+      const result = await gis().People({
+        filters: { ids: batch },
+        pagination: { page: 1, per_page: batch.length },
+      });
+      for (const person of result.people?.data ?? []) {
+        if (person?.id) people.set(person.id, person);
+      }
     }
   } catch (error) {
-    // Degrades to showing ids alone: this is context for an admin, not
-    // something the page depends on.
     logger.warn("Could not read EP context from EXPA", { error });
+    ok = false;
   }
 
-  return byEp;
+  for (const [id, person] of people) {
+    const own = applications.get(id) ?? [];
+    const activeProgrammeIds = [
+      ...new Set(
+        own
+          .filter((application) => isLiveApplication(application.status, reversingStatuses))
+          .flatMap((application) => (application.programmeId === null ? [] : [application.programmeId]))
+      ),
+    ].sort((a, b) => a - b);
+
+    byEp.set(id, {
+      fullName: person.full_name ? personName(person.full_name) : null,
+      status: displayStatus(person.status ?? null, own),
+      signedUpAt: parseGisDate(person.created_at),
+      lastActionAt: lastAction([parseGisDate(person.updated_at), ...own.map((application) => application.updatedAt)]),
+      isMemberNotEp: isMemberNotEp(
+        {
+          hasApplications: person.has_opportunity_applications === true || own.length > 0,
+          positions: (person.current_positions ?? []).flatMap((position) =>
+            position.office?.id
+              ? [
+                  {
+                    status: position.status,
+                    officeId: BigInt(position.office.id),
+                    endDate: parseGisDate(position.end_date),
+                  },
+                ]
+              : []
+          ),
+        },
+        operatingSet,
+        term
+      ),
+      managers: person.managers
+        ? person.managers.flatMap((manager) =>
+            manager?.id ? [{ id: BigInt(manager.id), fullName: personName(manager.full_name ?? `Person ${manager.id}`) }] : []
+          )
+        : null,
+      activeProgrammeIds,
+    });
+  }
+
+  return { byEp, ok };
 }

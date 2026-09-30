@@ -8,20 +8,20 @@ import { characterFor } from "@/lib/design/character";
 export const dynamic = "force-dynamic";
 
 const ERRORS: Record<string, { headline: string; detail: string }> = {
-  denied_at_aiesec: { headline: "Sign-in was cancelled.", detail: "Try again below." },
+  denied_at_aiesec: { headline: "Sign-in was cancelled.", detail: "Sign in again when you're ready." },
   missing_code: {
-    headline: "AIESEC did not return an authorization code.",
-    detail: "Start again below.",
+    headline: "We couldn't finish signing you in.",
+    detail: "Please sign in again.",
   },
-  missing_state: { headline: "Sign-in link expired.", detail: "Request a new one below." },
+  missing_state: { headline: "Your sign-in took too long.", detail: "Please sign in again." },
   state_mismatch: {
-    headline: "Sign-in link could not be verified.",
-    detail: "Start again below.",
+    headline: "We couldn't finish signing you in.",
+    detail: "Please sign in again.",
   },
-  gis_unavailable: { headline: "AIESEC could not be reached.", detail: "Try again in a moment." },
+  gis_unavailable: { headline: "AIESEC isn't responding.", detail: "Try again in a few minutes." },
   session_unavailable: {
-    headline: "Signed in, but no session could start.",
-    detail: "This app's SESSION_SECRET is missing or too short. Tell the MCVP IM.",
+    headline: "Sign-in isn't working right now.",
+    detail: "It's a problem on our side. Let the MCVP IM know.",
   },
 };
 
@@ -45,7 +45,7 @@ export default async function LoginPage({
   const params = await searchParams;
   const returnTo = safeReturnTo(params.returnTo);
   const error = params.error
-    ? (ERRORS[params.error] ?? { headline: "Sign-in failed.", detail: "Try again below." })
+    ? (ERRORS[params.error] ?? { headline: "We couldn't sign you in.", detail: "Please try again." })
     : null;
 
   return (

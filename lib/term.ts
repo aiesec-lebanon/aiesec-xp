@@ -24,6 +24,19 @@ export async function termStart(): Promise<Date> {
   return settings.startsAt;
 }
 
+export type CurrentWindow = { startsAt: Date; endsAt: Date | null };
+
+/**
+ * The window the MC is measuring now: the active DisplayWindow (D-07), or the
+ * term from its start while none is set. The assignment console lists the EPs
+ * updated since it opened (D-76), and the sync mirrors EXPA managers for them.
+ */
+export async function currentWindow(): Promise<CurrentWindow> {
+  const window = await db.displayWindow.findFirst({ where: { isActive: true } });
+  if (window) return { startsAt: window.startsAt, endsAt: window.endsAt };
+  return { startsAt: await termStart(), endsAt: null };
+}
+
 export async function setTermStart(startsAt: Date): Promise<Date> {
   const settings = await db.termSettings.upsert({
     where: { id: "singleton" },

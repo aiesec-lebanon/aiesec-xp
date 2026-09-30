@@ -5,6 +5,8 @@ import { activeWindow, closingMove, pace } from "@/lib/dashboard";
 import { personalProgress } from "@/lib/leaderboard";
 import { STAGE, STAGE_TINT, TEXT } from "@/lib/design/tokens";
 import type { CharacterBeat } from "@/lib/design/character";
+import { firstName } from "@/lib/design/names";
+import { formatPoints, formatSignedPoints } from "@/lib/design/points";
 
 import { CharacterAvatar } from "@/components/studio/character";
 import { BeatOnHover } from "@/components/studio/hero-beat";
@@ -40,10 +42,6 @@ function unit(thresholdType: string): string {
     default:
       return "";
   }
-}
-
-function firstName(full: string): string {
-  return full.split(" ")[0] ?? full;
 }
 
 export default async function HomePage() {
@@ -94,7 +92,7 @@ export default async function HomePage() {
         stage: STAGES[entry.eventType] ?? entry.eventType,
         product: PROGRAMMES[entry.programmeId] ?? String(entry.programmeId),
         date: entry.occurredAt.toISOString().slice(0, 10),
-        points: entry.points > 0 ? `+${entry.points}` : String(entry.points),
+        points: formatSignedPoints(entry.points),
       }));
 
   const chips: Chip[] = [
@@ -107,7 +105,7 @@ export default async function HomePage() {
       value: standing?.aplCount ?? 0,
       caption: (standing?.aplCount ?? 0) === 1 ? "application" : "applications",
       events: eventsFor("APL"),
-      empty: "No application has scored for you inside this window yet.",
+      empty: "No applications count for you in this period yet.",
     },
     {
       key: "APD",
@@ -118,7 +116,7 @@ export default async function HomePage() {
       value: standing?.apdCount ?? 0,
       caption: (standing?.apdCount ?? 0) === 1 ? "approval" : "approvals",
       events: eventsFor("APD"),
-      empty: "No approval has scored for you inside this window yet.",
+      empty: "No approvals count for you in this period yet.",
     },
     {
       key: "RE",
@@ -129,7 +127,7 @@ export default async function HomePage() {
       value: standing?.reCount ?? 0,
       caption: (standing?.reCount ?? 0) === 1 ? "realization" : "realizations",
       events: eventsFor("RE"),
-      empty: "No realization has scored for you inside this window yet.",
+      empty: "No realizations count for you in this period yet.",
     },
     {
       key: "pace",
@@ -143,12 +141,12 @@ export default async function HomePage() {
         next === null
           ? "nothing left to chase"
           : next.perWeek === null
-            ? `${next.remaining} ${unit(next.reward.thresholdType)} to go, no closing date set`
-            : `to reach ${next.reward.threshold} before it closes`,
+            ? `${next.remaining} ${unit(next.reward.thresholdType)} to go`
+            : `to reach ${next.reward.label} before the period ends`,
       empty:
         next === null
-          ? "Every configured reward is already yours."
-          : "Pace needs a display window with an end date before it can name a weekly number.",
+          ? "You've earned every reward. Well done!"
+          : "Your weekly pace will show once the period has an end date.",
     },
   ];
 
@@ -189,15 +187,15 @@ export default async function HomePage() {
             <WindowLabel>
               {window.label}
               {window.daysLeft === null
-                ? " · no closing date"
+                ? ""
                 : window.daysLeft === 0
-                  ? " · closes today"
-                  : ` · closes in ${window.daysLeft} day${window.daysLeft === 1 ? "" : "s"}`}
+                  ? " · ends today"
+                  : ` · ends in ${window.daysLeft} day${window.daysLeft === 1 ? "" : "s"}`}
             </WindowLabel>
           </Rise>
         ) : (
           <Rise className="flex justify-center" delay={0.05}>
-            <WindowLabel>No display window is active</WindowLabel>
+            <WindowLabel>No scoring period set yet</WindowLabel>
           </Rise>
         )}
 
@@ -218,14 +216,14 @@ export default async function HomePage() {
           left={
             <Rise delay={0.12} className="hero-column self-start">
               <p className="tabular text-[clamp(56px,7vw,96px)] font-bold leading-[0.9] text-ink">
-                {points}
+                {formatPoints(points)}
               </p>
               <p className="mt-0.5 text-[15px] font-semibold text-ink-secondary">
-                points this window
+                points this period
               </p>
               <span aria-hidden className="mt-4 block h-[3px] w-11 rounded-sm bg-stage-apl" />
               <p className="mt-4 max-w-[230px] text-sm leading-relaxed text-ink-secondary">
-                Every point here is an EP you carried through a stage. Open a chip to see which.
+                Each point comes from an EP you helped move forward. Open a card below to see which.
               </p>
             </Rise>
           }
@@ -242,7 +240,7 @@ export default async function HomePage() {
                 </div>
               ) : (
                 <p className="tabular text-[clamp(44px,5vw,64px)] font-bold leading-none text-ink-faint">
-                  unranked
+                  Not ranked yet
                 </p>
               )}
               <p className="mt-0.5 text-[15px] font-semibold text-ink-secondary">

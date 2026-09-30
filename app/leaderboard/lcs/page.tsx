@@ -64,7 +64,7 @@ export default async function LcLeaderboardPage({
 
       {!analyticsOk ? (
         <p className="mx-6 mb-2 shrink-0 rounded-2xl bg-break-wash px-5 py-2.5 text-center text-sm font-semibold text-ink sm:mx-11">
-          Could not reach the AIESEC analytics API just now — LC totals may be out of date.
+          AIESEC&rsquo;s LC figures aren&rsquo;t available right now, so these totals may be out of date.
         </p>
       ) : null}
 
@@ -116,7 +116,7 @@ export default async function LcLeaderboardPage({
           </Rise>
         ) : (
           <p className="flex flex-1 items-center justify-center rounded-3xl bg-surface-raised text-center text-sm text-ink-secondary shadow-e2">
-            No operating office has scored yet.
+            No LC has scored yet.
           </p>
         )}
 

@@ -16,7 +16,7 @@ const hackathonSchema = z.discriminatedUnion("enabled", [
     enabled: z.literal("true"),
     hours: z.coerce
       .number()
-      .refine((hours) => (HACKATHON_HOURS as readonly number[]).includes(hours), "Pick a duration"),
+      .refine((hours) => (HACKATHON_HOURS as readonly number[]).includes(hours), "Choose how long to keep it on."),
   }),
   z.object({ enabled: z.literal("false") }),
 ]);
@@ -35,7 +35,7 @@ export async function setHackathonModeAction(
     enabled: formData.get("enabled"),
     hours: formData.get("hours") ?? undefined,
   });
-  if (!parsed.success) return { ok: false, message: "Pick how long hackathon mode should stay on." };
+  if (!parsed.success) return { ok: false, message: "Choose how long to keep hackathon mode on." };
 
   const before = await hackathonUntil();
   const after =
@@ -76,36 +76,33 @@ export async function runSyncJobAction(
   const admin = await requireAdminLive();
 
   const parsed = z.enum(SYNC_JOBS).safeParse(formData.get("job"));
-  if (!parsed.success) return { ok: false, message: "Unknown sync job." };
+  if (!parsed.success) return { ok: false, message: "Something went wrong. Reload the page and try again." };
 
   const job = parsed.data;
   const run = await runSyncJob(job, "MANUAL", admin.id);
 
   if (run.outcome === "skipped") {
-    return { ok: false, message: "A refresh is already running. Reload in a minute to see what it brought in." };
+    return { ok: true, message: "A refresh is already in progress. Reload the page in a minute to see the new data." };
   }
 
   for (const path of REFRESHED_PATHS[job]) revalidatePath(path);
 
   const seconds = Math.max(1, Math.round(run.durationMs / 1000));
   if (!run.ok) {
-    const failed = run.steps.filter((step) => step.status === "FAILED").map((step) => step.pass);
     return {
       ok: false,
-      message: `Finished with errors${failed.length > 0 ? ` in ${failed.join(", ")}` : ""}. The Sync page has the detail.`,
+      message: "The refresh didn't finish. Try again, and check Updates if it keeps happening.",
     };
   }
 
   if (job === "roster") {
     const members = run.steps.find((step) => step.pass === "roster")?.rowsSeen ?? 0;
-    return { ok: true, message: `Members synced in ${seconds}s: ${members} with an active position.` };
+    return { ok: true, message: `Members refreshed. ${members} people hold a member position this term.` };
   }
 
-  const applications = run.steps
-    .filter((step) => step.pass !== "replay")
-    .reduce((sum, step) => sum + step.rowsSeen, 0);
+  const applications = run.steps.find((step) => step.pass === "applications")?.rowsSeen ?? 0;
   return {
     ok: true,
-    message: `EP data refreshed in ${seconds}s: ${applications} application rows read, scores rebuilt.`,
+    message: `EP data refreshed in ${seconds}s. ${applications} ${applications === 1 ? "application" : "applications"} checked, and points are up to date.`,
   };
 }
