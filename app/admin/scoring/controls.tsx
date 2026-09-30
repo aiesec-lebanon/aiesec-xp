@@ -3,7 +3,8 @@
 import { useActionState, useMemo, useState } from "react";
 
 import { saveRoleSharesAction, type ActionState } from "@/lib/admin/scoring-actions";
-import { roundPercent, SHARE_FIELD_PREFIX, splitShares } from "@/lib/scoring/shares";
+import { formatPoints } from "@/lib/design/points";
+import { SHARE_FIELD_PREFIX } from "@/lib/scoring/shares";
 import { useActionToast } from "@/components/studio/toast";
 
 const FIELD =
@@ -18,7 +19,7 @@ function parseShare(raw: string): number {
   return raw.trim() === "" || !Number.isFinite(value) ? 0 : value;
 }
 
-export function RoleSharesForm({ roles }: { roles: RoleRow[] }) {
+export function RoleSharesForm({ roles, apdPoints }: { roles: RoleRow[]; apdPoints: number }) {
   const [state, action, pending] = useActionState<ActionState | null, FormData>(saveRoleSharesAction, null);
   useActionToast(state);
 
@@ -30,19 +31,13 @@ export function RoleSharesForm({ roles }: { roles: RoleRow[] }) {
     () => Object.fromEntries(Object.entries(values).map(([role, raw]) => [role, parseShare(raw)])),
     [values]
   );
-  const total = roundPercent(Object.values(shares).reduce((sum, share) => sum + share, 0));
-  const balanced = Math.abs(total - 100) < 0.001;
+  const valid = Object.values(shares).every((share) => share >= 0 && share <= 100);
 
-  // The two most-held roles, as the pair an admin most needs to see split.
+  // The most-held role, as the one an admin most often sees beside a main.
   const example = useMemo(() => {
-    const pair = [...roles].sort((a, b) => b.members - a.members || a.role.localeCompare(b.role)).slice(0, 2);
-    if (pair.length < 2) return null;
-    const split = splitShares(
-      pair.map((row, index) => ({ memberId: BigInt(index + 1), role: row.role })),
-      shares
-    );
-    return pair.map((row, index) => ({ role: row.role, percent: roundPercent((split.get(String(index + 1)) ?? 0) * 100) }));
-  }, [roles, shares]);
+    const role = [...roles].sort((a, b) => b.members - a.members || a.role.localeCompare(b.role))[0];
+    return role ? { role: role.role, points: (apdPoints * (shares[role.role] ?? 0)) / 100 } : null;
+  }, [roles, shares, apdPoints]);
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -50,7 +45,7 @@ export function RoleSharesForm({ roles }: { roles: RoleRow[] }) {
         <div className="grid grid-cols-[1fr_110px_150px] gap-4 px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
           <span>Role</span>
           <span>Members</span>
-          <span>Share of an EP</span>
+          <span>When not the main</span>
         </div>
 
         {roles.map((row) => (
@@ -82,22 +77,21 @@ export function RoleSharesForm({ roles }: { roles: RoleRow[] }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-line px-3.5 pt-4">
-        <p className={`text-sm font-semibold ${balanced ? "text-ink" : "text-break-ink"}`}>
-          Total <span className="tabular">{total}%</span>
-          {balanced ? null : <span className="font-normal">. Shares need to add up to 100%.</span>}
-        </p>
-
-        {example && balanced ? (
-          <p className="text-[13px] text-ink-secondary">
-            For example, an EP shared between {example[0]!.role} and {example[1]!.role}: {example[0]!.role}{" "}
-            <b className="tabular text-ink">{example[0]!.percent}%</b>, {example[1]!.role}{" "}
-            <b className="tabular text-ink">{example[1]!.percent}%</b>.
-          </p>
-        ) : null}
+        {valid ? (
+          example ? (
+            <p className="text-[13px] text-ink-secondary">
+              For example, for an approval worth {formatPoints(apdPoints)} points, the main manager gets{" "}
+              <b className="tabular text-ink">{formatPoints(apdPoints)}</b> and a manager in the {example.role} role beside
+              them gets <b className="tabular text-ink">{formatPoints(example.points)}</b>.
+            </p>
+          ) : null
+        ) : (
+          <p className="text-sm font-semibold text-break-ink">Each percentage needs to be from 0 to 100.</p>
+        )}
 
         <div className="flex-1" />
 
-        <button type="submit" disabled={pending || !balanced} className={PRIMARY}>
+        <button type="submit" disabled={pending || !valid} className={PRIMARY}>
           {pending ? "Saving…" : "Save shares"}
         </button>
       </div>

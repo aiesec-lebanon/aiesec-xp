@@ -60,11 +60,17 @@ function assignment(over: Partial<Assignment> = {}): Assignment {
 function run(
   events: ScorableEvent[],
   assignments: Assignment[] = [assignment()],
-  over: Partial<{ config: ScoringConfig; window: Window; rewards: RewardDefinition[] }> = {}
+  over: Partial<{
+    config: ScoringConfig;
+    window: Window;
+    rewards: RewardDefinition[];
+    mains: Map<string, bigint>;
+  }> = {}
 ) {
   return score({
     events,
     assignments,
+    mains: over.mains,
     config: over.config ?? CONFIG,
     window: over.window ?? WINDOW,
     rewards: over.rewards ?? [],
@@ -399,82 +405,102 @@ describe("attribution", () => {
   });
 });
 
-describe("shared EPs (D-73)", () => {
-  const shares = { TM: 60, TL: 30, LCVP: 10 };
+describe("main manager and role shares (D-83)", () => {
+  const shares = { TM: 40, TL: 30, LCVP: 25, MCP: 10 };
   const config = { ...CONFIG, roleShares: shares };
+  const mainIs = (member: bigint) => new Map([[String(EP), member]]);
 
-  it("splits evenly when no shares are configured", () => {
+  it("gives the main manager the full points and everyone else their role's %", () => {
     const result = run([event({ eventType: "RE" })], [
-      assignment({ memberId: ALICE }),
-      assignment({ memberId: BOB }),
-    ]);
-    expect(total(result.ledger, ALICE)).toBe(5);
-    expect(total(result.ledger, BOB)).toBe(5);
-  });
-
-  it("splits by role share", () => {
-    const result = run([event({ eventType: "RE" })], [
-      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: ALICE, role: "MCP" }),
       assignment({ memberId: BOB, role: "TL" }),
       assignment({ memberId: CAROL, role: "LCVP" }),
-    ], { config });
-    expect(total(result.ledger, ALICE)).toBe(6);
+    ], { config, mains: mainIs(ALICE) });
+    expect(total(result.ledger, ALICE)).toBe(10);
     expect(total(result.ledger, BOB)).toBe(3);
-    expect(total(result.ledger, CAROL)).toBe(1);
+    expect(total(result.ledger, CAROL)).toBe(2.5);
   });
 
-  it("pays out the EP's points in full, whatever the split", () => {
-    const result = run([event({ eventType: "RE" })], [
-      assignment({ memberId: ALICE, role: "TM" }),
-      assignment({ memberId: BOB, role: "LCVP" }),
-    ], { config });
-    const paid = result.ledger.reduce((sum, entry) => sum + entry.points, 0);
-    expect(Math.round(paid * 10_000) / 10_000).toBe(10);
-  });
-
-  it("gives a member alone on an EP everything, whatever their role", () => {
-    const result = run([event({ eventType: "RE" })], [assignment({ role: "LCVP" })], { config });
-    expect(total(result.ledger)).toBe(10);
-    expect(result.ledger.every((entry) => entry.share === 1)).toBe(true);
-  });
-
-  it("splits within a role evenly", () => {
+  it("can pay out more than the EP's points", () => {
     const result = run([event({ eventType: "RE" })], [
       assignment({ memberId: ALICE, role: "TM" }),
       assignment({ memberId: BOB, role: "TM" }),
-      assignment({ memberId: CAROL, role: "TL" }),
-    ], { config });
-    expect(total(result.ledger, ALICE)).toBe(total(result.ledger, BOB));
-    expect(total(result.ledger, CAROL)).toBeCloseTo(10 * (30 / 90), 3);
+    ], { config, mains: mainIs(ALICE) });
+    const paid = result.ledger.reduce((sum, entry) => sum + entry.points, 0);
+    expect(paid).toBe(14);
   });
 
-  it("keeps counts whole: everyone on the EP passed the stage", () => {
-    const result = run([event({ eventType: "APD" })], [
+  it("gives two people in the same role the full % each", () => {
+    const result = run([event({ eventType: "RE" })], [
+      assignment({ memberId: ALICE, role: "MCP" }),
+      assignment({ memberId: BOB, role: "TL" }),
+      assignment({ memberId: CAROL, role: "TL" }),
+    ], { config, mains: mainIs(ALICE) });
+    expect(total(result.ledger, BOB)).toBe(3);
+    expect(total(result.ledger, CAROL)).toBe(3);
+  });
+
+  it("gives everyone their role's % when no main is picked", () => {
+    const result = run([event({ eventType: "RE" })], [
       assignment({ memberId: ALICE, role: "TM" }),
       assignment({ memberId: BOB, role: "TL" }),
     ], { config });
-    expect(totalsByMember(result.ledger).get(String(ALICE))?.apdCount).toBe(1);
-    expect(totalsByMember(result.ledger).get(String(BOB))?.apdCount).toBe(1);
+    expect(total(result.ledger, ALICE)).toBe(4);
+    expect(total(result.ledger, BOB)).toBe(3);
   });
 
-  it("shares a break the way it shared the stage, so the two net to zero", () => {
+  it("gives a manager alone on an EP everything, with no pick needed", () => {
+    const result = run([event({ eventType: "RE" })], [assignment({ role: "LCVP" })], { config });
+    expect(total(result.ledger)).toBe(10);
+    expect(result.ledger.every((entry) => entry.share === 1 && entry.countDelta === 1)).toBe(true);
+  });
+
+  it("promotes nobody when the main is no longer a member, not even a lone manager left", () => {
+    const result = run([event({ eventType: "RE" })], [assignment({ memberId: BOB, role: "TL" })], {
+      config,
+      mains: mainIs(CAROL),
+    });
+    expect(total(result.ledger, BOB)).toBe(3);
+  });
+
+  it("counts the stage as 1 for the main and as the role's % for everyone else", () => {
+    const result = run([event({ eventType: "APD" })], [
+      assignment({ memberId: ALICE, role: "MCP" }),
+      assignment({ memberId: BOB, role: "TL" }),
+    ], { config, mains: mainIs(ALICE) });
+    expect(totalsByMember(result.ledger).get(String(ALICE))?.apdCount).toBe(1);
+    expect(totalsByMember(result.ledger).get(String(BOB))?.apdCount).toBe(0.3);
+  });
+
+  it("takes back a break at exactly the share it paid, in points and counts", () => {
     const result = run(
       [event({ eventType: "APD", occurredAt: IN }), event({ eventType: "APD_BROKEN", occurredAt: ALSO_IN })],
       [assignment({ memberId: ALICE, role: "TM" }), assignment({ memberId: BOB, role: "TL" })],
-      { config }
+      { config, mains: mainIs(ALICE) }
     );
-    expect(total(result.ledger, ALICE)).toBeCloseTo(0, 6);
-    expect(total(result.ledger, BOB)).toBeCloseTo(0, 6);
+    for (const member of [ALICE, BOB]) {
+      const totals = totalsByMember(result.ledger).get(String(member));
+      expect(totals?.points).toBeCloseTo(0, 6);
+      expect(totals?.apdCount).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("gives a role with no % nothing, and writes no entry for it", () => {
+    const result = run([event({ eventType: "RE" })], [
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "ESTL" }),
+    ], { config, mains: mainIs(ALICE) });
+    expect(result.ledger.some((entry) => entry.memberId === BOB)).toBe(false);
   });
 
   it("records each member's share on the entry", () => {
     const result = run([event()], [
       assignment({ memberId: ALICE, role: "TM" }),
       assignment({ memberId: BOB, role: "TL" }),
-    ], { config });
+    ], { config, mains: mainIs(BOB) });
     const share = new Map(result.ledger.map((entry) => [entry.memberId, entry.share]));
-    expect(share.get(ALICE)).toBeCloseTo(2 / 3, 6);
-    expect(share.get(BOB)).toBeCloseTo(1 / 3, 6);
+    expect(share.get(ALICE)).toBe(0.4);
+    expect(share.get(BOB)).toBe(1);
   });
 });
 
@@ -576,10 +602,24 @@ describe("rewards", () => {
   it("grants to each member separately, on their own share", () => {
     const points: RewardDefinition = { id: "p", thresholdType: "POINTS", threshold: 5 };
     const result = run([event({ eventType: "RE" })], [
-      assignment({ memberId: ALICE }),
-      assignment({ memberId: BOB }),
-    ], { rewards: [points] });
-    expect(result.grants).toHaveLength(2);
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "TM" }),
+      assignment({ memberId: CAROL, role: "TL" }),
+    ], {
+      rewards: [points],
+      config: { ...CONFIG, roleShares: { TM: 50, TL: 30 } },
+      mains: new Map([[String(EP), ALICE]]),
+    });
+    expect(result.grants.map((grant) => grant.memberId).sort()).toEqual([ALICE, BOB]);
+  });
+
+  it("measures a count goal on decimal counts", () => {
+    const apds: RewardDefinition = { id: "c", thresholdType: "APD_COUNT", threshold: 0.5 };
+    const result = run([event({ eventType: "APD" })], [
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "TL" }),
+    ], { rewards: [apds], config: { ...CONFIG, roleShares: { TM: 50, TL: 30 } } });
+    expect(result.grants.map((grant) => grant.memberId)).toEqual([ALICE]);
   });
 
   it("emits no grants when no rewards are configured", () => {
@@ -602,9 +642,9 @@ describe("totals", () => {
     const result = run([event({ eventType: "RE" })], [
       assignment({ memberId: ALICE }),
       assignment({ memberId: BOB }),
-    ]);
+    ], { config: { ...CONFIG, roleShares: { TM: 50 } }, mains: new Map([[String(EP), ALICE]]) });
     const totals = totalsByMember(result.ledger);
-    expect(totals.get(String(ALICE))?.points).toBe(5);
+    expect(totals.get(String(ALICE))?.points).toBe(10);
     expect(totals.get(String(BOB))?.points).toBe(5);
   });
 

@@ -7,7 +7,7 @@ import type { Assignment } from "@/lib/scoring/attribution";
 
 // The assignment register (D-73): who is credited with each EP, from which
 // source. The sync and the sheet import write it through `applySource`; the
-// replay and the live leaderboards read it through `creditedAssignments`.
+// replay and the live leaderboards read it through `creditRegister`.
 
 export const SYSTEM_ACTOR = 0n;
 
@@ -44,6 +44,7 @@ export async function applySource(
       fromExpa: true,
       fromSheet: true,
       fromAdmin: true,
+      isMain: true,
       removedAt: true,
     },
   });
@@ -68,21 +69,41 @@ export async function applySource(
   };
 }
 
-/**
- * The credits that count, for the engine: not removed, named by a live source,
- * held by a member this term, each with the role they share under.
- */
-export async function creditedAssignments(): Promise<Assignment[]> {
+export type CreditRegister = {
+  /** The credits that count: not removed, named by a source, held by a member this term. */
+  assignments: Assignment[];
+  /** EP id to its main manager (D-83), including a main who is no longer a member. */
+  mains: Map<string, bigint>;
+};
+
+/** What the engine scores with: each credit and the role it is weighted by, and each EP's main. */
+export async function creditRegister(): Promise<CreditRegister> {
   const rows = await db.epAssignment.findMany({
-    where: { removedAt: null, OR: [{ fromExpa: true }, { fromSheet: true }, { fromAdmin: true }] },
-    select: { epPersonId: true, memberId: true, fromExpa: true, fromSheet: true, fromAdmin: true, removedAt: true },
+    where: {
+      removedAt: null,
+      OR: [{ fromExpa: true }, { fromSheet: true }, { fromAdmin: true }, { isMain: true }],
+    },
+    select: {
+      epPersonId: true,
+      memberId: true,
+      fromExpa: true,
+      fromSheet: true,
+      fromAdmin: true,
+      isMain: true,
+      removedAt: true,
+    },
   });
 
   const roles = await inTermRoles([...new Set(rows.map((row) => row.memberId))]);
+  const mains = new Map<string, bigint>();
+  const assignments: Assignment[] = [];
 
-  return rows.flatMap((row) => {
+  for (const row of rows) {
+    if (row.isMain) mains.set(String(row.epPersonId), row.memberId);
     const key = String(row.memberId);
-    if (!isActiveCredit(row) || !roles.has(key)) return [];
-    return [{ epPersonId: row.epPersonId, memberId: row.memberId, role: roles.get(key) ?? null }];
-  });
+    if (!isActiveCredit(row) || !roles.has(key)) continue;
+    assignments.push({ epPersonId: row.epPersonId, memberId: row.memberId, role: roles.get(key) ?? null });
+  }
+
+  return { assignments, mains };
 }

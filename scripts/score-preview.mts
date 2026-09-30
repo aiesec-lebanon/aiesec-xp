@@ -2,23 +2,26 @@
 // result. Read-only: it writes no ledger, and exists to sanity-check the engine
 // against real data before the leaderboard is built on it.
 import { db } from "@/lib/db";
-import { creditedAssignments } from "@/lib/assignments/register";
+import { creditRegister } from "@/lib/assignments/register";
 import { toScoringConfig } from "@/lib/scoring/config";
 import { score } from "@/lib/scoring/engine";
 
-const [config, window, rewards, events, assignments] = await Promise.all([
+const [config, window, rewards, events, register] = await Promise.all([
   db.scoreConfig.findFirst({ where: { isActive: true } }),
   db.displayWindow.findFirst({ where: { isActive: true } }),
   db.reward.findMany({ where: { isActive: true } }),
   db.exchangeEvent.findMany(),
-  creditedAssignments(),
+  creditRegister(),
 ]);
 
 if (!config || !window) throw new Error("No active config or display window");
 
+const { assignments } = register;
+
 const result = score({
   events,
   assignments,
+  mains: register.mains,
   config: toScoringConfig(config),
   window: { startsAt: window.startsAt, endsAt: window.endsAt },
   rewards: rewards.map((r) => ({

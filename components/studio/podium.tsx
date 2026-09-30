@@ -142,7 +142,7 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
       >
         {leader ? (
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-1">
-            <GhostNumber>{Math.round(leader.points)}</GhostNumber>
+            <GhostNumber>{formatPoints(leader.points)}</GhostNumber>
           </div>
         ) : null}
 

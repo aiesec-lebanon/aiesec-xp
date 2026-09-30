@@ -107,6 +107,10 @@ model EpAssignment {
   fromExpa   Boolean   @default(false)
   fromSheet  Boolean   @default(false)
   fromAdmin  Boolean   @default(false)
+  // The EP's main manager (D-83), picked by an admin: full points while
+  // everyone else takes their role's %. Holds the row on the EP whatever EXPA
+  // or the sheet later say. At most one per EP, kept by the action that sets it.
+  isMain     Boolean   @default(false)
   // An admin removal outranks every source, so the next sync cannot bring the
   // credit back. Kept as a row rather than deleted for exactly that reason.
   removedAt  DateTime?
@@ -313,9 +317,11 @@ model ScoreLedgerEntry {
   stage           ScoredStage
   configVersion   Int
   points          Decimal     @db.Decimal(12, 4) // negative on break
-  // This member's part of the EP's points when several are credited (D-73).
+  // This member's part of the EP's points: 1 for the main or a sole manager,
+  // otherwise their role's % (D-83).
   share           Decimal     @default(1) @db.Decimal(7, 6)
-  countDelta      Int
+  // The same part of the stage's count, negative on a break (D-83).
+  countDelta      Decimal     @db.Decimal(7, 6)
   occurredAt      DateTime
 
   member Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)

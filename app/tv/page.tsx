@@ -194,7 +194,7 @@ export default async function TvPage() {
                     <b>{item.fullName}</b> {STAGES[item.eventType] ?? item.eventType}
                   </span>
                   <span className="tabular text-[19px] font-bold text-re-mid">
-                    {item.points > 0 ? `+${item.points}` : item.points}
+                    {formatSignedPoints(item.points)}
                   </span>
                 </div>
               ))

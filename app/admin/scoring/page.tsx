@@ -67,8 +67,8 @@ export default async function ScoringAdminPage() {
           <div>
             <h1 className="font-display text-[28px] font-semibold text-ink">Scoring</h1>
             <p className="mt-1.5 max-w-140 text-sm text-ink-secondary">
-              Decide how an EP&rsquo;s points are split when more than one member works on it.
-              When you save, everyone&rsquo;s points are recalculated.
+              Decide what each manager earns when more than one member works on an EP. When you
+              save, everyone&rsquo;s points are recalculated.
             </p>
           </div>
 
@@ -82,20 +82,27 @@ export default async function ScoringAdminPage() {
                 Shares by role
               </h2>
               <ul className="mt-2 flex max-w-160 list-disc flex-col gap-1 pl-5 text-[13px] text-ink-secondary">
-                <li>A member who works on an EP alone gets all of its points, whatever their role.</li>
                 <li>
-                  When several people share an EP, each role gets its share. Shares are scaled so
-                  the EP&rsquo;s points are always paid out in full. People in the same role split
-                  that role&rsquo;s share equally.
+                  The EP&rsquo;s main manager, picked on{" "}
+                  <Link href="/admin/assignments" className="font-semibold text-apl-ink">
+                    Assignments
+                  </Link>
+                  , gets all of its points and counts each APL, APD and RE as 1.
                 </li>
                 <li>
-                  Each member counts under their most senior position this term. Only points are
-                  split: everyone on the EP still gets the APL, APD or RE on their count.
+                  Everyone else on the EP gets their role&rsquo;s percentage of the points, and counts
+                  that part of the stage (15% counts as 0.15). Two people in the same role each get
+                  the full percentage.
                 </li>
+                <li>
+                  With no main picked, everyone gets their role&rsquo;s percentage. A manager alone on
+                  an EP always gets everything.
+                </li>
+                <li>Each member counts under their most senior position this term. A role left at 0% gets nothing.</li>
               </ul>
             </div>
 
-            <RoleSharesForm roles={rows} />
+            <RoleSharesForm roles={rows} apdPoints={Number(config.apdPoints)} />
           </section>
         ) : (
           <p className="rounded-2xl bg-break-wash px-5 py-4 text-sm font-semibold text-ink">

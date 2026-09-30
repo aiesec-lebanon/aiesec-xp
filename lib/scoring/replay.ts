@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import { creditedAssignments } from "@/lib/assignments/register";
+import { creditRegister } from "@/lib/assignments/register";
 import { logger } from "@/lib/logger";
 import { toScoringConfig } from "@/lib/scoring/config";
 import { score, type RewardDefinition } from "@/lib/scoring/engine";
@@ -20,12 +20,12 @@ export type ReplayResult = {
 };
 
 export async function replay(actorId: bigint): Promise<ReplayResult> {
-  const [config, window, rewards, events, assignments] = await Promise.all([
+  const [config, window, rewards, events, register] = await Promise.all([
     db.scoreConfig.findFirst({ where: { isActive: true } }),
     db.displayWindow.findFirst({ where: { isActive: true } }),
     db.reward.findMany({ where: { isActive: true } }),
     db.exchangeEvent.findMany(),
-    creditedAssignments(),
+    creditRegister(),
   ]);
 
   if (!config) throw new Error("No active ScoreConfig");
@@ -39,7 +39,8 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
 
   const result = score({
     events,
-    assignments,
+    assignments: register.assignments,
+    mains: register.mains,
     config: toScoringConfig(config),
     window: { startsAt: window.startsAt, endsAt: window.endsAt },
     rewards: definitions,

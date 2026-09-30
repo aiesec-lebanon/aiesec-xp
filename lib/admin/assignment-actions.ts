@@ -180,7 +180,9 @@ export async function removeManagerAction(
   ]);
   if (!member) return { ok: false, message: "This person isn't a member, so they aren't earning points for this EP." };
 
-  const removal = { removedAt: new Date(), removedBy: admin.id };
+  // Removing the main clears the pick (D-83): the EP goes back to everyone
+  // taking their role's %, or a lone manager taking it all.
+  const removal = { removedAt: new Date(), removedBy: admin.id, isMain: false };
   const after = await db.epAssignment.upsert({
     where: { epPersonId_memberId: { epPersonId, memberId } },
     create: { epPersonId, memberId, createdBy: admin.id, ...removal },
@@ -192,6 +194,59 @@ export async function removeManagerAction(
   refresh();
 
   return { ok: true, message: `${personName(member.fullName)} no longer earns points for ${epLabel(formData)}.` };
+}
+
+/**
+ * Makes a manager already on the EP its main manager (D-83): full points and a
+ * whole count for every event, while everyone else takes their role's %. The
+ * pick holds them on the EP whatever EXPA or the sheet later say; only an admin
+ * changes it, by picking someone else or removing them.
+ */
+export async function setMainManagerAction(
+  _previous: ActionState | null,
+  formData: FormData
+): Promise<ActionState> {
+  const admin = await requireAdminLive();
+  const parsed = parseCredit(formData);
+  if (!parsed.success) return { ok: false, message: RELOAD };
+
+  const { epPersonId, memberId } = parsed.data;
+
+  const [member, row, before] = await Promise.all([
+    db.member.findFirst({
+      where: { id: memberId, ...(await inTermMemberWhere()) },
+      select: { fullName: true },
+    }),
+    db.epAssignment.findUnique({ where: { epPersonId_memberId: { epPersonId, memberId } } }),
+    db.epAssignment.findFirst({ where: { epPersonId, isMain: true } }),
+  ]);
+
+  if (!member) return { ok: false, message: NOT_A_MEMBER };
+  if (!row || row.removedAt || !(row.fromExpa || row.fromSheet || row.fromAdmin)) {
+    return { ok: false, message: "Only a manager already on this EP can be its main manager. Reload the page to see the latest." };
+  }
+  if (row.isMain) return { ok: true, message: `${personName(member.fullName)} is already the main manager.` };
+
+  await db.$transaction([
+    db.epAssignment.updateMany({ where: { epPersonId, isMain: true }, data: { isMain: false } }),
+    db.epAssignment.update({ where: { id: row.id }, data: { isMain: true } }),
+  ]);
+
+  await audit(
+    admin.id,
+    "ASSIGNMENT_MAIN",
+    "EpAssignment",
+    `${epPersonId}:${memberId}`,
+    { main: before ? String(before.memberId) : null },
+    { main: String(memberId) }
+  );
+  await replay(admin.id);
+  refresh();
+
+  return {
+    ok: true,
+    message: `${personName(member.fullName)} is now the main manager for ${epLabel(formData)} and gets its full points.`,
+  };
 }
 
 /**

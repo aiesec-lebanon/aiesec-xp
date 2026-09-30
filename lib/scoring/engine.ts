@@ -1,5 +1,5 @@
 import { indexAssignments, type Assignment } from "@/lib/scoring/attribution";
-import { splitShares, type RoleShares } from "@/lib/scoring/shares";
+import { creditShares, type RoleShares } from "@/lib/scoring/shares";
 
 // The scoring engine. Pure: no database, no network, no clock. Everything it
 // needs arrives as an argument, so the same inputs always produce the same
@@ -51,8 +51,9 @@ export type LedgerEntry = {
   stage: ScoredStageValue;
   configVersion: number;
   points: number;
-  /** This member's fraction of the EP's points (D-73). */
+  /** This member's fraction of the event: 1 for the main or a sole manager, else their role's % (D-83). */
   share: number;
+  /** The same fraction of the stage's count, negative on a break. */
   countDelta: number;
   occurredAt: Date;
 };
@@ -73,6 +74,8 @@ export type Anomaly = {
 export type ScoreInput = {
   events: readonly ScorableEvent[];
   assignments: readonly Assignment[];
+  /** EP id to the main manager an admin picked, member or not (D-83). */
+  mains?: ReadonlyMap<string, bigint>;
   config: ScoringConfig;
   window: Window;
   rewards: readonly RewardDefinition[];
@@ -220,7 +223,7 @@ function breakReversals(
   return reversals;
 }
 
-export function score({ events, assignments, config, window, rewards }: ScoreInput): ScoreOutput {
+export function score({ events, assignments, mains = new Map(), config, window, rewards }: ScoreInput): ScoreOutput {
   const creditsByEp = indexAssignments(assignments);
   const ledger: LedgerEntry[] = [];
   const anomalies: Anomaly[] = [];
@@ -259,11 +262,14 @@ export function score({ events, assignments, config, window, rewards }: ScoreInp
     }
 
     const directionWeight = config.directionWeights[direction] ?? 0;
-    const shares = splitShares(creditees, config.roleShares);
+    const shares = creditShares(creditees, mains.get(String(epPersonId)) ?? null, config.roleShares);
 
     for (const credit of credits) {
       const magnitude = basePoints(credit.stage, config) * productWeight * directionWeight;
       for (const [member, share] of shares) {
+        // A role with no percentage takes nothing, and an entry for nothing
+        // would only show up in a trail as a zero.
+        if (share === 0) continue;
         ledger.push({
           memberId: BigInt(member),
           exchangeEventId: credit.source.id,
@@ -271,9 +277,7 @@ export function score({ events, assignments, config, window, rewards }: ScoreInp
           configVersion: config.version,
           points: round(credit.sign * magnitude * share),
           share: roundShare(share),
-          // Counts are whole: everyone on the EP passed the stage with it, and
-          // only its points are shared (D-73).
-          countDelta: credit.sign,
+          countDelta: roundShare(credit.sign * share),
           occurredAt: credit.at,
         });
       }
@@ -323,9 +327,9 @@ const EMPTY_TOTALS: MemberTotals = { points: 0, aplCount: 0, apdCount: 0, reCoun
 
 function add(totals: MemberTotals, entry: LedgerEntry): void {
   totals.points = round(totals.points + entry.points);
-  if (entry.stage === "APL") totals.aplCount += entry.countDelta;
-  if (entry.stage === "APD") totals.apdCount += entry.countDelta;
-  if (entry.stage === "RE") totals.reCount += entry.countDelta;
+  if (entry.stage === "APL") totals.aplCount = roundShare(totals.aplCount + entry.countDelta);
+  if (entry.stage === "APD") totals.apdCount = roundShare(totals.apdCount + entry.countDelta);
+  if (entry.stage === "RE") totals.reCount = roundShare(totals.reCount + entry.countDelta);
 }
 
 /**

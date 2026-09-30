@@ -89,14 +89,18 @@ export function Lift({
 export function CountUp({
   value,
   decimals = 0,
+  format,
   duration = 1.1,
   className,
 }: {
   value: number;
   decimals?: number;
+  /** How the settled value reads; the count itself moves at `decimals` places. */
+  format?: (value: number) => string;
   duration?: number;
   className?: string;
 }) {
+  const settled = format ? format(value) : value.toFixed(decimals);
   const reduceMotion = useReduceMotion();
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.4 });
@@ -111,14 +115,17 @@ export function CountUp({
       onUpdate: (latest) => {
         node.textContent = latest.toFixed(decimals);
       },
+      onComplete: () => {
+        node.textContent = settled;
+      },
     });
 
     return () => controls.stop();
-  }, [inView, reduceMotion, value, decimals, duration]);
+  }, [inView, reduceMotion, value, decimals, duration, settled]);
 
   return (
     <span ref={ref} className={className}>
-      {value.toFixed(decimals)}
+      {settled}
     </span>
   );
 }

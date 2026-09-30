@@ -179,7 +179,7 @@ export async function recentActivity(limit = 12): Promise<ActivityItem[]> {
   return entries.map((entry) => ({
     memberId: entry.memberId,
     fullName: personName(entry.member.fullName),
-    eventType: trailLabel(entry.stage, entry.countDelta),
+    eventType: trailLabel(entry.stage, Number(entry.countDelta)),
     points: Number(entry.points),
     occurredAt: entry.occurredAt,
   }));
