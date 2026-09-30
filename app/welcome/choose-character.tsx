@@ -54,7 +54,7 @@ export function ChooseCharacter({
           {pending ? "Saving…" : `I'm ${character.name}`}
         </button>
         <p role="status" className={`min-h-4 text-xs ${error ? "text-re-ink" : "text-ink-muted"}`}>
-          {error ?? "You can change this later in the character lab."}
+          {error ?? "You can change this later in your profile."}
         </p>
       </div>
     </div>

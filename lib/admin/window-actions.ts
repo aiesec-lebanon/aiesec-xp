@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireAdminLive } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
+import { formatDisplay, toIso } from "@/lib/design/calendar";
 import { replay } from "@/lib/scoring/replay";
 import { setTermStart, termStart } from "@/lib/term";
 
@@ -29,11 +30,11 @@ async function audit(
   });
 }
 
-const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date.");
 
 const windowSchema = z
   .object({
-    label: z.string().trim().min(1, "A label is required"),
+    label: z.string().trim().min(1, "Give the period a name."),
     startsAt: dateOnly,
     endsAt: z.union([dateOnly, z.literal("")]),
   })
@@ -43,7 +44,7 @@ const windowSchema = z
     endsAt: endsAt ? new Date(`${endsAt}T23:59:59.999Z`) : null,
   }))
   .refine((value) => !value.endsAt || value.endsAt > value.startsAt, {
-    message: "The end date must be after the start date",
+    message: "The end date needs to be after the start date.",
   });
 
 /**
@@ -81,9 +82,9 @@ export async function setDisplayWindowAction(
   revalidatePath("/");
 
   const range = after.endsAt
-    ? `${parsed.data.startsAt.toDateString()} to ${after.endsAt.toDateString()}`
-    : `${parsed.data.startsAt.toDateString()}, open-ended`;
-  return { ok: true, message: `Display window set: ${range}.` };
+    ? `${formatDisplay(toIso(parsed.data.startsAt))} to ${formatDisplay(toIso(after.endsAt))}`
+    : `from ${formatDisplay(toIso(parsed.data.startsAt))}, with no end date`;
+  return { ok: true, message: `Scoring period saved: ${range}. Points are up to date.` };
 }
 
 const termSchema = z.object({ startsAt: dateOnly }).transform(({ startsAt }) => ({
@@ -119,5 +120,5 @@ export async function setTermStartAction(
   revalidatePath("/leaderboard");
   revalidatePath("/leaderboard/lcs");
 
-  return { ok: true, message: `Term starts ${after.toDateString()}.` };
+  return { ok: true, message: `Term start saved: ${formatDisplay(toIso(after))}.` };
 }

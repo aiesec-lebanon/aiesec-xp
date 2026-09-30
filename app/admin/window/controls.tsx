@@ -51,7 +51,7 @@ export function WindowForm({
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="label" className="text-xs font-semibold text-ink-muted">
-            Label
+            Name members see
           </label>
           <input
             id="label"
@@ -85,7 +85,7 @@ export function WindowForm({
         </div>
 
         <button type="submit" disabled={pending} className={PRIMARY}>
-          Save window
+          Save period
         </button>
       </div>
 

@@ -75,10 +75,14 @@ export default async function TvPage() {
             Live
             {window
               ? ` · ${window.label}${
-                  window.daysLeft === null ? "" : ` closes in ${window.daysLeft} days`
+                  window.daysLeft === null
+                    ? ""
+                    : window.daysLeft === 0
+                      ? " ends today"
+                      : ` ends in ${window.daysLeft} day${window.daysLeft === 1 ? "" : "s"}`
                 }`
-              : " · no display window"}
-            {analyticsOk ? "" : " · analytics unavailable"}
+              : ""}
+            {analyticsOk ? "" : " · LC figures unavailable"}
           </span>
         </div>
       </header>
@@ -86,7 +90,7 @@ export default async function TvPage() {
       <div className="grid min-h-0 flex-1 gap-[clamp(1rem,1.6vw,2rem)] px-[clamp(1.5rem,3vw,3.5rem)] pb-[clamp(1rem,2vh,2.25rem)] lg:grid-cols-[1fr_auto]">
         <section className="flex min-h-0 flex-col">
           <h2 className="mb-[clamp(0.5rem,1vh,1rem)] shrink-0 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
-            Entities
+            LCs
           </h2>
           <ol className="flex min-h-0 flex-[3] flex-col gap-[clamp(0.4rem,0.9vh,0.875rem)]">
             {entities.map((entity) => (
@@ -120,7 +124,7 @@ export default async function TvPage() {
               entity. */}
           <div className="mt-[clamp(0.5rem,1.2vh,2rem)] flex min-h-0 flex-[2] flex-col justify-center rounded-3xl bg-surface-raised px-[clamp(1.5rem,2.5vw,2.5rem)] py-[clamp(1rem,2.2vh,2rem)] shadow-e1">
             <p className="shrink-0 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
-              All entities
+              All of Lebanon
             </p>
             <div className="mt-[clamp(0.5rem,1.4vh,1.25rem)] flex min-h-0 flex-1 items-stretch gap-[clamp(0.75rem,1.2vw,1.5rem)]">
               <Tile label="APL" value={totals.aplCount} wash="bg-apl-wash" ink="text-apl-ink" size="lg" />
@@ -132,7 +136,7 @@ export default async function TvPage() {
 
         <section className="flex min-h-0 flex-col lg:w-[620px]">
           <h2 className="mb-[clamp(0.5rem,1vh,1rem)] shrink-0 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
-            Top 10, individual
+            Top 10 members
           </h2>
           <ol className="flex min-h-0 flex-1 flex-col gap-[clamp(0.2rem,0.5vh,0.375rem)]">
             {top.map((standing) => {

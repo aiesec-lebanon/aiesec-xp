@@ -6,6 +6,7 @@ import {
   officePoints,
   score,
   totalsByMember,
+  type LedgerEntry,
   type RewardDefinition,
   type ScorableEvent,
   type ScoringConfig,
@@ -14,6 +15,7 @@ import {
 
 const ALICE = 1001n;
 const BOB = 1002n;
+const CAROL = 1003n;
 const EP = 5000n;
 
 const CONFIG: ScoringConfig = {
@@ -25,12 +27,14 @@ const CONFIG: ScoringConfig = {
   aplReversingStatuses: ["withdrawn", "rejected"],
   productWeights: { "7": 1, "8": 1, "9": 1 },
   directionWeights: { OUTGOING: 1, INCOMING: 1 },
+  roleShares: {},
 };
 
 const WINDOW: Window = { startsAt: new Date("2026-07-01T00:00:00Z"), endsAt: null };
 
 const IN = new Date("2026-08-01T00:00:00Z");
 const ALSO_IN = new Date("2026-08-15T00:00:00Z");
+const LATER_IN = new Date("2026-09-01T00:00:00Z");
 const BEFORE = new Date("2026-06-01T00:00:00Z");
 
 let seq = 0;
@@ -50,13 +54,7 @@ function event(over: Partial<ScorableEvent> = {}): ScorableEvent {
 }
 
 function assignment(over: Partial<Assignment> = {}): Assignment {
-  return {
-    epPersonId: EP,
-    memberId: ALICE,
-    effectiveFrom: new Date("2020-01-01T00:00:00Z"),
-    effectiveTo: null,
-    ...over,
-  };
+  return { epPersonId: EP, memberId: ALICE, role: "TM", ...over };
 }
 
 function run(
@@ -72,6 +70,10 @@ function run(
     rewards: over.rewards ?? [],
   });
 }
+
+const stages = (ledger: LedgerEntry[]) => ledger.map((entry) => `${entry.stage}:${entry.points}`);
+const total = (ledger: LedgerEntry[], member = ALICE) =>
+  totalsByMember(ledger).get(String(member))?.points ?? 0;
 
 describe("purity", () => {
   it("returns the same ledger for the same inputs", () => {
@@ -98,7 +100,7 @@ describe("points", () => {
     ["APD", 5],
     ["RE", 10],
   ] as const)("scores %s at its configured value", (eventType, points) => {
-    expect(run([event({ eventType })]).ledger[0].points).toBe(points);
+    expect(stages(run([event({ eventType })]).ledger)).toEqual([`${eventType}:${points}`]);
   });
 
   it("orders APL below APD below RE (D-05)", () => {
@@ -111,9 +113,7 @@ describe("points", () => {
 
   it("multiplies by the product weight", () => {
     const config = { ...CONFIG, productWeights: { "7": 2.5 } };
-    expect(run([event({ eventType: "APD" })], [assignment()], { config }).ledger[0].points).toBe(
-      12.5
-    );
+    expect(run([event({ eventType: "APD" })], [assignment()], { config }).ledger[0].points).toBe(12.5);
   });
 
   it("multiplies by the direction weight", () => {
@@ -129,8 +129,7 @@ describe("points", () => {
 
   it("rounds to four places rather than leaking float error", () => {
     const config = { ...CONFIG, aplPoints: 0.1, productWeights: { "7": 0.2 } };
-    const points = run([event()], [assignment()], { config }).ledger[0].points;
-    expect(points).toBe(0.02);
+    expect(run([event()], [assignment()], { config }).ledger[0].points).toBe(0.02);
   });
 
   it("scores an unconfigured programme at zero and reports it (D-30)", () => {
@@ -141,6 +140,72 @@ describe("points", () => {
 
   it("never invents a weight of 1 for an unknown programme", () => {
     expect(run([event({ programmeId: 99 })]).ledger).toHaveLength(0);
+  });
+});
+
+describe("each stage scores in the window it happens in (D-75)", () => {
+  it("credits every stage whose own date is inside the window, each on that date", () => {
+    const result = run([
+      event({ eventType: "APL", occurredAt: IN }),
+      event({ eventType: "APD", occurredAt: ALSO_IN }),
+      event({ eventType: "RE", occurredAt: LATER_IN }),
+    ]);
+    expect(stages(result.ledger)).toEqual(["APL:1", "APD:5", "RE:10"]);
+    expect(result.ledger.map((entry) => entry.occurredAt)).toEqual([IN, ALSO_IN, LATER_IN]);
+  });
+
+  it("does not bring back an application from before the window when the approval lands inside it", () => {
+    const result = run([
+      event({ eventType: "APL", occurredAt: BEFORE }),
+      event({ eventType: "APD", occurredAt: IN, applicationStatus: "approved" }),
+    ]);
+    expect(stages(result.ledger)).toEqual(["APD:5"]);
+  });
+
+  it("gives a realization from last term that completes this term nothing", () => {
+    // Measured: realized 2 Jul, completed 15 Aug, term from 1 Aug.
+    const window: Window = { startsAt: new Date("2026-08-01T00:00:00Z"), endsAt: null };
+    const result = run(
+      [
+        event({ eventType: "APL", occurredAt: new Date("2026-04-18T00:00:00Z"), applicationStatus: "completed" }),
+        event({ eventType: "APD", occurredAt: new Date("2026-05-01T00:00:00Z"), applicationStatus: "completed" }),
+        event({ eventType: "RE", occurredAt: new Date("2026-07-02T00:00:00Z"), applicationStatus: "completed" }),
+      ],
+      [assignment()],
+      { window }
+    );
+    expect(result.ledger).toHaveLength(0);
+  });
+
+  it("points each entry at its own event", () => {
+    const apl = event({ eventType: "APL" });
+    const apd = event({ eventType: "APD" });
+    const ledger = run([apl, apd]).ledger;
+    expect(ledger.map((entry) => entry.exchangeEventId)).toEqual([apl.id, apd.id]);
+  });
+
+  it("stops at the window's end", () => {
+    const window: Window = { startsAt: WINDOW.startsAt, endsAt: new Date("2026-08-10T00:00:00Z") };
+    const result = run(
+      [event({ eventType: "APL", occurredAt: IN }), event({ eventType: "APD", occurredAt: ALSO_IN })],
+      [assignment()],
+      { window }
+    );
+    expect(stages(result.ledger)).toEqual(["APL:1"]);
+  });
+
+  it("scores each application of an EP on its own", () => {
+    const result = run([
+      event({ eventType: "APL", applicationId: 1n }),
+      event({ eventType: "APL", applicationId: 2n }),
+      event({ eventType: "APD", applicationId: 2n }),
+    ]);
+    expect(totalsByMember(result.ledger).get(String(ALICE))).toEqual({
+      points: 7,
+      aplCount: 2,
+      apdCount: 1,
+      reCount: 0,
+    });
   });
 });
 
@@ -173,13 +238,13 @@ describe("display window (D-08)", () => {
   });
 });
 
-describe("breaks (D-10, D-26)", () => {
+describe("breaks (D-10, D-26, D-28)", () => {
   it("negates points and the count", () => {
     const result = run([
       event({ eventType: "APD", occurredAt: IN }),
       event({ eventType: "APD_BROKEN", occurredAt: ALSO_IN }),
     ]);
-    expect(result.ledger.map((entry) => entry.points)).toEqual([5, -5]);
+    expect(stages(result.ledger)).toEqual(["APD:5", "APD:-5"]);
     expect(result.ledger.map((entry) => entry.countDelta)).toEqual([1, -1]);
   });
 
@@ -188,8 +253,12 @@ describe("breaks (D-10, D-26)", () => {
       event({ eventType: "APD", occurredAt: IN }),
       event({ eventType: "APD_BROKEN", occurredAt: ALSO_IN }),
     ]);
-    const totals = totalsByMember(result.ledger, []);
-    expect(totals.get(String(ALICE))?.points).toBe(0);
+    expect(totalsByMember(result.ledger).get(String(ALICE))).toEqual({
+      points: 0,
+      aplCount: 0,
+      apdCount: 0,
+      reCount: 0,
+    });
   });
 
   it("ignores a break whose stage event is outside the window (D-26)", () => {
@@ -206,8 +275,7 @@ describe("breaks (D-10, D-26)", () => {
       event({ eventType: "RE", occurredAt: BEFORE }),
       event({ eventType: "RE_BROKEN", occurredAt: IN }),
     ]);
-    const total = totalsByMember(result.ledger, []).get(String(ALICE))?.points ?? 0;
-    expect(total).toBeGreaterThanOrEqual(0);
+    expect(total(result.ledger)).toBeGreaterThanOrEqual(0);
   });
 
   it("reports an orphan break rather than dropping it silently", () => {
@@ -221,7 +289,7 @@ describe("breaks (D-10, D-26)", () => {
       event({ eventType: "APD", applicationId: 1n, occurredAt: IN }),
       event({ eventType: "APD_BROKEN", applicationId: 2n, occurredAt: ALSO_IN }),
     ]);
-    expect(result.ledger).toHaveLength(1);
+    expect(stages(result.ledger)).toEqual(["APD:5"]);
     expect(result.anomalies[0].kind).toBe("BREAK_WITHOUT_STAGE_EVENT");
   });
 
@@ -230,7 +298,29 @@ describe("breaks (D-10, D-26)", () => {
       event({ eventType: "RE", occurredAt: IN }),
       event({ eventType: "APD_BROKEN", occurredAt: ALSO_IN }),
     ]);
-    expect(totalsByMember(result.ledger, []).get(String(ALICE))?.points).toBe(10);
+    expect(total(result.ledger)).toBe(10);
+  });
+
+  it("ignores a break the stage has since overtaken: approve, break, re-approve (D-28)", () => {
+    const result = run([
+      event({ eventType: "APD", occurredAt: LATER_IN }),
+      event({ eventType: "APD_BROKEN", occurredAt: ALSO_IN }),
+    ]);
+    expect(stages(result.ledger)).toEqual(["APD:5"]);
+    expect(result.anomalies).toHaveLength(0);
+  });
+
+  it("takes back a realization broken inside the window", () => {
+    const result = run([
+      event({ eventType: "RE", occurredAt: IN }),
+      event({ eventType: "RE_BROKEN", occurredAt: ALSO_IN }),
+    ]);
+    expect(totalsByMember(result.ledger).get(String(ALICE))).toEqual({
+      points: 0,
+      aplCount: 0,
+      apdCount: 0,
+      reCount: 0,
+    });
   });
 });
 
@@ -252,19 +342,13 @@ describe("net APL (D-41)", () => {
 
   it("follows the configured list rather than a hardcoded one", () => {
     const config = { ...CONFIG, aplReversingStatuses: ["open"] };
-    expect(run([event({ applicationStatus: "open" })], [assignment()], { config }).ledger).toHaveLength(
-      0
-    );
-    expect(
-      run([event({ applicationStatus: "rejected" })], [assignment()], { config }).ledger
-    ).toHaveLength(1);
+    expect(run([event({ applicationStatus: "open" })], [assignment()], { config }).ledger).toHaveLength(0);
+    expect(run([event({ applicationStatus: "rejected" })], [assignment()], { config }).ledger).toHaveLength(1);
   });
 
   it("keeps the APL when reversal is switched off", () => {
     const config = { ...CONFIG, reverseApl: false };
-    expect(
-      run([event({ applicationStatus: "rejected" })], [assignment()], { config }).ledger
-    ).toHaveLength(1);
+    expect(run([event({ applicationStatus: "rejected" })], [assignment()], { config }).ledger).toHaveLength(1);
   });
 
   it("reverses only APL, never a later stage of the same application", () => {
@@ -272,52 +356,13 @@ describe("net APL (D-41)", () => {
       event({ eventType: "APL", applicationStatus: "rejected" }),
       event({ eventType: "APD", applicationStatus: "rejected" }),
     ]);
-    expect(result.ledger).toHaveLength(1);
-    expect(result.ledger[0].points).toBe(5);
+    expect(stages(result.ledger)).toEqual(["APD:5"]);
   });
 });
 
 describe("attribution", () => {
   it("credits the assigned member", () => {
     expect(run([event()]).ledger[0].memberId).toBe(ALICE);
-  });
-
-  it("gives full points to every concurrent assignee (D-06)", () => {
-    const result = run([event({ eventType: "RE" })], [
-      assignment({ memberId: ALICE }),
-      assignment({ memberId: BOB }),
-    ]);
-    expect(result.ledger).toHaveLength(2);
-    expect(result.ledger.every((entry) => entry.points === 10)).toBe(true);
-  });
-
-  it("does not split points between assignees", () => {
-    const result = run([event({ eventType: "RE" })], [
-      assignment({ memberId: ALICE }),
-      assignment({ memberId: BOB }),
-    ]);
-    expect(result.ledger.reduce((sum, entry) => sum + entry.points, 0)).toBe(20);
-  });
-
-  it("credits whoever held the assignment when the event happened (D-36)", () => {
-    const result = run([event({ occurredAt: ALSO_IN })], [
-      assignment({ memberId: ALICE, effectiveFrom: BEFORE, effectiveTo: IN }),
-      assignment({ memberId: BOB, effectiveFrom: IN, effectiveTo: null }),
-    ]);
-    expect(result.ledger).toHaveLength(1);
-    expect(result.ledger[0].memberId).toBe(BOB);
-  });
-
-  it("does not credit an assignment that had already ended", () => {
-    const result = run([event({ occurredAt: ALSO_IN })], [
-      assignment({ effectiveFrom: BEFORE, effectiveTo: IN }),
-    ]);
-    expect(result.ledger).toHaveLength(0);
-  });
-
-  it("does not credit an assignment that had not yet begun", () => {
-    const result = run([event({ occurredAt: IN })], [assignment({ effectiveFrom: ALSO_IN })]);
-    expect(result.ledger).toHaveLength(0);
   });
 
   it("attributes per EP, so one assignment drives the whole funnel", () => {
@@ -340,9 +385,96 @@ describe("attribution", () => {
     expect(run([event({ epPersonId: 9999n })]).ledger).toHaveLength(0);
   });
 
-  it("counts a duplicated assignment once", () => {
+  it("counts a member named by two sources once", () => {
     const result = run([event()], [assignment(), assignment()]);
     expect(result.ledger).toHaveLength(1);
+    expect(result.ledger[0].points).toBe(1);
+  });
+
+  it("credits whoever holds the EP now, for every event (D-73 supersedes D-36)", () => {
+    const result = run([event({ occurredAt: IN }), event({ eventType: "APD", occurredAt: LATER_IN })], [
+      assignment({ memberId: BOB }),
+    ]);
+    expect(result.ledger.every((entry) => entry.memberId === BOB)).toBe(true);
+  });
+});
+
+describe("shared EPs (D-73)", () => {
+  const shares = { TM: 60, TL: 30, LCVP: 10 };
+  const config = { ...CONFIG, roleShares: shares };
+
+  it("splits evenly when no shares are configured", () => {
+    const result = run([event({ eventType: "RE" })], [
+      assignment({ memberId: ALICE }),
+      assignment({ memberId: BOB }),
+    ]);
+    expect(total(result.ledger, ALICE)).toBe(5);
+    expect(total(result.ledger, BOB)).toBe(5);
+  });
+
+  it("splits by role share", () => {
+    const result = run([event({ eventType: "RE" })], [
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "TL" }),
+      assignment({ memberId: CAROL, role: "LCVP" }),
+    ], { config });
+    expect(total(result.ledger, ALICE)).toBe(6);
+    expect(total(result.ledger, BOB)).toBe(3);
+    expect(total(result.ledger, CAROL)).toBe(1);
+  });
+
+  it("pays out the EP's points in full, whatever the split", () => {
+    const result = run([event({ eventType: "RE" })], [
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "LCVP" }),
+    ], { config });
+    const paid = result.ledger.reduce((sum, entry) => sum + entry.points, 0);
+    expect(Math.round(paid * 10_000) / 10_000).toBe(10);
+  });
+
+  it("gives a member alone on an EP everything, whatever their role", () => {
+    const result = run([event({ eventType: "RE" })], [assignment({ role: "LCVP" })], { config });
+    expect(total(result.ledger)).toBe(10);
+    expect(result.ledger.every((entry) => entry.share === 1)).toBe(true);
+  });
+
+  it("splits within a role evenly", () => {
+    const result = run([event({ eventType: "RE" })], [
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "TM" }),
+      assignment({ memberId: CAROL, role: "TL" }),
+    ], { config });
+    expect(total(result.ledger, ALICE)).toBe(total(result.ledger, BOB));
+    expect(total(result.ledger, CAROL)).toBeCloseTo(10 * (30 / 90), 3);
+  });
+
+  it("keeps counts whole: everyone on the EP passed the stage", () => {
+    const result = run([event({ eventType: "APD" })], [
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "TL" }),
+    ], { config });
+    expect(totalsByMember(result.ledger).get(String(ALICE))?.apdCount).toBe(1);
+    expect(totalsByMember(result.ledger).get(String(BOB))?.apdCount).toBe(1);
+  });
+
+  it("shares a break the way it shared the stage, so the two net to zero", () => {
+    const result = run(
+      [event({ eventType: "APD", occurredAt: IN }), event({ eventType: "APD_BROKEN", occurredAt: ALSO_IN })],
+      [assignment({ memberId: ALICE, role: "TM" }), assignment({ memberId: BOB, role: "TL" })],
+      { config }
+    );
+    expect(total(result.ledger, ALICE)).toBeCloseTo(0, 6);
+    expect(total(result.ledger, BOB)).toBeCloseTo(0, 6);
+  });
+
+  it("records each member's share on the entry", () => {
+    const result = run([event()], [
+      assignment({ memberId: ALICE, role: "TM" }),
+      assignment({ memberId: BOB, role: "TL" }),
+    ], { config });
+    const share = new Map(result.ledger.map((entry) => [entry.memberId, entry.share]));
+    expect(share.get(ALICE)).toBeCloseTo(2 / 3, 6);
+    expect(share.get(BOB)).toBeCloseTo(1 / 3, 6);
   });
 });
 
@@ -354,9 +486,7 @@ describe("replay", () => {
 
   it("produces a different ledger from a changed config, with no state carried over", () => {
     const before = run(events);
-    const after = run(events, [assignment()], {
-      config: { ...CONFIG, version: 2, apdPoints: 50 },
-    });
+    const after = run(events, [assignment()], { config: { ...CONFIG, version: 2, apdPoints: 50 } });
     expect(before.ledger[1].points).toBe(5);
     expect(after.ledger[1].points).toBe(50);
     expect(after.ledger.every((entry) => entry.configVersion === 2)).toBe(true);
@@ -366,21 +496,8 @@ describe("replay", () => {
     expect(run(events).ledger).toEqual(run(events).ledger);
   });
 
-  it("rebuilds from events, assignments and config alone", () => {
-    const rebuilt = score({
-      events,
-      assignments: [assignment()],
-      config: CONFIG,
-      window: WINDOW,
-      rewards: [],
-    });
-    expect(rebuilt.ledger).toEqual(run(events).ledger);
-  });
-
   it("moves attribution when the assignment register changes", () => {
-    expect(run(events, [assignment({ memberId: BOB })]).ledger.every((e) => e.memberId === BOB)).toBe(
-      true
-    );
+    expect(run(events, [assignment({ memberId: BOB })]).ledger.every((e) => e.memberId === BOB)).toBe(true);
   });
 
   it("drops everything when the window moves past the events", () => {
@@ -416,12 +533,11 @@ describe("rewards", () => {
   });
 
   it("dates the grant to when the threshold was crossed, not the latest event", () => {
-    const later = new Date("2026-09-01T00:00:00Z");
     const result = run(
       [
         event({ eventType: "APD", applicationId: 1n, occurredAt: IN }),
         event({ eventType: "APD", applicationId: 2n, occurredAt: ALSO_IN }),
-        event({ eventType: "APD", applicationId: 3n, occurredAt: later }),
+        event({ eventType: "APD", applicationId: 3n, occurredAt: LATER_IN }),
       ],
       [assignment()],
       { rewards: [reward] }
@@ -429,7 +545,7 @@ describe("rewards", () => {
     expect(result.grants[0].earnedAt).toEqual(ALSO_IN);
   });
 
-  it("withdraws the grant when a break drops the count back below (D-20)", () => {
+  it("withdraws the grant when a break drops the count back below (D-10)", () => {
     const result = run(
       [
         event({ eventType: "APD", applicationId: 1n, occurredAt: IN }),
@@ -457,8 +573,8 @@ describe("rewards", () => {
     expect(result.grants.map((grant) => grant.rewardId)).toEqual(["low"]);
   });
 
-  it("grants to each member separately", () => {
-    const points: RewardDefinition = { id: "p", thresholdType: "POINTS", threshold: 10 };
+  it("grants to each member separately, on their own share", () => {
+    const points: RewardDefinition = { id: "p", thresholdType: "POINTS", threshold: 5 };
     const result = run([event({ eventType: "RE" })], [
       assignment({ memberId: ALICE }),
       assignment({ memberId: BOB }),
@@ -478,21 +594,22 @@ describe("totals", () => {
       event({ eventType: "RE", applicationId: 2n, occurredAt: IN }),
       event({ eventType: "RE_BROKEN", applicationId: 2n, occurredAt: ALSO_IN }),
     ];
-    const result = run(events);
-    const totals = totalsByMember(result.ledger, events).get(String(ALICE));
+    const totals = totalsByMember(run(events).ledger).get(String(ALICE));
     expect(totals).toEqual({ points: 10, aplCount: 0, apdCount: 0, reCount: 1 });
   });
 
   it("keeps each member's totals separate", () => {
-    const events = [event({ eventType: "RE" })];
-    const result = run(events, [assignment({ memberId: ALICE }), assignment({ memberId: BOB })]);
-    const totals = totalsByMember(result.ledger, events);
-    expect(totals.get(String(ALICE))?.points).toBe(10);
-    expect(totals.get(String(BOB))?.points).toBe(10);
+    const result = run([event({ eventType: "RE" })], [
+      assignment({ memberId: ALICE }),
+      assignment({ memberId: BOB }),
+    ]);
+    const totals = totalsByMember(result.ledger);
+    expect(totals.get(String(ALICE))?.points).toBe(5);
+    expect(totals.get(String(BOB))?.points).toBe(5);
   });
 
   it("is empty for an empty ledger", () => {
-    expect(totalsByMember([], []).size).toBe(0);
+    expect(totalsByMember([]).size).toBe(0);
   });
 });
 
@@ -501,16 +618,15 @@ describe("degenerate input", () => {
     expect(run([])).toEqual({ ledger: [], grants: [], anomalies: [] });
   });
 
-  it("handles events with no assignments", () => {
-    const result = run([event(), event()], []);
+  it("reports every unattributed event", () => {
+    const result = run([event({ applicationId: 1n }), event({ applicationId: 2n, eventType: "RE" })], []);
     expect(result.ledger).toHaveLength(0);
     expect(result.anomalies).toHaveLength(2);
+    expect(result.anomalies.every((anomaly) => anomaly.kind === "UNATTRIBUTED")).toBe(true);
   });
 
   it("handles rewards with no ledger", () => {
-    expect(evaluateRewards([], [], [{ id: "r", thresholdType: "POINTS", threshold: 1 }])).toEqual(
-      []
-    );
+    expect(evaluateRewards([], [{ id: "r", thresholdType: "POINTS", threshold: 1 }])).toEqual([]);
   });
 
   it("treats a zero threshold as already met", () => {
@@ -532,8 +648,7 @@ describe("officePoints", () => {
   });
 
   it("scores zero for a programme with no configured weight (D-30)", () => {
-    const points = officePoints({ 5: { APL: 100, APD: 100, RE: 100 } }, CONFIG);
-    expect(points).toBe(0);
+    expect(officePoints({ 5: { APL: 100, APD: 100, RE: 100 } }, CONFIG)).toBe(0);
   });
 
   it("uses the OUTGOING direction weight by default", () => {

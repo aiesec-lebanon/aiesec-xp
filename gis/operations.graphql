@@ -92,20 +92,26 @@ query MemberPositions($filters: MemberPositionFilter, $pagination: Pagination) {
   }
 }
 
-# One operation serves every sync pass; the caller varies the filter, which is
-# what keeps the query set closed. No EP contact detail is selected (D-40).
-query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
-  allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
+# The EP data sync (D-76): applications newest last action first, so the caller
+# reads back only as far as it needs. One row carries every stage date, so a
+# single pass replaces a pass per stage, and the EP's managers in EXPA ride
+# along (D-74). No EP contact detail is selected (D-40).
+query Applications($filters: ApplicationFilter, $pagination: Pagination) {
+  allOpportunityApplication(filters: $filters, pagination: $pagination) {
     data {
       id
       status
       created_at
+      updated_at
       # Ids only, and only what scoring reads. The EP's name is not requested,
-      # so sync cannot store one (D-42); nothing descriptive is requested
-      # either, because this product does not display EP or opportunity data --
-      # EXPA does that (D-44).
+      # so sync cannot store one (D-42). `person.managers` is who manages the EP
+      # in EXPA; `OpportunityApplication.managers` is a different field that
+      # was empty on every application measured (D-74).
       person {
         id
+        managers {
+          id
+        }
       }
       opportunity {
         id
@@ -119,8 +125,7 @@ query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
         date_realized
         date_realisation_broke
         remote_realized_at
-        date_rejected
-        date_withdrawn
+        date_remote_realization_broken_at
       }
     }
     paging {
@@ -131,24 +136,77 @@ query Applications($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
   }
 }
 
-
-
-# What the assignment console needs to name a row: the EP behind an id, and the
-# manager EXPA itself records on the application. Both are read at display time
-# and never stored (D-42) -- this is the "read from GIS per view and discarded"
-# path that decision carves out, not a relaxation of it. EXPA populates the
-# manager only after approval, so it is frequently absent.
-query ApplicationContext($filters: ApplicationFilter, $page: Int!, $perPage: Int!) {
-  allOpportunityApplication(filters: $filters, page: $page, per_page: $perPage) {
+# Who manages each EP in EXPA, for the sync to mirror (D-74): by last action
+# for everyone the assignment console lists, and by id for an EP who can score
+# but whose record has not moved. Ids only, like the sync query above.
+query EpManagers($filters: PeopleFilter, $pagination: Pagination) {
+  people(filters: $filters, pagination: $pagination) {
     data {
       id
+      updated_at
+      managers {
+        id
+      }
+    }
+    paging {
+      total_pages
+    }
+  }
+}
+
+# Per application, for the assignment console: its live status and product,
+# which decide an EP's active product and shown status (D-72, D-78), and its
+# last action, which orders the console (D-76). Read at display time and never
+# stored (D-42). Deliberately not `person { full_name }` (D-70): a name is
+# resolved by id through `People` below, not by scanning applications.
+query ApplicationContext($filters: ApplicationFilter, $pagination: Pagination) {
+  allOpportunityApplication(filters: $filters, pagination: $pagination) {
+    data {
+      id
+      status
+      updated_at
       person {
         id
-        full_name
       }
+      opportunity {
+        programme {
+          id
+        }
+      }
+    }
+    paging {
+      total_pages
+    }
+  }
+}
+
+# The EPs the assignment console lists, and what EXPA says about each: who they
+# are, their own status (a sign-up is "open"), when they signed up and last
+# acted, and who manages them in EXPA -- named here because the console shows
+# managers who are not members, and so have no Member row to name them from.
+# Asked two ways with the same selection: by last action for everyone recent
+# (D-76), and by id for an EP who can score but whose record has not moved.
+# `current_positions` is read only to tell a member from an EP with the term
+# rule (D-71).
+query People($filters: PeopleFilter, $pagination: Pagination) {
+  people(filters: $filters, pagination: $pagination) {
+    data {
+      id
+      full_name
+      status
+      created_at
+      updated_at
+      has_opportunity_applications
       managers {
         id
         full_name
+      }
+      current_positions {
+        status
+        end_date
+        office {
+          id
+        }
       }
     }
     paging {

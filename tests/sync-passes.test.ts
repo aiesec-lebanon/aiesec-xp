@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  dedupe,
+  EVENT_TYPES,
   isBreakSuperseded,
-  mapRow,
+  managerIds,
+  mapApplication,
   occurrenceDate,
-  PASSES,
   type ApplicationRow,
 } from "@/lib/sync/passes";
 
@@ -18,16 +18,26 @@ type Meta = Partial<{
   date_realized: string | null;
   date_realisation_broke: string | null;
   remote_realized_at: string | null;
-  date_rejected: string | null;
-  date_withdrawn: string | null;
+  date_remote_realization_broken_at: string | null;
 }>;
 
-function row(over: { id?: string; status?: string; created_at?: string; programme?: string; meta?: Meta } = {}) {
+function row(
+  over: {
+    id?: string;
+    status?: string;
+    created_at?: string;
+    updated_at?: string;
+    programme?: string;
+    managers?: { id: string }[] | null;
+    meta?: Meta;
+  } = {}
+) {
   return {
     id: over.id ?? "7163866",
     status: over.status ?? "open",
     created_at: over.created_at ?? "2026-08-31T10:41:48Z",
-    person: { id: "5534242" },
+    updated_at: over.updated_at ?? "2026-09-25T16:10:37Z",
+    person: { id: "5534242", managers: over.managers === undefined ? [{ id: "5663710" }] : over.managers },
     opportunity: {
       id: "1338627",
       programme: { id: over.programme ?? "8" },
@@ -38,31 +48,13 @@ function row(over: { id?: string; status?: string; created_at?: string; programm
       date_realized: null,
       date_realisation_broke: null,
       remote_realized_at: null,
-      date_rejected: null,
-      date_withdrawn: null,
+      date_remote_realization_broken_at: null,
       ...over.meta,
     },
   } as unknown as ApplicationRow;
 }
 
-describe("pass definitions", () => {
-  it("covers every funnel stage the spike found data for", () => {
-    expect(PASSES.map((pass) => pass.name)).toEqual([
-      "apl",
-      "apd",
-      "re",
-      "re_remote",
-      "apd_broken",
-      "re_broken",
-    ]);
-  });
-
-  it("leaves the break passes unsorted, since GIS offers no sort for those dates", () => {
-    for (const pass of PASSES) {
-      if (pass.eventType.endsWith("_BROKEN")) expect(pass.sortField).toBeNull();
-    }
-  });
-});
+const types = (mapped: ReturnType<typeof mapApplication>) => mapped.map((event) => event.eventType);
 
 describe("occurrenceDate", () => {
   it("takes APL from the application's own created_at", () => {
@@ -76,21 +68,23 @@ describe("occurrenceDate", () => {
 
   it("takes the earlier of physical and remote realization (D-29)", () => {
     const at = occurrenceDate(
-      row({
-        meta: { date_realized: "2026-07-02T12:17:32Z", remote_realized_at: "2026-06-30T09:00:00Z" },
-      }),
+      row({ meta: { date_realized: "2026-07-02T12:17:32Z", remote_realized_at: "2026-06-30T09:00:00Z" } }),
       "RE"
     );
     expect(at?.toISOString()).toBe("2026-06-30T09:00:00.000Z");
   });
 
   it("falls back to whichever realization date exists", () => {
-    expect(
-      occurrenceDate(row({ meta: { remote_realized_at: "2026-06-30T09:00:00Z" } }), "RE")
-    ).not.toBeNull();
-    expect(
-      occurrenceDate(row({ meta: { date_realized: "2026-07-02T12:17:32Z" } }), "RE")
-    ).not.toBeNull();
+    expect(occurrenceDate(row({ meta: { remote_realized_at: "2026-06-30T09:00:00Z" } }), "RE")).not.toBeNull();
+    expect(occurrenceDate(row({ meta: { date_realized: "2026-07-02T12:17:32Z" } }), "RE")).not.toBeNull();
+  });
+
+  it("dates a broken remote realization like a broken physical one", () => {
+    const at = occurrenceDate(
+      row({ meta: { date_remote_realization_broken_at: "2026-09-10T00:00:00Z" } }),
+      "RE_BROKEN"
+    );
+    expect(at?.toISOString()).toBe("2026-09-10T00:00:00.000Z");
   });
 
   it("is null when the stage has not happened", () => {
@@ -109,7 +103,7 @@ describe("break supersession (D-28)", () => {
       meta: { date_approved: "2026-08-20T00:00:00Z", date_approval_broken: "2026-08-10T00:00:00Z" },
     });
     expect(isBreakSuperseded(approved, "APD_BROKEN")).toBe(true);
-    expect(mapRow(approved, "APD_BROKEN", OPTIONS)).toBeNull();
+    expect(types(mapApplication(approved, OPTIONS))).not.toContain("APD_BROKEN");
   });
 
   it("keeps a break that is later than the stage it reverses", () => {
@@ -117,87 +111,73 @@ describe("break supersession (D-28)", () => {
       meta: { date_approved: "2026-08-01T00:00:00Z", date_approval_broken: "2026-08-10T00:00:00Z" },
     });
     expect(isBreakSuperseded(broken, "APD_BROKEN")).toBe(false);
-    expect(mapRow(broken, "APD_BROKEN", OPTIONS)).not.toBeNull();
+    expect(types(mapApplication(broken, OPTIONS))).toContain("APD_BROKEN");
   });
 
-  it("keeps a break with no stage date at all", () => {
-    const orphan = row({ meta: { date_approval_broken: "2026-08-10T00:00:00Z" } });
+  it("keeps a break with no stage date at all, as GIS leaves it after clearing the approval", () => {
+    const orphan = row({ status: "approval_broken", meta: { date_approval_broken: "2026-08-19T00:00:00Z" } });
     expect(isBreakSuperseded(orphan, "APD_BROKEN")).toBe(false);
+    expect(types(mapApplication(orphan, OPTIONS))).toEqual(["APL", "APD_BROKEN"]);
   });
 
   it("applies the same rule to realization breaks", () => {
     const superseded = row({
-      meta: {
-        date_realized: "2026-09-01T00:00:00Z",
-        date_realisation_broke: "2026-08-01T00:00:00Z",
-      },
+      meta: { date_realized: "2026-09-01T00:00:00Z", date_realisation_broke: "2026-08-01T00:00:00Z" },
     });
     expect(isBreakSuperseded(superseded, "RE_BROKEN")).toBe(true);
   });
 
   it("never treats a stage event as superseded", () => {
     expect(isBreakSuperseded(row(), "APL")).toBe(false);
-    expect(isBreakSuperseded(row({ meta: { date_approved: "2026-08-01T00:00:00Z" } }), "APD")).toBe(
-      false
-    );
+    expect(isBreakSuperseded(row({ meta: { date_approved: "2026-08-01T00:00:00Z" } }), "APD")).toBe(false);
   });
 });
 
-describe("mapRow", () => {
-  it("maps a complete APL row", () => {
-    const event = mapRow(row(), "APL", OPTIONS);
-    expect(event).toMatchObject({
-      applicationId: 7163866n,
-      eventType: "APL",
-      epPersonId: 5534242n,
-      programmeId: 8,
-      direction: "OUTGOING",
-      applicationStatus: "open",
+describe("mapApplication", () => {
+  it("maps every stage an application has reached, in funnel order", () => {
+    const realized = row({
+      status: "completed",
+      meta: { date_approved: "2026-04-18T00:00:00Z", date_realized: "2026-07-30T00:00:00Z" },
     });
+    expect(types(mapApplication(realized, OPTIONS))).toEqual(["APL", "APD", "RE"]);
+  });
+
+  it("maps an open application to its APL alone", () => {
+    expect(mapApplication(row(), OPTIONS)).toEqual([
+      {
+        applicationId: 7163866n,
+        eventType: "APL",
+        occurredAt: new Date("2026-08-31T10:41:48Z"),
+        epPersonId: 5534242n,
+        programmeId: 8,
+        direction: "OUTGOING",
+        applicationStatus: "open",
+      },
+    ]);
+  });
+
+  it("carries the application's current status on every event (D-41)", () => {
+    const events = mapApplication(
+      row({ status: "approved", meta: { date_approved: "2026-09-27T00:00:00Z" } }),
+      OPTIONS
+    );
+    expect(events.every((event) => event.applicationStatus === "approved")).toBe(true);
   });
 
   it("marks the person side OUTGOING and the opportunity side INCOMING (D-25)", () => {
-    expect(mapRow(row(), "APL", OPTIONS)?.direction).toBe("OUTGOING");
+    expect(mapApplication(row(), OPTIONS)[0].direction).toBe("OUTGOING");
     expect(
-      mapRow(row(), "APL", { side: "OPPORTUNITY", allowedProgrammeIds: PROGRAMMES })?.direction
+      mapApplication(row(), { side: "OPPORTUNITY", allowedProgrammeIds: PROGRAMMES })[0].direction
     ).toBe("INCOMING");
   });
 
   it("stores no EP personal data beyond the id needed to attribute (D-40, D-42)", () => {
-    const event = mapRow(row(), "APL", OPTIONS)!;
-    expect(Object.keys(event).join(" ")).not.toMatch(/email|phone|name|title/i);
-  });
-
-  it("keeps epPersonId, without which nothing can be attributed", () => {
-    expect(mapRow(row(), "APL", OPTIONS)?.epPersonId).toBe(5534242n);
-  });
-
-  it("drops a programme outside the configured set", () => {
-    expect(mapRow(row({ programme: "1" }), "APL", OPTIONS)).toBeNull();
-  });
-
-  it("follows the configured set rather than a hardcoded list", () => {
-    const event = mapRow(row({ programme: "1" }), "APL", {
-      side: "PERSON",
-      allowedProgrammeIds: new Set([1]),
-    });
-    expect(event?.programmeId).toBe(1);
-  });
-
-  it("returns null rather than throwing on a malformed row", () => {
-    for (const broken of [
-      { ...(row() as Record<string, unknown>), id: null },
-      { ...(row() as Record<string, unknown>), person: null },
-      { ...(row() as Record<string, unknown>), opportunity: null },
-      { ...(row() as Record<string, unknown>), created_at: null },
-    ]) {
-      expect(() => mapRow(broken as ApplicationRow, "APL", OPTIONS)).not.toThrow();
-      expect(mapRow(broken as ApplicationRow, "APL", OPTIONS)).toBeNull();
-    }
+    const [event] = mapApplication(row(), OPTIONS);
+    expect(Object.keys(event).join(" ")).not.toMatch(/email|phone|name|title|manager/i);
   });
 
   it("carries only the fields scoring reads (D-44)", () => {
-    expect(Object.keys(mapRow(row(), "APL", OPTIONS)!).sort()).toEqual([
+    expect(Object.keys(mapApplication(row(), OPTIONS)[0]).sort()).toEqual([
       "applicationId",
       "applicationStatus",
       "direction",
@@ -207,66 +187,59 @@ describe("mapRow", () => {
       "programmeId",
     ]);
   });
-});
 
-describe("idempotency", () => {
-  it("produces a stable key, so a rerun over the overlap window updates in place", () => {
-    const first = mapRow(row(), "APL", OPTIONS)!;
-    const second = mapRow(row(), "APL", OPTIONS)!;
-    expect(`${first.applicationId}:${first.eventType}`).toBe(
-      `${second.applicationId}:${second.eventType}`
-    );
+  it("drops a programme outside the configured set", () => {
+    expect(mapApplication(row({ programme: "1" }), OPTIONS)).toEqual([]);
   });
 
-  it("collapses the physical and remote RE passes onto one event", () => {
-    const physical = mapRow(
-      row({ meta: { date_realized: "2026-07-02T12:17:32Z" } }),
-      "RE",
-      OPTIONS
-    )!;
-    const remote = mapRow(
-      row({ meta: { remote_realized_at: "2026-06-30T09:00:00Z" } }),
-      "RE",
-      OPTIONS
-    )!;
-
-    const deduped = dedupe([physical, remote]);
-    expect(deduped).toHaveLength(1);
-    expect(deduped[0].occurredAt.toISOString()).toBe("2026-06-30T09:00:00.000Z");
+  it("follows the configured set rather than a hardcoded list", () => {
+    const [event] = mapApplication(row({ programme: "1" }), {
+      side: "PERSON",
+      allowedProgrammeIds: new Set([1]),
+    });
+    expect(event.programmeId).toBe(1);
   });
 
-  it("keeps different stages of the same application apart", () => {
-    const apl = mapRow(row(), "APL", OPTIONS)!;
-    const apd = mapRow(row({ meta: { date_approved: "2026-09-01T00:00:00Z" } }), "APD", OPTIONS)!;
-    expect(dedupe([apl, apd])).toHaveLength(2);
-  });
-
-  it("keeps different applications apart", () => {
-    const a = mapRow(row({ id: "1" }), "APL", OPTIONS)!;
-    const b = mapRow(row({ id: "2" }), "APL", OPTIONS)!;
-    expect(dedupe([a, b])).toHaveLength(2);
-  });
-
-  it("is order-independent", () => {
-    const early = mapRow(row({ meta: { date_realized: "2026-01-01T00:00:00Z" } }), "RE", OPTIONS)!;
-    const late = mapRow(row({ meta: { date_realized: "2026-09-01T00:00:00Z" } }), "RE", OPTIONS)!;
-    expect(dedupe([early, late])[0].occurredAt).toEqual(dedupe([late, early])[0].occurredAt);
-  });
-
-  it("is a no-op on an empty batch", () => {
-    expect(dedupe([])).toEqual([]);
-  });
-});
-
-describe("application status, for net APL (D-41)", () => {
-  it.each(["withdrawn", "rejected", "open", "approved", "matched", "finished", "completed"])(
-    "carries the %s status through to the event",
-    (status) => {
-      expect(mapRow(row({ status }), "APL", OPTIONS)?.applicationStatus).toBe(status);
+  it("returns nothing rather than throwing on a malformed row", () => {
+    for (const broken of [
+      { ...(row() as Record<string, unknown>), id: null },
+      { ...(row() as Record<string, unknown>), person: null },
+      { ...(row() as Record<string, unknown>), opportunity: null },
+    ]) {
+      expect(() => mapApplication(broken as ApplicationRow, OPTIONS)).not.toThrow();
+      expect(mapApplication(broken as ApplicationRow, OPTIONS)).toEqual([]);
     }
-  );
+  });
+
+  it("produces one event per type, the idempotency key the upsert relies on", () => {
+    const events = mapApplication(
+      row({ meta: { date_realized: "2026-07-02T00:00:00Z", remote_realized_at: "2026-06-30T00:00:00Z" } }),
+      OPTIONS
+    );
+    const keys = events.map((event) => `${event.applicationId}:${event.eventType}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
 
   it("does not drop a withdrawn application at ingest; scoring decides", () => {
-    expect(mapRow(row({ status: "withdrawn" }), "APL", OPTIONS)).not.toBeNull();
+    expect(mapApplication(row({ status: "withdrawn" }), OPTIONS)).toHaveLength(1);
+  });
+
+  it("knows every event type the schema declares", () => {
+    expect([...EVENT_TYPES].sort()).toEqual(["APD", "APD_BROKEN", "APL", "RE", "RE_BROKEN"]);
+  });
+});
+
+describe("managerIds (D-74)", () => {
+  it("reads the EP's managers as ids", () => {
+    expect(managerIds([{ id: "5663710" }, { id: "5157924" }])).toEqual([5663710n, 5157924n]);
+  });
+
+  it("drops duplicates and nulls", () => {
+    expect(managerIds([{ id: "1" }, null, { id: "1" }])).toEqual([1n]);
+  });
+
+  it("reads no managers as an empty list", () => {
+    expect(managerIds([])).toEqual([]);
+    expect(managerIds(null)).toEqual([]);
   });
 });

@@ -45,7 +45,7 @@ model Member {
   scoringOffice Office?            @relation("MemberScoringOffice", fields: [scoringOfficeId], references: [id], onDelete: SetNull)
   positions     Position[]
   assignments   EpAssignment[]
-  managerAliases ManagerAlias[]
+  sheetMappings SheetManagerMapping[]
   ledgerEntries ScoreLedgerEntry[]
   rewardGrants  RewardGrant[]
   avatar        MemberAvatar?
@@ -93,57 +93,68 @@ model Position {
   @@index([officeId, status])
 }
 
-// ── EP assignment: imported from the MC's sheet, not decided here ───────────
+// ── EP assignment: who is credited with an EP ───────────────────────────────
 
-// D-44, O-08. The sheet carries the EXPA person id, so every imported row
-// resolves exactly and there is no pending or review state to model. A row that
-// cannot be resolved is an import error, reported per row, never a stored
-// half-assignment.
-enum AssignmentSource {
-  SHEET
-  ADMIN
-}
-
+// One row per EP and member (D-73). A row can come from several places at once,
+// and each automatic source is rewritten by its own sync: EXPA mirrors the EP's
+// managers in EXPA (D-74), SHEET the sheet's responsible member (D-77). ADMIN
+// is a manual add, which nothing automatic clears. A row counts while any
+// source is set and it has not been removed.
 model EpAssignment {
-  id            String           @id @default(cuid())
-  epPersonId    BigInt
-  memberId      BigInt
-  effectiveFrom DateTime
-  effectiveTo   DateTime? // null = still current (D-36)
-  // An ADMIN row is a deliberate correction and survives re-import; a SHEET row
-  // is replaced by whatever the sheet says next.
-  source        AssignmentSource @default(SHEET)
-  createdBy     BigInt
-  createdAt     DateTime         @default(now())
+  id         String    @id @default(cuid())
+  epPersonId BigInt
+  memberId   BigInt
+  fromExpa   Boolean   @default(false)
+  fromSheet  Boolean   @default(false)
+  fromAdmin  Boolean   @default(false)
+  // An admin removal outranks every source, so the next sync cannot bring the
+  // credit back. Kept as a row rather than deleted for exactly that reason.
+  removedAt  DateTime?
+  removedBy  BigInt?
+  createdBy  BigInt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  @@unique([epPersonId, effectiveFrom])
-  @@index([epPersonId, effectiveFrom])
+  @@unique([epPersonId, memberId])
   @@index([memberId])
 }
 
-// Where the assignment register is imported from. Configuration rather than a
-// constant: the MC keeps more than one sheet and they change between terms.
+// The MC's sign-up sheet (D-80). One active row: configuration rather than a
+// constant so a new term's sheet is a row change, not a deploy.
 model AssignmentSheet {
-  id            String   @id @default(cuid())
-  label         String
-  spreadsheetId String   @unique
-  tabName       String
-  isActive      Boolean  @default(true)
-  lastImportAt  DateTime?
+  id              String    @id @default(cuid())
+  label           String
+  spreadsheetId   String    @unique
+  // Each EP's row: "EP ID", "EP Manager", "LC Assigned To", "Function Assigned to".
+  tabName         String
+  // The EP managers' directory: "LC", "Team", "EP Manager Name", "EXPA ID".
+  managersTabName String    @default("Sheet7")
+  isActive        Boolean   @default(true)
+  lastImportAt    DateTime?
 }
 
-// The sheet names a manager by first name, not by id: "Joseph", "Ahmad M",
-// "Ahmad K". Those labels are a human convention and cannot be matched to a
-// person reliably, so an admin maps each one to a member once, and the import
-// refuses any label it has not been told about rather than guessing.
-model ManagerAlias {
-  label    String @id
-  memberId BigInt
+// An EP manager's name in the sheet matched to a member on the console (D-80):
+// the same shape as a row of the sheet's directory tab, and preferred over it
+// for the same name, LC and team. Keys are normalised; `name`, `lc` and `team`
+// keep the spelling the sheet used, for display.
+model SheetManagerMapping {
+  id        String   @id @default(cuid())
+  nameKey   String
+  lcKey     String   @default("")
+  teamKey   String   @default("")
+  name      String
+  lc        String   @default("")
+  team      String   @default("")
+  memberId  BigInt
+  createdBy BigInt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
+  @@unique([nameKey, lcKey, teamKey])
   @@index([memberId])
 }
 
@@ -155,6 +166,14 @@ enum FunnelEvent {
   RE
   APD_BROKEN
   RE_BROKEN
+}
+
+// What a ledger entry pays for: an event's own stage, or for a break the stage
+// it takes back.
+enum ScoredStage {
+  APL
+  APD
+  RE
 }
 
 enum Direction {
@@ -174,7 +193,8 @@ model ExchangeEvent {
   epPersonId          BigInt // the join key to EpAssignment, and the only EP data held
   programmeId         Int // 7 | 8 | 9
   direction           Direction
-  // Current observed state, refreshed by sync pass 5b. Net APL is a status
+  // The application's current status, rewritten on every event of the
+  // application whenever its last action moves (D-76). Net APL is a status
   // check rather than a dated reversal, because GIS dates neither withdrawal
   // nor rejection in a filterable way (D-41).
   applicationStatus   String?
@@ -206,6 +226,10 @@ model ScoreConfig {
   productWeights   Json // { "7": 1, "8": 1, "9": 1 }
   directionWeights Json // { "OUTGOING": 1, "INCOMING": 1 }
   scopeSides       Json // ["PERSON"] today; add "OPPORTUNITY" for incoming (D-27)
+  // Percentage of an EP's points each position role takes when more than one
+  // member is credited with that EP: { "TM": 40, "TL": 30, ... }, totalling 100
+  // (D-73). Rescaled over the roles actually on the EP.
+  roleShares       Json     @default("{}")
   isActive         Boolean  @default(false)
   createdBy        BigInt
   createdAt        DateTime @default(now())
@@ -282,11 +306,15 @@ model AdminMatcher {
 // ── Derived, fully recomputable ─────────────────────────────────────────────
 
 model ScoreLedgerEntry {
-  id              String   @id @default(cuid())
+  id              String      @id @default(cuid())
   memberId        BigInt
   exchangeEventId String
+  // Kept on the entry so totals and trails need no join to the event.
+  stage           ScoredStage
   configVersion   Int
-  points          Decimal  @db.Decimal(12, 4) // negative on break
+  points          Decimal     @db.Decimal(12, 4) // negative on break
+  // This member's part of the EP's points when several are credited (D-73).
+  share           Decimal     @default(1) @db.Decimal(7, 6)
   countDelta      Int
   occurredAt      DateTime
 

@@ -1,0 +1,15 @@
+-- One-time cleanup, not a recurring purge: deletes ExchangeEvent rows dated
+-- before 2026-01-01. These predate the assignment register entirely (D-58's
+-- 2026-08-01 term start already says as much) and leaked into the table from
+-- before the collection floor was tightened to the term start -- they show on
+-- the assignments admin screen but can never be attributed correctly, since
+-- no assignment covers a period before assignment existed.
+--
+-- This amends D-20 ("no data purge cycle") for this one case: D-20 continues
+-- to describe ongoing operation -- nothing about this migration adds a
+-- recurring purge, and TermSettings.startsAt (the collection floor everything
+-- else reads) is untouched. See Context.md.
+--
+-- Cascades to ScoreLedgerEntry and ScoringAnomaly (both onDelete: Cascade on
+-- exchangeEventId), so no separate cleanup is needed for either.
+DELETE FROM "ExchangeEvent" WHERE "occurredAt" < '2026-01-01T00:00:00Z';

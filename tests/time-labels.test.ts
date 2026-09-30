@@ -26,8 +26,8 @@ describe("timeAgo", () => {
 
   it("counts minutes, then hours, then days", () => {
     expect(timeAgo(ago(4), now)).toBe("4 min ago");
-    expect(timeAgo(ago(5 * 60), now)).toBe("5 h ago");
-    expect(timeAgo(ago(47 * 60), now)).toBe("47 h ago");
+    expect(timeAgo(ago(5 * 60), now)).toBe("5 hours ago");
+    expect(timeAgo(ago(47 * 60), now)).toBe("47 hours ago");
     expect(timeAgo(ago(3 * 24 * 60), now)).toBe("3 days ago");
   });
 });
