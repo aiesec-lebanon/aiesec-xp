@@ -34,6 +34,14 @@ export type ScoringConfig = {
   roleShares: RoleShares;
 };
 
+/** The weights a moment is scored with: each period keeps its own (D-85). */
+export type ConfigAt = (at: Date) => ScoringConfig;
+
+/** One set of weights for every moment. */
+export function constantConfig(config: ScoringConfig): ConfigAt {
+  return () => config;
+}
+
 export type Window = { startsAt: Date; endsAt: Date | null };
 
 export type ThresholdKind = "POINTS" | "APL_COUNT" | "APD_COUNT" | "RE_COUNT";
@@ -76,7 +84,7 @@ export type ScoreInput = {
   assignments: readonly Assignment[];
   /** EP id to the main manager an admin picked, member or not (D-83). */
   mains?: ReadonlyMap<string, bigint>;
-  config: ScoringConfig;
+  configAt: ConfigAt;
   window: Window;
   rewards: readonly RewardDefinition[];
 };
@@ -100,7 +108,8 @@ const REVERSES: Partial<Record<FunnelEventType, ScoredStageValue>> = {
 
 const STAGE_ORDER: Record<ScoredStageValue, number> = { APL: 0, APD: 1, RE: 2 };
 
-type Credit = { stage: ScoredStageValue; at: Date; source: ScorableEvent; sign: 1 | -1 };
+/** `config` is the stage's own weights, which a break takes back unchanged (D-85). */
+type Credit = { stage: ScoredStageValue; at: Date; source: ScorableEvent; sign: 1 | -1; config: ScoringConfig };
 
 function inWindow(occurredAt: Date, window: Window): boolean {
   if (occurredAt < window.startsAt) return false;
@@ -172,16 +181,17 @@ function isReversedApl(status: string | null, config: ScoringConfig): boolean {
 function stageCredits(
   application: readonly ScorableEvent[],
   window: Window,
-  config: ScoringConfig
+  configAt: ConfigAt
 ): Credit[] {
-  const aplReversed = isReversedApl(applicationStatus(application), config);
+  const status = applicationStatus(application);
 
   return application
     .flatMap((event): Credit[] => {
       const stage = STAGE_OF[event.eventType];
       if (!stage || !inWindow(event.occurredAt, window)) return [];
-      if (stage === "APL" && aplReversed) return [];
-      return [{ stage, at: event.occurredAt, source: event, sign: 1 }];
+      const config = configAt(event.occurredAt);
+      if (stage === "APL" && isReversedApl(status, config)) return [];
+      return [{ stage, at: event.occurredAt, source: event, sign: 1, config }];
     })
     .sort((a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage]);
 }
@@ -212,18 +222,19 @@ function breakReversals(
     );
     if (overtaken) continue;
 
-    if (!credits.some((credit) => credit.stage === stage)) {
+    const reversed = credits.find((credit) => credit.stage === stage);
+    if (!reversed) {
       report(event, "BREAK_WITHOUT_STAGE_EVENT", `${event.eventType} has no in-window ${stage} to reverse`);
       continue;
     }
 
-    reversals.push({ stage, at: event.occurredAt, source: event, sign: -1 });
+    reversals.push({ stage, at: event.occurredAt, source: event, sign: -1, config: reversed.config });
   }
 
   return reversals;
 }
 
-export function score({ events, assignments, mains = new Map(), config, window, rewards }: ScoreInput): ScoreOutput {
+export function score({ events, assignments, mains = new Map(), configAt, window, rewards }: ScoreInput): ScoreOutput {
   const creditsByEp = indexAssignments(assignments);
   const ledger: LedgerEntry[] = [];
   const anomalies: Anomaly[] = [];
@@ -237,7 +248,7 @@ export function score({ events, assignments, mains = new Map(), config, window, 
   };
 
   for (const application of groupByApplication(events)) {
-    const gains = stageCredits(application, window, config);
+    const gains = stageCredits(application, window, configAt);
     const credits = [...gains, ...breakReversals(application, gains, window, report)];
     if (credits.length === 0) continue;
 
@@ -251,22 +262,21 @@ export function score({ events, assignments, mains = new Map(), config, window, 
       continue;
     }
 
-    const productWeight = config.productWeights[String(programmeId)];
-    if (productWeight === undefined) {
-      // Never assumed to be 1: an invented weight is a wrong score that looks
-      // right (D-30).
-      for (const credit of credits) {
-        report(credit.source, "UNKNOWN_PROGRAMME_WEIGHT", `Programme ${programmeId} has no configured weight`);
-      }
-      continue;
-    }
-
-    const directionWeight = config.directionWeights[direction] ?? 0;
-    const shares = creditShares(creditees, mains.get(String(epPersonId)) ?? null, config.roleShares);
+    const main = mains.get(String(epPersonId)) ?? null;
 
     for (const credit of credits) {
+      const { config } = credit;
+      const productWeight = config.productWeights[String(programmeId)];
+      if (productWeight === undefined) {
+        // Never assumed to be 1: an invented weight is a wrong score that looks
+        // right (D-30).
+        report(credit.source, "UNKNOWN_PROGRAMME_WEIGHT", `Programme ${programmeId} has no configured weight`);
+        continue;
+      }
+
+      const directionWeight = config.directionWeights[direction] ?? 0;
       const magnitude = basePoints(credit.stage, config) * productWeight * directionWeight;
-      for (const [member, share] of shares) {
+      for (const [member, share] of creditShares(creditees, main, config.roleShares)) {
         // A role with no percentage takes nothing, and an entry for nothing
         // would only show up in a trail as a zero.
         if (share === 0) continue;

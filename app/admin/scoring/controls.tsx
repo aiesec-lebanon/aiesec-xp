@@ -2,9 +2,10 @@
 
 import { useActionState, useMemo, useState } from "react";
 
-import { saveRoleSharesAction, type ActionState } from "@/lib/admin/scoring-actions";
+import { saveWeightsAction, type ActionState } from "@/lib/admin/scoring-actions";
 import { formatPoints } from "@/lib/design/points";
 import { SHARE_FIELD_PREFIX } from "@/lib/scoring/shares";
+import { DIRECTION_FIELD_PREFIX, POINTS_FIELD, PRODUCT_FIELD_PREFIX } from "@/lib/scoring/weights";
 import { useActionToast } from "@/components/studio/toast";
 
 const FIELD =
@@ -14,14 +15,58 @@ const PRIMARY =
 
 export type RoleRow = { role: string; members: number; share: number };
 
+export type StageWeights = {
+  aplPoints: number;
+  apdPoints: number;
+  rePoints: number;
+  productWeights: Record<string, number>;
+  directionWeights: Record<string, number>;
+};
+
+const PROGRAMMES: Record<string, string> = { "7": "GV", "8": "GTa", "9": "GTe" };
+const DIRECTIONS: Record<string, string> = { OUTGOING: "Outgoing", INCOMING: "Incoming" };
+const STAGES = [
+  { key: "aplPoints", label: "Application", tone: "text-stage-apl" },
+  { key: "apdPoints", label: "Approval", tone: "text-stage-apd" },
+  { key: "rePoints", label: "Realization", tone: "text-stage-re" },
+] as const;
+
+const HEADING = "text-xs font-bold uppercase tracking-[0.08em] text-ink-muted";
+
 function parseShare(raw: string): number {
   const value = Number(raw);
   return raw.trim() === "" || !Number.isFinite(value) ? 0 : value;
 }
 
-export function RoleSharesForm({ roles, apdPoints }: { roles: RoleRow[]; apdPoints: number }) {
-  const [state, action, pending] = useActionState<ActionState | null, FormData>(saveRoleSharesAction, null);
+function WeightInput({ id, name, label, defaultValue, tone }: {
+  id: string;
+  name: string;
+  label: string;
+  defaultValue: number;
+  tone?: string;
+}) {
+  return (
+    <label htmlFor={id} className="flex flex-col gap-1.5">
+      <span className={`text-[13px] font-semibold ${tone ?? "text-ink"}`}>{label}</span>
+      <input
+        id={id}
+        name={name}
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="any"
+        required
+        defaultValue={defaultValue}
+        className={`${FIELD} w-28 tabular`}
+      />
+    </label>
+  );
+}
+
+export function WeightsForm({ roles, weights }: { roles: RoleRow[]; weights: StageWeights }) {
+  const [state, action, pending] = useActionState<ActionState | null, FormData>(saveWeightsAction, null);
   useActionToast(state);
+  const apdPoints = weights.apdPoints;
 
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(roles.map((row) => [row.role, String(row.share)]))
@@ -40,8 +85,58 @@ export function RoleSharesForm({ roles, apdPoints }: { roles: RoleRow[]; apdPoin
   }, [roles, shares, apdPoints]);
 
   return (
-    <form action={action} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-0.5">
+    <form action={action} className="flex flex-col gap-6">
+      <fieldset className="flex flex-col gap-3">
+        <legend className={`${HEADING} mb-3`}>Points per stage</legend>
+        <div className="flex flex-wrap gap-6">
+          {STAGES.map((stage) => (
+            <WeightInput
+              key={stage.key}
+              id={`points-${stage.key}`}
+              name={POINTS_FIELD[stage.key]}
+              label={stage.label}
+              defaultValue={weights[stage.key]}
+              tone={stage.tone}
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-3">
+        <legend className={`${HEADING} mb-3`}>Programme weights</legend>
+        <div className="flex flex-wrap gap-6">
+          {Object.entries(weights.productWeights).map(([id, value]) => (
+            <WeightInput
+              key={id}
+              id={`product-${id}`}
+              name={`${PRODUCT_FIELD_PREFIX}${id}`}
+              label={PROGRAMMES[id] ?? `Programme ${id}`}
+              defaultValue={value}
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-3">
+        <legend className={`${HEADING} mb-3`}>Direction weights</legend>
+        <div className="flex flex-wrap gap-6">
+          {Object.entries(weights.directionWeights).map(([key, value]) => (
+            <WeightInput
+              key={key}
+              id={`direction-${key}`}
+              name={`${DIRECTION_FIELD_PREFIX}${key}`}
+              label={DIRECTIONS[key] ?? key}
+              defaultValue={value}
+            />
+          ))}
+        </div>
+        <p className="text-[13px] text-ink-secondary">
+          A stage is worth its points × its programme weight × its direction weight.
+        </p>
+      </fieldset>
+
+      <h3 className={HEADING}>Shares by role</h3>
+      <div className="-mt-4 flex flex-col gap-0.5">
         <div className="grid grid-cols-[1fr_110px_150px] gap-4 px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
           <span>Role</span>
           <span>Members</span>
@@ -92,7 +187,7 @@ export function RoleSharesForm({ roles, apdPoints }: { roles: RoleRow[]; apdPoin
         <div className="flex-1" />
 
         <button type="submit" disabled={pending || !valid} className={PRIMARY}>
-          {pending ? "Saving…" : "Save shares"}
+          {pending ? "Saving…" : "Save points"}
         </button>
       </div>
     </form>
