@@ -198,14 +198,7 @@ export type ParsedDirectory = {
   invalid: { lineNumber: number; detail: string }[];
 };
 
-/**
- * Reads the EP managers' directory tab.
- *
- * Google answers a tab name it does not have with the spreadsheet's first tab
- * and a 200 -- measured: an unknown tab name returned sign-up rows. So the
- * header is the only proof the right tab came back.
- */
-export function parseDirectory(csv: string, tabName: string): ParsedDirectory {
+function readDirectory(csv: string, tabName: string, onWrongShape: () => SheetShapeError): ParsedDirectory {
   const rows = table(csv, tabName);
   const header = rows[0];
   const name = columnOf(header, DIRECTORY_NAME_HEADER);
@@ -213,11 +206,7 @@ export function parseDirectory(csv: string, tabName: string): ParsedDirectory {
   const lc = columnOf(header, DIRECTORY_LC_HEADER);
   const team = columnOf(header, DIRECTORY_TEAM_HEADER);
 
-  if (name === -1 || id === -1) {
-    throw new SheetShapeError(
-      `The sheet has no "${tabName}" tab with ${listColumns([DIRECTORY_NAME_HEADER, DIRECTORY_ID_HEADER])} columns, so managers can only be matched here on the console.`
-    );
-  }
+  if (name === -1 || id === -1) throw onWrongShape();
 
   const parsed: ParsedDirectory = { entries: [], missingIds: [], invalid: [] };
 
@@ -246,6 +235,41 @@ export function parseDirectory(csv: string, tabName: string): ParsedDirectory {
   }
 
   return parsed;
+}
+
+/**
+ * Reads the EP managers' directory tab.
+ *
+ * Google answers a tab name it does not have with the spreadsheet's first tab
+ * and a 200 -- measured: an unknown tab name returned sign-up rows. So the
+ * header is the only proof the right tab came back.
+ */
+export function parseDirectory(csv: string, tabName: string): ParsedDirectory {
+  return readDirectory(
+    csv,
+    tabName,
+    () =>
+      new SheetShapeError(
+        `The sheet has no "${tabName}" tab with ${listColumns([DIRECTORY_NAME_HEADER, DIRECTORY_ID_HEADER])} columns, so managers can only be matched here on the console.`
+      )
+  );
+}
+
+/**
+ * Reads a CSV an admin uploads to match many manager names at once. It takes
+ * the same columns as the directory tab, so one template serves both.
+ */
+export function parseManagerCsv(csv: string): ParsedDirectory {
+  // Excel's "CSV UTF-8" starts with a byte-order mark, which would otherwise
+  // become part of the first header and hide the "LC" column.
+  return readDirectory(
+    csv.charCodeAt(0) === 0xfeff ? csv.slice(1) : csv,
+    "CSV",
+    () =>
+      new SheetShapeError(
+        `The file needs columns headed ${listColumns([DIRECTORY_NAME_HEADER, DIRECTORY_ID_HEADER])} in its first row. Download the template to see the layout.`
+      )
+  );
 }
 
 export function directoryKey(entry: { name: string; lc: string; team: string }): string {

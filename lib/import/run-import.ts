@@ -243,6 +243,7 @@ export async function importAssignments(
 
   for (const ep of conflicted) desired.delete(ep);
 
+  const epsListed = new Set(signups.rows.map((row) => String(row.epPersonId))).size;
   const epsMatched = [...desired.values()].filter((set) => set.size > 0).length;
   let assignmentsWritten = 0;
 
@@ -262,7 +263,7 @@ export async function importAssignments(
           action: "IMPORT",
           targetType: "EpAssignment",
           targetId: "sheet-import",
-          afterJson: { assignmentsWritten, ...changes, epsListed: firstLine.size, epsUnassigned },
+          afterJson: { assignmentsWritten, ...changes, epsListed, epsUnassigned },
         },
       });
     }
@@ -270,7 +271,7 @@ export async function importAssignments(
 
   logger.info("Assignment import finished", {
     dryRun,
-    epsListed: firstLine.size,
+    epsListed,
     epsMatched,
     epsUnassigned,
     assignmentsWritten,
@@ -283,7 +284,7 @@ export async function importAssignments(
     dryRun,
     sheetRead: true,
     sheetLabel: sheet.label,
-    epsListed: firstLine.size,
+    epsListed,
     epsMatched,
     epsUnassigned,
     assignmentsWritten,

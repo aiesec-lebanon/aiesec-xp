@@ -5,6 +5,7 @@ import {
   normaliseLabel,
   parseCsv,
   parseDirectory,
+  parseManagerCsv,
   parseSignups,
   resolveManager,
   SheetShapeError,
@@ -167,6 +168,27 @@ describe("parseDirectory (D-80)", () => {
     const directory = parseDirectory('"EP Manager Name","EXPA ID"\n"Ali","n/a"', "Sheet7");
     expect(directory.invalid[0].lineNumber).toBe(2);
     expect(directory.entries).toHaveLength(0);
+  });
+});
+
+describe("parseManagerCsv", () => {
+  it("reads the same columns as Sheet7, so one template serves both", () => {
+    expect(parseManagerCsv(DIRECTORY).entries).toEqual(parseDirectory(DIRECTORY, "Sheet7").entries);
+  });
+
+  it("finds the LC column behind Excel's byte-order mark", () => {
+    const entries = parseManagerCsv(`\uFEFF${DIRECTORY}`).entries;
+    expect(entries[0].lc).toBe("AUB");
+  });
+
+  it("finds columns by header, in any order", () => {
+    expect(parseManagerCsv("EXPA ID,EP Manager Name\r\n5663710,Sirine\r\n").entries).toEqual([
+      { name: "Sirine", lc: "", team: "", memberId: 5663710n, source: "SHEET" },
+    ]);
+  });
+
+  it("explains the expected columns when they are missing", () => {
+    expect(() => parseManagerCsv("Name,ID\nSirine,5663710")).toThrow(/"EP Manager Name" and "EXPA ID"/);
   });
 });
 
