@@ -3,18 +3,18 @@
 // against real data before the leaderboard is built on it.
 import { db } from "@/lib/db";
 import { creditRegister } from "@/lib/assignments/register";
-import { toScoringConfig } from "@/lib/scoring/config";
 import { score } from "@/lib/scoring/engine";
+import { loadConfigAt } from "@/lib/scoring/weight-periods";
 
-const [config, window, rewards, events, register] = await Promise.all([
-  db.scoreConfig.findFirst({ where: { isActive: true } }),
+const [configAt, window, rewards, events, register] = await Promise.all([
+  loadConfigAt(),
   db.displayWindow.findFirst({ where: { isActive: true } }),
   db.reward.findMany({ where: { isActive: true } }),
   db.exchangeEvent.findMany(),
   creditRegister(),
 ]);
 
-if (!config || !window) throw new Error("No active config or display window");
+if (!configAt || !window) throw new Error("No active display window");
 
 const { assignments } = register;
 
@@ -22,7 +22,7 @@ const result = score({
   events,
   assignments,
   mains: register.mains,
-  config: toScoringConfig(config),
+  configAt,
   window: { startsAt: window.startsAt, endsAt: window.endsAt },
   rewards: rewards.map((r) => ({
     id: r.id,

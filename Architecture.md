@@ -18,7 +18,8 @@ Companion: `Context.md` (domain, glossary, decisions D-01…D-79; open items O-0
    Google Sheet already do those. Every stored column and every requested GIS
    field has to earn its place against that scope.
 3. **Event-sourced scoring.** Immutable events in, derived score out. A config
-   change is a replay, not a patch — this is what makes D-15 cheap. The events
+   change is a replay, not a patch, of the current scoring period only: each
+   period keeps its own weights (D-85). The events
    record what happened, not who it happened to: EP personal data stays in EXPA
    and is read at display time (D-42).
 4. **Configuration over code.** Point values, per-product multipliers, rewards,
@@ -278,11 +279,13 @@ model ScoreConfig {
 }
 
 model DisplayWindow {                          // D-07, D-20
-  id       String   @id @default(cuid())
-  label    String
-  startsAt DateTime
-  endsAt   DateTime?
-  isActive Boolean                              // exactly one true, partial unique index (D-21)
+  id            String   @id @default(cuid())
+  label         String
+  startsAt      DateTime
+  endsAt        DateTime?
+  isActive      Boolean                         // exactly one true, partial unique index (D-21)
+  configVersion Int                             // the weights this period keeps (D-85)
+  createdAt     DateTime                        // newest saved wins an overlap (D-85)
 }
 
 model TermSettings {                            // D-58. One row, check constraint
@@ -357,8 +360,9 @@ model AuditLog {
 ```
 
 `ScoreLedgerEntry` and `RewardGrant` are **derived**. They can be dropped and
-rebuilt from `ExchangeEvent` + `EpAssignment` + `ScoreConfig` at any time. That is
-what makes D-15 safe.
+rebuilt from `ExchangeEvent` + `EpAssignment` + `DisplayWindow` + `ScoreConfig`
+at any time, and a rebuild never moves a past period's points, because each
+period names the config it is scored with (D-85).
 
 ---
 
@@ -510,6 +514,14 @@ stage (`countDelta`), so the main counts an APD as 1 and a manager at 15% as
 0.15, and a break takes back exactly the share its stage paid. Reward goals
 based on counts measure these decimal totals.
 
+Every factor above comes from the config of the scoring period the stage
+happened in, not the active one (D-85). `score()` takes a resolver,
+`configAt(date)`, built by `weightsAt()` (`lib/scoring/periods.ts`) from every
+`DisplayWindow` and its config: the most recently saved period covering the
+date wins, and a date no period covers takes the period that started most
+recently before it. A break is scored with its stage's config, so it takes
+back exactly what the stage paid even if the weights have moved since.
+
 A programme with no entry in `productWeights` scores zero and is returned as an
 anomaly, never scored at an assumed weight of 1 (D-30). Remote and physical
 realization share one weight; where both dates exist the earlier wins (D-29).
@@ -550,7 +562,11 @@ at all: `officePoints()` (`lib/scoring/engine.ts`) applies the same
 formula directly to AIESEC's own per-office, per-programme funnel counts, read
 live from the AIESEC Analytics API (`fetchEntityFunnelBreakdown`,
 `lib/analytics/aiesec-analytics.ts`) on every request. Nothing is persisted:
-the request that renders the board is the request that scores it.
+the request that renders the board is the request that scores it. The API only
+returns totals between two dates, so the range is split into runs of UTC days
+with the same weights (`weightSegments()`), each run is fetched separately and
+scored with its own period's weights, and the runs are summed (D-85). If any
+run cannot be read the whole board is the zero placeholder.
 
 This intentionally does **not** replicate every ledger rule. AIESEC's
 analytics counts are cumulative "ever reached this stage" totals, not
@@ -604,21 +620,26 @@ at which the current score was reached (D-33).
 
 ### Replay
 
-Any change to `ScoreConfig`, `EpAssignment` or `Reward` triggers a full rebuild
-of the ledger and re-evaluation of grants. At Lebanon's volume a full rebuild is
-the simplest correct option. Replays are audited.
+Any change to `ScoreConfig`, `EpAssignment`, `Reward` or the display window
+triggers a full rebuild of the ledger and re-evaluation of grants. The ledger
+holds the active window only, so a rebuild re-scores the current period and
+nothing before it (D-85). At Lebanon's volume a full rebuild is the simplest
+correct option. Replays are audited.
 
 ---
 
 ## 8. Admin surface (`/admin`)
 
-- **Scoring** (`/admin/scoring`) — the manager shares: a percentage per
-  position role, 0-100 each with no total, that a manager who is not the EP's
-  main takes of each event (D-83). Saving creates a new `ScoreConfig` version and
-  replays. APL/APD/RE points, product and direction multipliers, the APL
-  reversal toggle and scope sides are shown for reference and stay seeded
-  configuration for now.
-- **Display window** — the range the reward race is measured in. Saving replays.
+- **Scoring** (`/admin/scoring`) — the current scoring period's weights (D-85):
+  APL/APD/RE points, a weight per configured programme and direction, and the
+  manager shares, a percentage per position role, 0-100 each with no total,
+  that a manager who is not the EP's main takes of each event (D-83). Saving
+  creates a new `ScoreConfig` version, points the active window at it and
+  replays; past periods keep theirs. Programmes and directions are the ones
+  already configured, never added or removed here. The APL reversal rule and
+  scope sides stay seeded configuration.
+- **Display window** — the range the reward race is measured in. Saving creates
+  a new period with the previous one's weights and replays (D-85).
 - **Term start** — the floor under everything (D-58): sync collects nothing
   earlier and the leaderboards open on it. Saving does not replay, because the
   ledger is still derived against the window above.
@@ -935,7 +956,7 @@ Steps 1–5 are the correctness core and must not be compressed.
 | Wrong identity match | Reward credited to the wrong person | Email and phone auto-match only; name matches require admin confirmation |
 | Assignment backlog at launch | Points sit in the unattributed queue | CSV import on day 6; queue visible to every LEAD, not only admins |
 | GIS rate limits or schema drift | Sync stalls | Codegen from published schema, backoff, contract tests, staleness banner |
-| Gaming via low-quality applications | Reward paid for no exchange value | RE weighted highest; break-driven reduction; weights adjustable at any time |
+| Gaming via low-quality applications | Reward paid for no exchange value | RE weighted highest; break-driven reduction; weights adjustable per scoring period (D-85) |
 | Ranking demotivates the bottom half | Net-negative behaviour change | Personal progress first, ranking second, nearby-ranks view |
 | The 3D surface is unusable on a member's phone or the office TV | The member cannot read their own score | Every scene declares a DOM fallback and drops to it with no WebGL or on context loss; dpr is clamped and adapts down under load; canvases below the fold never boot a context (section 9) |
 | The 3D bundle sinks time-to-interactive | The leaderboard is slow on the device most members use | three, drei and Rapier are all dynamically imported — Rapier alone inlines 1.5MB of WebAssembly and loads only when a scene asks for physics; `next experimental-analyze` is the check |
