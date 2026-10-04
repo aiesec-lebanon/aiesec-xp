@@ -8,7 +8,7 @@ import { requireAdminLive } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { personName } from "@/lib/design/names";
 import { importAssignments } from "@/lib/import/run-import";
-import { normaliseLabel } from "@/lib/import/sheet-parser";
+import { directoryKey, normaliseLabel, parseManagerCsv, SheetShapeError, type DirectoryEntry } from "@/lib/import/sheet-parser";
 import { inTermMemberWhere } from "@/lib/org/members";
 import { replay } from "@/lib/scoring/replay";
 
@@ -363,4 +363,120 @@ export async function clearSheetMappingAction(
   await rebuildFromSheet(admin.id);
 
   return { ok: true, message: `Match removed. "${before.name}" is now looked up in the sheet's own manager list.` };
+}
+
+export type CsvImportState = ActionState & { problems: string[] };
+
+const CSV_MAX_BYTES = 256 * 1024;
+
+function csvFailure(message: string, problems: string[] = []): CsvImportState {
+  return { ok: false, message, problems };
+}
+
+/**
+ * Matches many EP manager names at once from an uploaded CSV with the same
+ * columns as the sheet's directory tab. Each row is saved as a console match,
+ * exactly as if it had been matched one by one, so it takes precedence over
+ * the tab. A row that cannot be trusted -- no EXPA ID, not a member this term,
+ * or the same name given two different people -- is skipped and reported,
+ * never guessed.
+ */
+export async function importSheetMappingsCsvAction(
+  _previous: CsvImportState | null,
+  formData: FormData
+): Promise<CsvImportState> {
+  const admin = await requireAdminLive();
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return csvFailure("Choose a CSV file to import.");
+  if (file.size > CSV_MAX_BYTES) return csvFailure("That file is too large. A manager list should be well under 256 KB.");
+
+  let parsed;
+  try {
+    parsed = parseManagerCsv(await file.text());
+  } catch (error) {
+    return csvFailure(error instanceof SheetShapeError ? error.message : "The file couldn't be read as a CSV.");
+  }
+
+  const problems: string[] = [
+    ...parsed.invalid.map((problem) => `Line ${problem.lineNumber}: ${problem.detail}`),
+    ...parsed.missingIds.map((name) => `${name} has no EXPA ID, so was skipped.`),
+  ];
+
+  const byKey = new Map<string, DirectoryEntry>();
+  const conflicted = new Set<string>();
+  for (const entry of parsed.entries) {
+    const key = directoryKey(entry);
+    const seen = byKey.get(key);
+    if (seen && seen.memberId !== entry.memberId && !conflicted.has(key)) {
+      conflicted.add(key);
+      problems.push(`${entry.name} is given two different EXPA IDs, so neither was used.`);
+    }
+    if (!seen) byKey.set(key, entry);
+  }
+  for (const key of conflicted) byKey.delete(key);
+
+  const ids = [...new Set([...byKey.values()].map((entry) => entry.memberId))];
+  const members = await db.member.findMany({
+    where: { id: { in: ids }, ...(await inTermMemberWhere()) },
+    select: { id: true },
+  });
+  const memberIds = new Set(members.map((member) => String(member.id)));
+
+  const rows = [...byKey.values()].flatMap((entry) => {
+    if (memberIds.has(String(entry.memberId))) return [entry];
+    problems.push(`${entry.name}'s EXPA ID ${entry.memberId} isn't anyone with a member position this term.`);
+    return [];
+  });
+
+  if (rows.length === 0) {
+    return csvFailure("Nothing was imported. No row matched a name to a member this term.", problems);
+  }
+
+  const keyed = rows.map((entry) => ({
+    entry,
+    key: { nameKey: normaliseLabel(entry.name), lcKey: normaliseLabel(entry.lc), teamKey: normaliseLabel(entry.team) },
+  }));
+  const existing = await db.sheetManagerMapping.findMany({
+    where: { OR: keyed.map(({ key }) => key) },
+    select: { nameKey: true, lcKey: true, teamKey: true, memberId: true },
+  });
+  const before = new Map(existing.map((row) => [`${row.nameKey}|${row.lcKey}|${row.teamKey}`, row.memberId]));
+
+  const changed = keyed.filter(({ key, entry }) => before.get(`${key.nameKey}|${key.lcKey}|${key.teamKey}`) !== entry.memberId);
+  const created = changed.filter(({ key }) => !before.has(`${key.nameKey}|${key.lcKey}|${key.teamKey}`)).length;
+  const updated = changed.length - created;
+
+  if (changed.length > 0) {
+    await db.$transaction(
+      changed.map(({ key, entry }) =>
+        db.sheetManagerMapping.upsert({
+          where: { nameKey_lcKey_teamKey: key },
+          create: { ...key, name: entry.name, lc: entry.lc, team: entry.team, memberId: entry.memberId, createdBy: admin.id },
+          update: { name: entry.name, lc: entry.lc, team: entry.team, memberId: entry.memberId },
+        })
+      )
+    );
+    await audit(admin.id, "SHEET_MAPPING_IMPORT", "SheetManagerMapping", "csv-import", null, {
+      file: file.name,
+      created,
+      updated,
+      unchanged: rows.length - changed.length,
+      skipped: problems.length,
+      matches: changed.map(({ entry }) => entry),
+    });
+    await rebuildFromSheet(admin.id);
+  }
+
+  const parts = [
+    created > 0 ? `${created} new` : null,
+    updated > 0 ? `${updated} changed` : null,
+    rows.length - changed.length > 0 ? `${rows.length - changed.length} already up to date` : null,
+  ].filter(Boolean);
+  const skipped = problems.length > 0 ? ` ${problems.length === 1 ? "1 row was" : `${problems.length} rows were`} skipped.` : "";
+
+  return {
+    ok: true,
+    message: `Imported ${rows.length === 1 ? "1 match" : `${rows.length} matches`} (${parts.join(", ")}).${skipped}`,
+    problems,
+  };
 }

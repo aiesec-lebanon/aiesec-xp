@@ -20,6 +20,7 @@ import { Rise } from "@/components/studio/motion";
 
 import { AdminNav } from "../admin-nav";
 import { ImportButtons } from "./controls";
+import { CsvImport } from "./csv-import";
 import { SheetNames } from "./sheet-names";
 import {
   AssignmentsTable,
@@ -295,7 +296,14 @@ export default async function AssignmentsAdminPage() {
             />
             <Figure value={preview.epsUnassigned} label="with no manager yet" tone="text-break-ink" />
             <div className="flex-1" />
-            <ImportButtons />
+            <div className="flex flex-wrap items-center gap-3">
+              <CsvImport
+                unmatched={preview.names
+                  .filter((name) => name.status !== "matched")
+                  .map(({ name, lc, team }) => ({ name, lc, team }))}
+              />
+              <ImportButtons />
+            </div>
           </div>
 
           {preview.issues.length > 0 ? (
