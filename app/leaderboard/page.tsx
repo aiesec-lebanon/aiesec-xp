@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireMemberPage } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { officeLabel } from "@/lib/design/names";
-import { mcDirectEntityId, mcOfficeId } from "@/lib/env";
+import { mcDirectEntityId } from "@/lib/env";
 import { individualStandings } from "@/lib/leaderboard";
 import { resolveRange } from "@/lib/leaderboard-range";
 import { termStart } from "@/lib/term";
@@ -43,14 +43,11 @@ export default async function LeaderboardPage({
     termStart(),
   ]);
 
-  // MC-direct's own committee (1735, "MC Lebanon") is a separate id from the
-  // office a real MC-direct member's position is actually recorded under
-  // (182, D-32) -- so its filter chip has to query by 182, not its own id, or
-  // it would filter to nobody (D-57).
+  // MC-direct's committee (D-57) gets no chip: only LCs are filterable (D-84).
   const directEntityId = mcDirectEntityId();
-  const filterOfficeId = (officeId: bigint) => (officeId === directEntityId ? mcOfficeId() : officeId);
   const offices = officeRows
-    .map((office) => ({ id: office.id, label: officeLabel(office.name, { isMc: office.id === directEntityId }) }))
+    .filter((office) => office.id !== directEntityId)
+    .map((office) => ({ id: office.id, label: officeLabel(office.name) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Unfiltered is the whole term to today (D-58), not the active display
@@ -61,7 +58,9 @@ export default async function LeaderboardPage({
     params.office && /^\d+$/.test(params.office)
       ? BigInt(params.office)
       : undefined;
-  const standings = await individualStandings(range, selected);
+  const standings = (await individualStandings(range, selected)).filter(
+    (standing) => standing.points > 0,
+  );
 
   const rest = standings.slice(3);
   const pageCount = Math.max(1, Math.ceil(rest.length / PER_PAGE));
@@ -143,19 +142,16 @@ export default async function LeaderboardPage({
               >
                 Everyone
               </Link>
-              {offices.map((office) => {
-                const id = filterOfficeId(office.id);
-                return (
-                  <Link
-                    key={String(office.id)}
-                    href={href({ office: id, page: 1 })}
-                    aria-current={selected === id ? "true" : undefined}
-                    className={chip(selected === id)}
-                  >
-                    {office.label}
-                  </Link>
-                );
-              })}
+              {offices.map((office) => (
+                <Link
+                  key={String(office.id)}
+                  href={href({ office: office.id, page: 1 })}
+                  aria-current={selected === office.id ? "true" : undefined}
+                  className={chip(selected === office.id)}
+                >
+                  {office.label}
+                </Link>
+              ))}
             </nav>
 
             {/* <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
@@ -288,7 +284,7 @@ export default async function LeaderboardPage({
             <span className="mr-auto font-mono text-[10px] text-ink-faint">
               {pageCount > 1
                 ? `Page ${page} of ${pageCount} · ${PER_PAGE} per page`
-                : "Ranked on points, then realizations, then approvals. Points from a shared EP are split between everyone on it."}
+                : ""}
             </span>
             {pageCount > 1 ? (
               <>
