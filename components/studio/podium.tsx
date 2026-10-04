@@ -130,12 +130,6 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[26px] bg-surface-raised shadow-e2">
-      <div className="flex shrink-0 items-center justify-between px-6 pb-2 pt-3.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-          Top three
-        </span>
-      </div>
-
       <div
         ref={stage}
         className="relative flex min-h-0 flex-1 items-end justify-center gap-1 overflow-hidden bg-wall px-4"
