@@ -124,7 +124,7 @@ export default async function TvPage() {
               entity. */}
           <div className="mt-[clamp(0.5rem,1.2vh,2rem)] flex min-h-0 flex-[2] flex-col justify-center rounded-3xl bg-surface-raised px-[clamp(1.5rem,2.5vw,2.5rem)] py-[clamp(1rem,2.2vh,2rem)] shadow-e1">
             <p className="shrink-0 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
-              All of Lebanon
+              All of AIESEC in Lebanon
             </p>
             <div className="mt-[clamp(0.5rem,1.4vh,1.25rem)] flex min-h-0 flex-1 items-stretch gap-[clamp(0.75rem,1.2vw,1.5rem)]">
               <Tile label="APL" value={totals.aplCount} wash="bg-apl-wash" ink="text-apl-ink" size="lg" />
