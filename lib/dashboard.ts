@@ -187,5 +187,7 @@ export async function recentActivity(limit = 12): Promise<ActivityItem[]> {
 
 /** The top of the individual board, for /tv and the podium. */
 export async function topMembers(count: number, range: DateRange) {
-  return (await individualStandings(range)).slice(0, count);
+  return (await individualStandings(range))
+    .filter((standing) => standing.points > 0)
+    .slice(0, count);
 }

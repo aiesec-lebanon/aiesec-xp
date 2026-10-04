@@ -151,9 +151,8 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
 /**
  * Individual standings over a range, optionally for one office.
  *
- * Every eligible member appears, including those on zero: a leaderboard that
- * lists only people who have scored tells everyone else nothing about where
- * they stand, and the point of the product is that the target stays visible.
+ * Every eligible member appears, including those on zero; `/leaderboard` and
+ * `/tv` drop the zeros themselves (D-84).
  */
 export async function individualStandings(
   range: DateRange,
