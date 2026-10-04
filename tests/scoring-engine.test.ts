@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Assignment } from "@/lib/scoring/attribution";
 import {
+  constantConfig,
   evaluateRewards,
   officePoints,
   score,
@@ -9,6 +10,7 @@ import {
   type LedgerEntry,
   type RewardDefinition,
   type ScorableEvent,
+  type ConfigAt,
   type ScoringConfig,
   type Window,
 } from "@/lib/scoring/engine";
@@ -62,6 +64,7 @@ function run(
   assignments: Assignment[] = [assignment()],
   over: Partial<{
     config: ScoringConfig;
+    configAt: ConfigAt;
     window: Window;
     rewards: RewardDefinition[];
     mains: Map<string, bigint>;
@@ -71,7 +74,7 @@ function run(
     events,
     assignments,
     mains: over.mains,
-    config: over.config ?? CONFIG,
+    configAt: over.configAt ?? constantConfig(over.config ?? CONFIG),
     window: over.window ?? WINDOW,
     rewards: over.rewards ?? [],
   });
@@ -534,6 +537,51 @@ describe("replay", () => {
   it("stamps every entry with the config version that produced it", () => {
     const result = run(events, [assignment()], { config: { ...CONFIG, version: 7 } });
     expect(result.ledger.every((entry) => entry.configVersion === 7)).toBe(true);
+  });
+});
+
+describe("each period keeps its own weights (D-85)", () => {
+  const CHANGE = new Date("2026-08-10T00:00:00Z");
+  const OLD = CONFIG;
+  const NEW: ScoringConfig = { ...CONFIG, version: 2, aplPoints: 2, apdPoints: 3, roleShares: { TL: 50 } };
+  const configAt: ConfigAt = (at) => (at < CHANGE ? OLD : NEW);
+
+  it("scores each stage with the weights in force on its own date", () => {
+    const result = run(
+      [event({ eventType: "APL", occurredAt: IN }), event({ eventType: "APD", occurredAt: ALSO_IN })],
+      [assignment()],
+      { configAt }
+    );
+    expect(stages(result.ledger)).toEqual(["APL:1", "APD:3"]);
+    expect(result.ledger.map((entry) => entry.configVersion)).toEqual([1, 2]);
+  });
+
+  it("takes back exactly what the stage paid, not what it would pay now", () => {
+    const result = run(
+      [event({ eventType: "APD", occurredAt: IN }), event({ eventType: "APD_BROKEN", occurredAt: LATER_IN })],
+      [assignment()],
+      { configAt }
+    );
+    expect(stages(result.ledger)).toEqual(["APD:5", "APD:-5"]);
+    expect(result.ledger.map((entry) => entry.configVersion)).toEqual([1, 1]);
+    expect(total(result.ledger)).toBe(0);
+  });
+
+  it("shares a stage by the role percentages of its own period", () => {
+    const team = [assignment({ memberId: ALICE, role: "TL" }), assignment({ memberId: BOB, role: "TL" })];
+    const before = run([event({ eventType: "APD", occurredAt: IN })], team, {
+      configAt: (at) => (at < CHANGE ? { ...OLD, roleShares: { TL: 20 } } : NEW),
+    });
+    const after = run([event({ eventType: "APD", occurredAt: ALSO_IN })], team, { configAt });
+    expect(before.ledger.map((entry) => entry.points)).toEqual([1, 1]);
+    expect(after.ledger.map((entry) => entry.points)).toEqual([1.5, 1.5]);
+  });
+
+  it("reverses an APL by the statuses of the period the APL happened in", () => {
+    const result = run([event({ eventType: "APL", occurredAt: IN, applicationStatus: "open" })], [assignment()], {
+      configAt: (at) => (at < CHANGE ? OLD : { ...NEW, aplReversingStatuses: ["open"] }),
+    });
+    expect(stages(result.ledger)).toEqual(["APL:1"]);
   });
 });
 

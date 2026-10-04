@@ -1,88 +1,96 @@
 "use server";
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { requireAdminLive } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { readRoleShares } from "@/lib/scoring/config";
 import { replay } from "@/lib/scoring/replay";
-import { normaliseRole, SHARE_FIELD_PREFIX, validateRoleShares } from "@/lib/scoring/shares";
+import { readWeightsForm, sameWeights, validateWeights, type Weights } from "@/lib/scoring/weights";
 
 export type ActionState = { ok: boolean; message: string };
 
-function sameShares(a: Record<string, number>, b: Record<string, number>): boolean {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  return [...keys].every((key) => (a[key] ?? 0) === (b[key] ?? 0));
-}
-
 /**
- * Saves each role's percentage of an event (D-83), as a new config
- * version rather than an edit: every ledger entry names the version that
- * produced it, and a replay recomputes history against the new one (D-15).
+ * Saves the current period's weights (D-85) as a new config version rather
+ * than an edit: every ledger entry names the version that produced it, and
+ * the past periods keep pointing at theirs, so only the current period is
+ * re-scored.
  */
-export async function saveRoleSharesAction(
+export async function saveWeightsAction(
   _previous: ActionState | null,
   formData: FormData
 ): Promise<ActionState> {
   const admin = await requireAdminLive();
 
-  const shares: Record<string, number> = {};
-  for (const [key, raw] of formData.entries()) {
-    if (!key.startsWith(SHARE_FIELD_PREFIX) || typeof raw !== "string") continue;
-    const role = normaliseRole(key.slice(SHARE_FIELD_PREFIX.length));
-    shares[role] = raw.trim() === "" ? 0 : Number(raw);
-  }
-
-  const problems = validateRoleShares(shares);
-  if (problems.length > 0) return { ok: false, message: problems[0]!.message };
-
-  const [active, latest] = await Promise.all([
-    db.scoreConfig.findFirst({ where: { isActive: true } }),
+  const [window, latest] = await Promise.all([
+    db.displayWindow.findFirst({ where: { isActive: true }, include: { config: true } }),
     db.scoreConfig.aggregate({ _max: { version: true } }),
   ]);
-  if (!active) return { ok: false, message: "Points aren't set up yet, so there's nothing to change." };
+  if (!window) return { ok: false, message: "There's no scoring period yet. Set one on the Period page first." };
 
-  const before = readRoleShares(active.roleShares);
-  if (sameShares({ ...before }, shares)) return { ok: true, message: "No changes to save." };
+  const active = window.config;
+  const before: Weights = {
+    aplPoints: Number(active.aplPoints),
+    apdPoints: Number(active.apdPoints),
+    rePoints: Number(active.rePoints),
+    productWeights: active.productWeights as Record<string, number>,
+    directionWeights: active.directionWeights as Record<string, number>,
+    roleShares: readRoleShares(active.roleShares),
+  };
+
+  const after = readWeightsForm(formData, before);
+  const problems = validateWeights(after);
+  if (problems.length > 0) return { ok: false, message: problems[0]! };
+  if (sameWeights(before, after)) return { ok: true, message: "No changes to save." };
 
   const version = (latest._max.version ?? active.version) + 1;
 
-  await db.$transaction([
-    db.scoreConfig.update({ where: { id: active.id }, data: { isActive: false } }),
-    db.scoreConfig.create({
-      data: {
-        version,
-        aplPoints: active.aplPoints,
-        apdPoints: active.apdPoints,
-        rePoints: active.rePoints,
-        reverseApl: active.reverseApl,
-        aplReversingStatuses: active.aplReversingStatuses as Prisma.InputJsonValue,
-        productWeights: active.productWeights as Prisma.InputJsonValue,
-        directionWeights: active.directionWeights as Prisma.InputJsonValue,
-        scopeSides: active.scopeSides as Prisma.InputJsonValue,
-        roleShares: shares,
-        isActive: true,
-        createdBy: admin.id,
-      },
-    }),
-    db.auditLog.create({
-      data: {
-        actorId: admin.id,
-        action: "CONFIG_UPDATE",
-        targetType: "ScoreConfig",
-        targetId: `v${version}`,
-        beforeJson: { version: active.version, roleShares: { ...before } },
-        afterJson: { version, roleShares: shares },
-      },
-    }),
-  ]);
+  try {
+    await db.$transaction([
+      db.scoreConfig.updateMany({ where: { isActive: true }, data: { isActive: false } }),
+      db.scoreConfig.create({
+        data: {
+          version,
+          aplPoints: after.aplPoints,
+          apdPoints: after.apdPoints,
+          rePoints: after.rePoints,
+          reverseApl: active.reverseApl,
+          aplReversingStatuses: active.aplReversingStatuses as Prisma.InputJsonValue,
+          productWeights: after.productWeights,
+          directionWeights: after.directionWeights,
+          scopeSides: active.scopeSides as Prisma.InputJsonValue,
+          roleShares: { ...after.roleShares },
+          isActive: true,
+          createdBy: admin.id,
+        },
+      }),
+      db.displayWindow.update({ where: { id: window.id }, data: { configVersion: version } }),
+      db.auditLog.create({
+        data: {
+          actorId: admin.id,
+          action: "CONFIG_UPDATE",
+          targetType: "ScoreConfig",
+          targetId: `v${version}`,
+          beforeJson: { version: active.version, window: window.id, ...before },
+          afterJson: { version, window: window.id, ...after },
+        },
+      }),
+    ]);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { ok: false, message: "Someone else saved points at the same time. Reload the page and try again." };
+    }
+    throw error;
+  }
 
+  // The new weights are already live on the leaderboards, which score on
+  // request. If this fails, the next sync's replay brings the ledger in line.
   await replay(admin.id);
 
-  for (const path of ["/admin/scoring", "/admin/assignments", "/", "/me", "/leaderboard", "/tv"]) {
+  for (const path of ["/admin/scoring", "/admin/assignments", "/", "/me", "/leaderboard", "/leaderboard/lcs", "/tv"]) {
     revalidatePath(path);
   }
 
-  return { ok: true, message: "Shares saved. Everyone's points are up to date." };
+  return { ok: true, message: `Points saved for ${window.label}. Everyone's points are up to date.` };
 }

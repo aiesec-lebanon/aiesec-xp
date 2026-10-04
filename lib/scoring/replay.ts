@@ -3,14 +3,16 @@ import "server-only";
 import { db } from "@/lib/db";
 import { creditRegister } from "@/lib/assignments/register";
 import { logger } from "@/lib/logger";
-import { toScoringConfig } from "@/lib/scoring/config";
 import { score, type RewardDefinition } from "@/lib/scoring/engine";
+import { loadConfigAt } from "@/lib/scoring/weight-periods";
 
 // Rebuilds the derived tables from events, assignments and config (D-15).
 //
 // The ledger is never patched. A config change, an import or an override drops
 // what was derived and recomputes it, which is what makes those changes safe to
-// make: there is no accumulated state to get out of step.
+// make: there is no accumulated state to get out of step. The ledger holds the
+// active window only, and each event is scored with its own period's weights
+// (D-85), so a replay never changes what a past period earned.
 
 export type ReplayResult = {
   configVersion: number;
@@ -20,16 +22,15 @@ export type ReplayResult = {
 };
 
 export async function replay(actorId: bigint): Promise<ReplayResult> {
-  const [config, window, rewards, events, register] = await Promise.all([
-    db.scoreConfig.findFirst({ where: { isActive: true } }),
-    db.displayWindow.findFirst({ where: { isActive: true } }),
+  const [configAt, window, rewards, events, register] = await Promise.all([
+    loadConfigAt(),
+    db.displayWindow.findFirst({ where: { isActive: true }, select: { startsAt: true, endsAt: true, configVersion: true } }),
     db.reward.findMany({ where: { isActive: true } }),
     db.exchangeEvent.findMany(),
     creditRegister(),
   ]);
 
-  if (!config) throw new Error("No active ScoreConfig");
-  if (!window) throw new Error("No active DisplayWindow");
+  if (!window || !configAt) throw new Error("No active DisplayWindow");
 
   const definitions: RewardDefinition[] = rewards.map((reward) => ({
     id: reward.id,
@@ -41,7 +42,7 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
     events,
     assignments: register.assignments,
     mains: register.mains,
-    config: toScoringConfig(config),
+    configAt,
     window: { startsAt: window.startsAt, endsAt: window.endsAt },
     rewards: definitions,
   });
@@ -79,7 +80,7 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
         actorId,
         action: "REPLAY",
         targetType: "ScoreLedgerEntry",
-        targetId: `config-v${config.version}`,
+        targetId: `config-v${window.configVersion}`,
         afterJson: {
           ledgerEntries: result.ledger.length,
           grants: result.grants.length,
@@ -90,14 +91,14 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
   ]);
 
   logger.info("Ledger rebuilt", {
-    configVersion: config.version,
+    configVersion: window.configVersion,
     ledgerEntries: result.ledger.length,
     grants: result.grants.length,
     anomalies: result.anomalies.length,
   });
 
   return {
-    configVersion: config.version,
+    configVersion: window.configVersion,
     ledgerEntries: result.ledger.length,
     grants: result.grants.length,
     anomalies: result.anomalies.length,

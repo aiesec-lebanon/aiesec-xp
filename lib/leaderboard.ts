@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import { defaultWindowRange, toDateInputValue } from "@/lib/admin/window";
+import { defaultWindowRange } from "@/lib/admin/window";
 import { fetchEntityFunnelBreakdown, type ProductFunnelCounts } from "@/lib/analytics/aiesec-analytics";
 import { PROGRAMME_IDS, sumProducts } from "@/lib/analytics/funnel-tags";
 import { creditRegister } from "@/lib/assignments/register";
@@ -9,8 +9,9 @@ import { officeLabel, personName } from "@/lib/design/names";
 import { mcDirectEntityId, mcOfficeId } from "@/lib/env";
 import type { DateRange } from "@/lib/leaderboard-range";
 import { inTermMemberWhere } from "@/lib/org/members";
-import { toScoringConfig } from "@/lib/scoring/config";
 import { officePoints, score } from "@/lib/scoring/engine";
+import { weightSegments } from "@/lib/scoring/periods";
+import { loadConfigAt } from "@/lib/scoring/weight-periods";
 
 // Both boards are scored on the request that renders them, over whatever range
 // they were asked for (D-58).
@@ -27,6 +28,9 @@ import { officePoints, score } from "@/lib/scoring/engine";
 // same range as two dates: an office total doesn't need the per-EP attribution
 // the ledger exists for, and AIESEC's own published counts are a figure nobody
 // here can dispute.
+//
+// Both score every day with the weights of the period it fell in (D-85), so a
+// change to the current period's weights never rewrites a past one.
 //
 // The ledger is still what rewards are granted from, and still what /me's trail
 // and /tv's ticker read, because those are about the active window and nothing
@@ -98,8 +102,8 @@ function roundCount(value: number): number {
  * (D-28).
  */
 async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotals>> {
-  const [config, active, register] = await Promise.all([
-    db.scoreConfig.findFirst({ where: { isActive: true } }),
+  const [configAt, active, register] = await Promise.all([
+    loadConfigAt(),
     db.exchangeEvent.findMany({
       where: { occurredAt: { gte: range.startsAt, lte: range.endsAt } },
       select: { applicationId: true },
@@ -109,7 +113,7 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
   ]);
 
   const totals = new Map<string, MemberTotals>();
-  if (!config || active.length === 0) return totals;
+  if (!configAt || active.length === 0) return totals;
 
   const events = await db.exchangeEvent.findMany({
     where: { applicationId: { in: active.map((row) => row.applicationId) } },
@@ -121,7 +125,7 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
     events,
     assignments: register.assignments,
     mains: register.mains,
-    config: toScoringConfig(config),
+    configAt,
     window: range,
     rewards: [],
   });
@@ -210,7 +214,7 @@ export type OfficeStanding = {
 
 export type OfficeStandingsResult = {
   standings: OfficeStanding[];
-  /** false when the AIESEC analytics API (or the active ScoreConfig) couldn't
+  /** false when the AIESEC analytics API (or the scoring periods) couldn't
    * be read -- every count and point below is then a zero placeholder, not a
    * real "nothing happened this window" read, and callers should say so. */
   analyticsOk: boolean;
@@ -241,41 +245,47 @@ async function memberCountsByOffice(): Promise<Map<string, number>> {
  * this board can be read over a historic window at all: the analytics endpoint
  * takes two dates and holds no opinion about which ones. */
 export async function officeStandings(range: DateRange): Promise<OfficeStandingsResult> {
-  const [offices, memberCounts, config] = await Promise.all([
+  const [offices, memberCounts, configAt] = await Promise.all([
     // isMc excluded: the MC's own row is the subtree root the analytics query
     // is scoped to, so its total is always identical to the sum of the other
     // rows -- a 4th "entity" here would just repeat "all entities" (D-56).
     db.office.findMany({ where: { isOperating: true, isMc: false }, select: { id: true, name: true } }),
     memberCountsByOffice(),
-    db.scoreConfig.findFirst({ where: { isActive: true } }),
+    loadConfigAt(),
   ]);
 
-  const breakdown = config
-    ? await fetchEntityFunnelBreakdown({
+  // The API only returns totals between two dates, so a range spanning periods
+  // with different weights is asked for one run of days at a time (D-85).
+  const segments = configAt ? weightSegments(range, configAt) : [];
+  const parts = await Promise.all(
+    segments.map(async (segment) => {
+      const breakdown = await fetchEntityFunnelBreakdown({
         officeId: Number(mcOfficeId()),
-        startDate: toDateInputValue(range.startsAt),
-        endDate: toDateInputValue(range.endsAt),
+        startDate: segment.startDate,
+        endDate: segment.endDate,
         programmeIds: PROGRAMME_IDS,
-      })
-    : null;
+      });
+      return breakdown ? { breakdown, config: segment.config } : null;
+    })
+  );
 
-  const analyticsOk = config !== null && breakdown !== null;
-  const weights = config
-    ? {
-        aplPoints: Number(config.aplPoints),
-        apdPoints: Number(config.apdPoints),
-        rePoints: Number(config.rePoints),
-        productWeights: config.productWeights as Record<string, number>,
-        directionWeights: config.directionWeights as Record<string, number>,
-      }
-    : null;
+  const analyticsOk = segments.length > 0 && parts.every((part) => part !== null);
+  const scored = analyticsOk ? parts.filter((part) => part !== null) : [];
 
   const directEntityId = mcDirectEntityId();
 
   const standings = offices
     .map((office) => {
-      const counts = breakdown?.byOffice[String(office.id)] ?? EMPTY_PRODUCT_COUNTS;
-      const totals = sumProducts(counts);
+      let points = 0;
+      const totals = { APL: 0, APD: 0, RE: 0 };
+      for (const { breakdown, config } of scored) {
+        const counts = breakdown.byOffice[String(office.id)] ?? EMPTY_PRODUCT_COUNTS;
+        const sum = sumProducts(counts);
+        points += officePoints(counts, config);
+        totals.APL += sum.APL;
+        totals.APD += sum.APD;
+        totals.RE += sum.RE;
+      }
 
       // MC-direct's own committee (D-56): AIESEC's analytics API buckets its
       // applications under this office's own GIS id (read above), but its
@@ -290,7 +300,7 @@ export async function officeStandings(range: DateRange): Promise<OfficeStandings
         officeId,
         officeName: officeLabel(office.name, { isMc: office.id === directEntityId }),
         memberCount: memberCounts.get(String(officeId)) ?? 0,
-        points: weights ? officePoints(counts, weights) : 0,
+        points: Math.round(points * 10_000) / 10_000,
         aplCount: totals.APL,
         apdCount: totals.APD,
         reCount: totals.RE,

@@ -239,18 +239,27 @@ model ScoreConfig {
   createdAt        DateTime @default(now())
 
   ledgerEntries ScoreLedgerEntry[]
+  windows       DisplayWindow[]
 
   @@index([isActive])
 }
 
+// Each scoring period keeps the weights it was given (D-85): a past period's
+// configVersion never changes, and where periods overlap the newest saved
+// (createdAt) decides.
 model DisplayWindow {
-  id       String    @id @default(cuid())
-  label    String
-  startsAt DateTime
-  endsAt   DateTime?
-  isActive Boolean   @default(false)
+  id            String    @id @default(cuid())
+  label         String
+  startsAt      DateTime
+  endsAt        DateTime?
+  isActive      Boolean   @default(false)
+  configVersion Int
+  createdAt     DateTime  @default(now())
+
+  config ScoreConfig @relation(fields: [configVersion], references: [version], onDelete: Restrict)
 
   @@index([isActive])
+  @@index([configVersion])
 }
 
 // The term this system holds data for (D-58). Exactly one row, enforced by a

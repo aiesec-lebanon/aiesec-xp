@@ -49,8 +49,9 @@ const windowSchema = z
 
 /**
  * Sets the one active display window (D-07). The previous window is
- * deactivated, not deleted, so past windows stay in the audit trail. Saving
- * replays the ledger (D-15): the window bounds which events count at all.
+ * deactivated, not deleted: it keeps its weights for the dates it still covers,
+ * and the new one wins wherever they overlap (D-85). Saving replays the ledger
+ * (D-15): the window bounds which events count at all.
  */
 export async function setDisplayWindowAction(
   _previous: ActionState | null,
@@ -65,11 +66,19 @@ export async function setDisplayWindowAction(
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
 
-  const before = await db.displayWindow.findFirst({ where: { isActive: true } });
+  const [before, activeConfig] = await Promise.all([
+    db.displayWindow.findFirst({ where: { isActive: true } }),
+    db.scoreConfig.findFirst({ where: { isActive: true }, select: { version: true } }),
+  ]);
+  // A new period starts with the weights of the one it replaces (D-85).
+  const configVersion = before?.configVersion ?? activeConfig?.version;
+  if (configVersion === undefined) {
+    return { ok: false, message: "Points aren't set up yet. Let whoever looks after the platform know." };
+  }
 
   const after = await db.$transaction(async (tx) => {
     await tx.displayWindow.updateMany({ where: { isActive: true }, data: { isActive: false } });
-    return tx.displayWindow.create({ data: { ...parsed.data, isActive: true } });
+    return tx.displayWindow.create({ data: { ...parsed.data, configVersion, isActive: true } });
   });
 
   await audit(admin.id, "DisplayWindow", after.id, before, after);
