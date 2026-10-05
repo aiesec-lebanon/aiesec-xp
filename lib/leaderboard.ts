@@ -341,6 +341,8 @@ export type PersonalProgress = {
     threshold: number;
     current: number;
     earned: boolean;
+    valueAmount: number | null;
+    valueCurrency: string | null;
   }[];
 };
 
@@ -412,6 +414,8 @@ export async function personalProgress(memberId: bigint): Promise<PersonalProgre
       threshold: Number(reward.threshold),
       current: measure(reward.thresholdType),
       earned: earned.has(reward.id),
+      valueAmount: reward.valueAmount === null ? null : Number(reward.valueAmount),
+      valueCurrency: reward.valueCurrency,
     })),
   };
 }

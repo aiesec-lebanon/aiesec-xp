@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { CharacterAvatar } from "@/components/studio/character";
+import { MultiSelect, type MultiOption } from "@/components/studio/multi-select";
 import { SearchSelect, type SearchOption } from "@/components/studio/search-select";
 import { FUNNEL_STATUSES } from "@/lib/admin/ep-order";
 
@@ -101,12 +102,12 @@ export function AssignmentsTable({
 }) {
   const [q, setQ] = useState("");
   const [product, setProduct] = useState(ALL);
-  const [status, setStatus] = useState(ALL);
+  const [statuses, setStatuses] = useState<string[]>([]);
   const [manager, setManager] = useState(ALL);
   const [source, setSource] = useState(ALL);
   const [page, setPage] = useState(1);
 
-  const hasFilters = q !== "" || product !== ALL || status !== ALL || manager !== ALL || source !== ALL;
+  const hasFilters = q !== "" || product !== ALL || statuses.length > 0 || manager !== ALL || source !== ALL;
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -114,7 +115,7 @@ export function AssignmentsTable({
     return allRows.filter((row) => {
       if (product !== ALL && !row.products.includes(Number(product))) return false;
 
-      if (status !== ALL && (row.status ?? UNKNOWN) !== status) return false;
+      if (statuses.length > 0 && !statuses.includes(row.status ?? UNKNOWN)) return false;
 
       const earning = row.managers.filter((chip) => chip.state === "active");
       if (manager === NOBODY && earning.length > 0) return false;
@@ -136,16 +137,16 @@ export function AssignmentsTable({
 
       return true;
     });
-  }, [allRows, q, product, status, manager, source]);
+  }, [allRows, q, product, statuses, manager, source]);
 
-  const statuses = useMemo(
-    () =>
-      [...new Set(allRows.flatMap((row) => (row.status ? [row.status] : [])))].sort(
-        (a, b) => statusRank(a) - statusRank(b) || a.localeCompare(b)
-      ),
-    [allRows]
-  );
-  const hasUnknownStatus = allRows.some((row) => row.status === null);
+  const statusOptions = useMemo<MultiOption[]>(() => {
+    const known = [...new Set(allRows.flatMap((row) => (row.status ? [row.status] : [])))]
+      .sort((a, b) => statusRank(a) - statusRank(b) || a.localeCompare(b))
+      .map((value) => ({ value, label: statusLabel(value) }));
+    return allRows.some((row) => row.status === null)
+      ? [...known, { value: UNKNOWN, label: "Unknown" }]
+      : known;
+  }, [allRows]);
 
   const managerOptions = useMemo<SearchOption[]>(() => {
     const earning = new Map<string, ManagerChip>();
@@ -175,7 +176,7 @@ export function AssignmentsTable({
   function clearFilters() {
     setQ("");
     setProduct(ALL);
-    setStatus(ALL);
+    setStatuses([]);
     setManager(ALL);
     setSource(ALL);
     setPage(1);
@@ -224,20 +225,14 @@ export function AssignmentsTable({
           ))}
         </select>
 
-        <select
-          value={status}
-          onChange={(event) => filterBy(setStatus)(event.target.value)}
-          aria-label="Status"
-          className={`${FIELD} xl:w-auto`}
-        >
-          <option value={ALL}>All statuses</option>
-          {statuses.map((value) => (
-            <option key={value} value={value}>
-              {statusLabel(value)}
-            </option>
-          ))}
-          {hasUnknownStatus ? <option value={UNKNOWN}>Unknown</option> : null}
-        </select>
+        <MultiSelect
+          label="Status"
+          allLabel="All statuses"
+          options={statusOptions}
+          value={statuses}
+          onChange={filterBy(setStatuses)}
+          className="w-full sm:w-44 xl:flex-none"
+        />
 
         <SearchSelect
           label="Manager"

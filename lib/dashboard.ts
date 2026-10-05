@@ -46,14 +46,39 @@ export type Pace = {
 };
 
 /**
- * The next reward still ahead of this member, and what it costs per week.
+ * The unearned reward this member is closest to (D-88). Rewards are counted in
+ * different units, so "closest" is the share of the threshold already reached,
+ * not the raw amount left: 2 of 3 approvals is nearer than 40 of 100 points.
+ * Ties go to the smaller amount left, then to the admin's order.
+ */
+export function closestReward<T extends PersonalProgress["rewards"][number]>(
+  rewards: readonly T[]
+): T | null {
+  let best: T | null = null;
+  let bestShare = -1;
+
+  for (const reward of rewards) {
+    if (reward.earned) continue;
+    const share = reward.threshold > 0 ? reward.current / reward.threshold : 1;
+    const left = reward.threshold - reward.current;
+    if (share > bestShare || (share === bestShare && best && left < best.threshold - best.current)) {
+      best = reward;
+      bestShare = share;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * The reward this member is closest to, and what it costs per week.
  *
  * The highest-leverage element on the page, so it is deliberately conservative:
  * a window with no end, or one already closed, produces no rate rather than a
  * number that reads as achievable when nothing is.
  */
 export function pace(progress: PersonalProgress, window: ActiveWindow | null): Pace | null {
-  const reward = progress.rewards.find((candidate) => !candidate.earned);
+  const reward = closestReward(progress.rewards);
   if (!reward) return null;
 
   const remaining = Math.max(0, reward.threshold - reward.current);
