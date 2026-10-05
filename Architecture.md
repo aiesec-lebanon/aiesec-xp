@@ -535,7 +535,7 @@ surface answers for itself:
 |---|---|
 | `/leaderboard`, `/leaderboard/lcs` | `?from=&to=`, defaulting to the term start through today |
 | `/tv` | The active `DisplayWindow`. It is the live screen for exchange hackathons and takes no range of its own |
-| `/`, `/me`, rewards | The active `DisplayWindow`, because `RewardGrant` is derived against it (D-34) |
+| `/`, `/me`, `/rewards` | The active `DisplayWindow`, because `RewardGrant` is derived against it (D-34) |
 | `ScoreLedgerEntry` (the replay) | The active `DisplayWindow` |
 
 That last row is why the individual board cannot read the ledger for a historic
@@ -678,6 +678,7 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 | `/` | Personal dashboard |
 | `/leaderboard` | Individual ranking, filterable by LC and MC and by date range (D-58). Both filters sit above the podium |
 | `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11), over the same date range. Points and counts read live from AIESEC's own analytics API, not the ledger (D-56) |
+| `/rewards` | Rewards by unit: one curved road each for points, APL, APD and RE that has a reward, with reward markers at their thresholds and the member's character at their count. Next up is the closest unearned reward by share reached (D-87, D-88) |
 | `/me` | Full event history and point trail |
 | `/tv` | Fullscreen display mode for office screens. Stays on the active display window; no range picker (D-58) |
 | `/admin/*` | Configuration |
@@ -687,7 +688,7 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 - **Funnel progress ring.** Three nested arcs — APL, APD, RE — filling toward the
   next reward threshold. Segment count comes from the active reward, never
   hardcoded.
-- **Next reward card.** Distance to the next threshold in that reward's own unit,
+- **Next reward card.** The unearned reward closest by share of its threshold reached (D-88). Distance to it in that reward's own unit,
   with its label and icon.
 - **Pace meter.** Events per week needed to reach the next threshold before the
   display window closes, against current pace. This converts a distant date into

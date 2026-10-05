@@ -7,6 +7,7 @@ import { STAGE, STAGE_TINT, TEXT } from "@/lib/design/tokens";
 import type { CharacterBeat } from "@/lib/design/character";
 import { firstName } from "@/lib/design/names";
 import { formatPoints, formatSignedPoints } from "@/lib/design/points";
+import { thresholdUnit as unit } from "@/lib/scoring/labels";
 
 import { CharacterAvatar } from "@/components/studio/character";
 import { BeatOnHover } from "@/components/studio/hero-beat";
@@ -28,21 +29,6 @@ const STAGES: Record<string, string> = {
   APD_BROKEN: "Approval broken",
   RE_BROKEN: "Realization broken",
 };
-
-function unit(thresholdType: string): string {
-  switch (thresholdType) {
-    case "POINTS":
-      return "points";
-    case "APL_COUNT":
-      return "applications";
-    case "APD_COUNT":
-      return "approvals";
-    case "RE_COUNT":
-      return "realizations";
-    default:
-      return "";
-  }
-}
 
 export default async function HomePage() {
   const user = await requireMemberPage("/");
