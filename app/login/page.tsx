@@ -1,5 +1,6 @@
 import { safeReturnTo } from "@/lib/auth/oauth";
 
+import { BrandGlyph } from "@/components/studio/brand-glyph";
 import { BrandMark } from "@/components/studio/chrome";
 import { CharacterGroup } from "@/components/studio/character-group";
 import { Rise } from "@/components/studio/motion";
@@ -84,7 +85,7 @@ export default async function LoginPage({
         <Rise className="w-full max-w-110">
           <div className="rounded-3xl bg-surface-raised px-8 py-9 text-center shadow-e3">
             <div className="mb-5 inline-flex items-center gap-2.5">
-              <span aria-hidden className="block size-6.5 rounded-[9px] bg-stage-apl" />
+              <BrandGlyph size={26} />
               <span className="font-display text-lg font-semibold text-ink">AIESEC XP</span>
             </div>
 

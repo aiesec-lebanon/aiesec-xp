@@ -3,17 +3,14 @@ import Link from "next/link";
 import type { CurrentUser } from "@/lib/auth/current-user";
 import { firstName } from "@/lib/design/names";
 
+import { BrandGlyph } from "./brand-glyph";
 import { DockSlot } from "./dock-slot";
 import { ProfileMenu } from "./profile-menu";
 
 export function BrandMark({ size = 30, type = 19 }: { size?: number; type?: number }) {
   return (
     <Link href="/" className="flex items-center gap-3">
-      <span
-        aria-hidden
-        style={{ width: size, height: size, borderRadius: size / 3 }}
-        className="block bg-stage-apl"
-      />
+      <BrandGlyph size={size} />
       <span style={{ fontSize: type }} className="font-display font-semibold text-ink">
         AIESEC XP
       </span>
