@@ -33,13 +33,13 @@ function row(
   } = {}
 ) {
   return {
-    id: over.id ?? "7163866",
+    id: over.id ?? "3000001",
     status: over.status ?? "open",
     created_at: over.created_at ?? "2026-08-31T10:41:48Z",
     updated_at: over.updated_at ?? "2026-09-25T16:10:37Z",
-    person: { id: "5534242", managers: over.managers === undefined ? [{ id: "5663710" }] : over.managers },
+    person: { id: "1000002", managers: over.managers === undefined ? [{ id: "2000001" }] : over.managers },
     opportunity: {
-      id: "1338627",
+      id: "4000001",
       programme: { id: over.programme ?? "8" },
     },
     meta: {
@@ -66,7 +66,7 @@ describe("occurrenceDate", () => {
     expect(at?.toISOString()).toBe("2026-08-21T11:36:01.000Z");
   });
 
-  it("takes the earlier of physical and remote realization (D-29)", () => {
+  it("takes the earlier of physical and remote realization", () => {
     const at = occurrenceDate(
       row({ meta: { date_realized: "2026-07-02T12:17:32Z", remote_realized_at: "2026-06-30T09:00:00Z" } }),
       "RE"
@@ -97,7 +97,7 @@ describe("occurrenceDate", () => {
   });
 });
 
-describe("break supersession (D-28)", () => {
+describe("break supersession", () => {
   it("ignores a break the stage date has overtaken", () => {
     const approved = row({
       meta: { date_approved: "2026-08-20T00:00:00Z", date_approval_broken: "2026-08-10T00:00:00Z" },
@@ -145,10 +145,10 @@ describe("mapApplication", () => {
   it("maps an open application to its APL alone", () => {
     expect(mapApplication(row(), OPTIONS)).toEqual([
       {
-        applicationId: 7163866n,
+        applicationId: 3000001n,
         eventType: "APL",
         occurredAt: new Date("2026-08-31T10:41:48Z"),
-        epPersonId: 5534242n,
+        epPersonId: 1000002n,
         programmeId: 8,
         direction: "OUTGOING",
         applicationStatus: "open",
@@ -156,7 +156,7 @@ describe("mapApplication", () => {
     ]);
   });
 
-  it("carries the application's current status on every event (D-41)", () => {
+  it("carries the application's current status on every event", () => {
     const events = mapApplication(
       row({ status: "approved", meta: { date_approved: "2026-09-27T00:00:00Z" } }),
       OPTIONS
@@ -164,19 +164,19 @@ describe("mapApplication", () => {
     expect(events.every((event) => event.applicationStatus === "approved")).toBe(true);
   });
 
-  it("marks the person side OUTGOING and the opportunity side INCOMING (D-25)", () => {
+  it("marks the person side OUTGOING and the opportunity side INCOMING", () => {
     expect(mapApplication(row(), OPTIONS)[0].direction).toBe("OUTGOING");
     expect(
       mapApplication(row(), { side: "OPPORTUNITY", allowedProgrammeIds: PROGRAMMES })[0].direction
     ).toBe("INCOMING");
   });
 
-  it("stores no EP personal data beyond the id needed to attribute (D-40, D-42)", () => {
+  it("stores no EP personal data beyond the id needed to attribute", () => {
     const [event] = mapApplication(row(), OPTIONS);
     expect(Object.keys(event).join(" ")).not.toMatch(/email|phone|name|title|manager/i);
   });
 
-  it("carries only the fields scoring reads (D-44)", () => {
+  it("carries only the fields scoring reads", () => {
     expect(Object.keys(mapApplication(row(), OPTIONS)[0]).sort()).toEqual([
       "applicationId",
       "applicationStatus",
@@ -229,9 +229,9 @@ describe("mapApplication", () => {
   });
 });
 
-describe("managerIds (D-74)", () => {
+describe("managerIds", () => {
   it("reads the EP's managers as ids", () => {
-    expect(managerIds([{ id: "5663710" }, { id: "5157924" }])).toEqual([5663710n, 5157924n]);
+    expect(managerIds([{ id: "2000001" }, { id: "2000004" }])).toEqual([2000001n, 2000004n]);
   });
 
   it("drops duplicates and nulls", () => {

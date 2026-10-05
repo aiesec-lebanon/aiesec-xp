@@ -5,16 +5,13 @@ import { mcOfficeId } from "@/lib/env";
 import { gis } from "@/lib/gis/client";
 import { logger } from "@/lib/logger";
 
-// The competition scope (D-01). The tree is derived by recursing committees()
-// -- this schema has no root office field -- and which offices are operating
-// comes from the public alignments list (D-39). Neither is hardcoded.
-
 const ALIGNMENTS_URL = "https://gis-api.aiesec.org/v2/lists/mcs_alignments";
 const ALIGNMENTS_TIMEOUT_MS = 10_000;
 const MAX_DEPTH = 10;
 
 type DiscoveredOffice = { id: bigint; name: string; parentId: bigint | null };
 
+// Recurses committees() because the GIS schema has no root office field.
 async function fetchSubtree(rootId: bigint): Promise<DiscoveredOffice[]> {
   const discovered = new Map<bigint, DiscoveredOffice>();
   let frontier = [rootId];
@@ -43,11 +40,7 @@ async function fetchSubtree(rootId: bigint): Promise<DiscoveredOffice[]> {
   return [...discovered.values()];
 }
 
-/**
- * Offices the MC currently operates. A failure here is not fatal: the tree is
- * still written, and offices keep whatever operating flag they already had,
- * because losing the flag would lock every member out.
- */
+// Null on failure, so offices keep their existing flag rather than locking every member out.
 async function fetchOperatingOfficeIds(mcName: string): Promise<Set<bigint> | null> {
   try {
     const response = await fetch(`${ALIGNMENTS_URL}?mc_name=${encodeURIComponent(mcName)}`, {
@@ -106,8 +99,6 @@ export async function syncOfficeTree(): Promise<OfficeTreeSyncResult> {
         isMc,
         isOperating: isOperating ?? isMc,
       },
-      // isOperating is only written when the alignments list was readable, so a
-      // transient failure cannot quietly close every office.
       update: {
         name: office.name,
         parentId: office.parentId,
@@ -123,19 +114,10 @@ export async function syncOfficeTree(): Promise<OfficeTreeSyncResult> {
   };
 }
 
-/** Offices whose members compete and may sign in (D-01, D-31). */
 export async function operatingOfficeIds(): Promise<bigint[]> {
   const offices = await db.office.findMany({
     where: { isOperating: true },
     select: { id: true },
   });
   return offices.map((office) => office.id);
-}
-
-export async function isOperatingOffice(officeId: bigint): Promise<boolean> {
-  const office = await db.office.findUnique({
-    where: { id: officeId },
-    select: { isOperating: true },
-  });
-  return office?.isOperating ?? false;
 }

@@ -1,7 +1,4 @@
-# Renders the shipped .glb files side by side, so a rebuild can be checked
-# without opening the app. Every body should come out the same height.
-#
-#   blender -b -P scripts/assets/avatar-preview.py -- <repo-root> <out-dir>
+# blender -b -P scripts/assets/avatar-preview.py -- <repo-root> <out-dir>
 
 import os
 import sys
@@ -55,23 +52,16 @@ def load(repo_root):
     for i, name in enumerate(NAMES):
         path = os.path.join(repo_root, "public", "models", f"{name}.glb")
         bpy.ops.import_scene.gltf(filepath=path)
-        # Found by name rather than by diffing bpy.data.objects before and after:
-        # the diff quietly lost one of the four, and something in this Blender's
-        # configuration keeps putting a stray primitive back after every import.
+        # Found by name: something keeps re-adding a stray primitive after each import.
         body = bpy.context.scene.objects.get(f"{name}-mesh")
         if body is None:
             raise RuntimeError(f"{name}-mesh missing after importing {path}")
-        # They all export standing at the origin, so deal them along x.
         body.location.x += -1.8 + i * 1.2
 
 
 def frame():
-    """Pull the camera back until every character fits, from the meshes' own
-    world bounds."""
     scene = bpy.context.scene
-    # The last body was moved after the last import, so its matrix_world is
-    # still stale here; without this the camera is framed without it and crops
-    # it out of the picture entirely.
+    # The last body's matrix_world is stale after it was moved.
     bpy.context.view_layer.update()
 
     corners = []
@@ -92,7 +82,6 @@ def frame():
     sensor = scene.camera.data.sensor_width
     lens = scene.camera.data.lens
 
-    # Fit whichever axis is tighter, with a margin.
     need = max(width / sensor, height / (sensor / aspect))
     scene.camera.location = (
         (min(xs) + max(xs)) / 2,
@@ -123,58 +112,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# --------------------------------------------------------------------------
-# Parked with the rest of the recolouring (D-52): the models ship with their
-# authored materials, so there are no per-part slots to repaint. This rendered
-# a second image with every part tinted, to prove recolouring worked.
-#
-# RECOLOUR = {
-#     "skin": (0.42, 0.24, 0.13),
-#     "hair": (0.86, 0.72, 0.30),
-#     "shirt": (0.01, 0.62, 0.30),
-#     "trouser": (0.05, 0.05, 0.06),
-#     "shoe": (0.95, 0.20, 0.13),
-# }
-#
-# def srgb_to_linear(c):
-#     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-#
-# def recolour():
-#     """Repaint each tintable part, the way the app does.
-#
-#     The importer rebuilds baseColorFactor as a multiply node in front of the
-#     shader, so the colour goes there; writing it to the shader's own Base Color
-#     socket silently does nothing, because that socket is linked.
-#     """
-#     for mat in bpy.data.materials:
-#         part = next((p for p in RECOLOUR if mat.name.endswith(f"-{p}")), None)
-#         if part is None or mat.node_tree is None:
-#             continue
-#         rgb = [srgb_to_linear(c) for c in RECOLOUR[part]]
-#
-#         tree = mat.node_tree
-#         bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
-#         if bsdf is None:
-#             continue
-#         link = next(
-#             (l for l in tree.links if l.to_node.name == bsdf.name and l.to_socket.name == "Base Color"),
-#             None,
-#         )
-#         if link is None:
-#             bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
-#             continue
-#
-#         node = link.from_node
-#         if node.type in {"MIX", "MIX_RGB"}:
-#             linked = {l.to_socket.name for l in tree.links if l.to_node.name == node.name}
-#             target = next(
-#                 (s for s in node.inputs if s.type == "RGBA" and s.name not in linked),
-#                 None,
-#             )
-#             if target is not None:
-#                 target.default_value = (*rgb, 1.0)
-#         else:
-#             bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
-# --------------------------------------------------------------------------

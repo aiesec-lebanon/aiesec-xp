@@ -1,9 +1,4 @@
-# Builds STUDIO's typefaces (D-48) into lib/design/faces/, which next/font/local
-# serves -- so a build never fetches from Google Fonts (D-67). Each family comes
-# from google/fonts at one pinned commit, next to its licence.
-#
-#   pip install "fonttools[woff]"
-#   python scripts/assets/build-faces.py
+# pip install "fonttools[woff]" && python scripts/assets/build-faces.py
 
 import os
 import urllib.request
@@ -24,8 +19,7 @@ FACES = [
     ("ofl/spacemono", "SpaceMono-Bold.ttf", "space-mono-bold.woff2", {}),
 ]
 
-# Google's latin and latin-ext ranges merged into one file, because next/font/local
-# cannot give each file of a family its own unicode-range the way Google's CSS does.
+# latin + latin-ext in one file: next/font/local cannot give each file its own unicode-range.
 UNICODES = (
     "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,"
     "U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD,"
@@ -48,7 +42,7 @@ def build(family_dir, source, pinned_axes):
 
     options = subset.Options()
     options.flavor = "woff2"
-    # Keep every OpenType feature: the scores lean on tabular figures.
+    # Keep every OpenType feature; scores rely on tabular figures.
     options.layout_features = ["*"]
     options.name_IDs = ["*"]
     subsetter = subset.Subsetter(options)

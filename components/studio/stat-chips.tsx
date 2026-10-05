@@ -9,10 +9,6 @@ import { formatPoints } from "@/lib/design/points";
 
 import { CountUp, Lift } from "./motion";
 
-// The floor chips. One number is large on the stage above; these four carry the
-// rest, and open only when asked -- which is also where the audit trail lives
-// (Architecture.md 9), since a score nobody can expand is a score nobody trusts.
-
 export type ChipEvent = { stage: string; product: string; date: string; points: string };
 
 export type Chip = {
@@ -25,11 +21,9 @@ export type Chip = {
   value: number | null;
   valueSuffix?: string;
   caption: string;
-  /** Replaces the numeral, for the reward chip's title. */
   headline?: string;
   events?: ChipEvent[];
   ladder?: { label: string; detail: string; earned: boolean }[];
-  /** Said instead of a drawer when there is nothing behind the number yet. */
   empty?: string;
 };
 
@@ -88,7 +82,7 @@ export function StatChips({ chips }: { chips: Chip[] }) {
                       {chip.value === null ? (
                         "—"
                       ) : (
-                        // A count can be a share of a stage (D-83), so it keeps its decimals.
+                        // A count can be a fractional share of a stage.
                         <CountUp
                           value={chip.value}
                           decimals={Number.isInteger(chip.value) ? 0 : 2}
@@ -127,9 +121,6 @@ export function StatChips({ chips }: { chips: Chip[] }) {
             transition={{ duration: 0.35, ease: EASE }}
             className="w-full max-w-[1000px] overflow-hidden"
           >
-            {/* Capped and scrolled rather than free to grow: the dashboard is
-                sized to the viewport, and a twelve-row trail that pushed the
-                body off the top of the set would cost more than it showed. */}
             <div className="max-h-[34vh] overflow-y-auto rounded-[20px] bg-surface-raised p-6 shadow-e2">
               <ChipDrawer chip={opened} />
             </div>

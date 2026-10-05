@@ -1,14 +1,7 @@
-// Pure parsing of the AIESEC Analytics API's response shape, kept free of
-// "server-only" and any fetch/env dependency so it can be unit tested directly
-// (tests/aiesec-analytics.test.ts). lib/analytics/aiesec-analytics.ts is the
-// server-only module that actually calls the endpoint and uses this to parse it.
-
-// Products in scope (D-04): 7 = GV, 8 = GTa, 9 = GTe.
+// 7 = GV, 8 = GTa, 9 = GTe.
 export const PROGRAMME_IDS = [7, 8, 9] as const;
 
-// Stage name -> the funnel stage this product scores (D-05). "realized" is
-// summed with "remote_realized" because remote realization scores identically
-// to physical (D-29).
+// Remote realization scores the same as physical.
 const STAGE_TAGS = {
   APL: ["applied"],
   APD: ["approved"],
@@ -25,8 +18,7 @@ function docCount(payload: Record<string, unknown>, tag: string): number {
   return typeof count === "number" ? count : 0;
 }
 
-/** Sums applications for one product across every tag a stage folds in, direction
- * fixed to outgoing (D-27: Lebanon runs outgoing exchange only, same as sync). */
+// Outgoing (o_) tags only, matching what sync collects.
 export function countsFromPayload(
   payload: Record<string, unknown>,
   programmeIds: readonly number[]
@@ -42,8 +34,6 @@ export function countsFromPayload(
   return result;
 }
 
-/** Collapses per-product counts into one figure, for a screen that shows a
- * single APL/APD/RE per entity rather than a per-product breakdown. */
 export function sumProducts(counts: ProductFunnelCounts): FunnelCounts {
   return Object.values(counts).reduce(
     (sum, entry) => ({ APL: sum.APL + entry.APL, APD: sum.APD + entry.APD, RE: sum.RE + entry.RE }),

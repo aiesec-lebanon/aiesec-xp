@@ -6,9 +6,7 @@ import type { CurrentUser } from "@/lib/auth/current-user";
 
 import { Header } from "./chrome";
 
-// /tv is projected in an office, not used: a profile pill and a sign-out button
-// are noise on it, and it draws its own brandmark, so the global header put the
-// wordmark on screen twice. It gets its own way home instead.
+// /tv draws its own brandmark and chrome.
 const BARE = ["/tv"];
 
 export function HeaderSlot({

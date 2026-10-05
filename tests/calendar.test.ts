@@ -13,11 +13,6 @@ import {
   shiftMonth,
 } from "@/lib/design/calendar";
 
-// The date field renders its own calendar rather than the browser's, so this is
-// the month arithmetic behind it. Everything is UTC: a date in this product is a
-// day with no time in it, and reading one back in the browser's zone would shift
-// it for anyone west of UTC.
-
 describe("parseIso", () => {
   it("accepts a real date", () => {
     expect(parseIso("2026-08-01")?.toISOString()).toBe("2026-08-01T00:00:00.000Z");

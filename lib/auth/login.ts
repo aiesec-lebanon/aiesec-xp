@@ -32,17 +32,8 @@ function toPositionInputs(
   });
 }
 
-/**
- * Records who signed in and what they may do.
- *
- * Positions are replaced rather than merged: a position that has disappeared
- * from GIS must disappear here too, or a terminated officer would keep the
- * access their vanished row still grants (D-23).
- *
- * A DENIED member is still written. They hold no access, but recording the
- * attempt is what lets an admin see that someone tried and why it failed,
- * rather than the sign-in vanishing without trace.
- */
+// Positions are replaced, not merged, so a position gone from GIS stops granting
+// access. DENIED members are still written so admins can see the failed attempt.
 export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
   const memberId = BigInt(identity.id);
   const positions = toPositionInputs(identity);
@@ -66,8 +57,7 @@ export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
   const profile = {
     fullName: personName(identity.full_name ?? `Person ${memberId}`),
     profilePhotoUrl: identity.profile_photo ?? null,
-    // Only set when the office is one we actually hold, since these columns
-    // carry a foreign key and GIS will report offices outside the subtree.
+    // FK column, and GIS reports offices outside the subtree we hold.
     homeOfficeId: homeOfficeId && knownOffices.has(String(homeOfficeId)) ? homeOfficeId : null,
     scoringOfficeId: access.scoringOfficeId,
     lastSyncedAt: new Date(),

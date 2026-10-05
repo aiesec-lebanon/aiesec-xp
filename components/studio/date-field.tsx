@@ -16,24 +16,13 @@ import {
   type YearMonth,
 } from "@/lib/design/calendar";
 
-// A date field on this product's own surface.
-//
-// `<input type="date">` was the obvious thing and it is the wrong thing here:
-// its calendar is browser chrome, rendered by the platform in the platform's own
-// blue, and no stylesheet can reach it. Next to a warm-paper cyclorama it reads
-// as a different application. So the calendar is ours, which also means it can
-// refuse dates before the term start rather than merely rejecting them on submit.
-//
-// Keyboard behaviour follows the ARIA date-picker pattern: one tab stop into the
-// grid, arrows to move, Escape to leave. 42 individually tabbable days would be
-// operable and unusable, which is not what AA means.
+// Custom rather than <input type="date">: the native calendar popup can't be styled.
 
 const TRIGGER =
   "flex items-center gap-2.5 rounded-[10px] border border-line bg-surface-raised px-3.5 py-2.5 text-[13px] font-semibold text-ink shadow-e1 transition-colors hover:bg-surface-sunken";
 
 export type DateFieldProps = {
   label: string;
-  /** The form field this writes into. */
   name: string;
   value: string;
   min: string;
@@ -52,8 +41,7 @@ export function DateField({ label, name, value, min, max, onChange }: DateFieldP
     if (returnFocus) trigger.current?.focus();
   }
 
-  // Pointer down rather than click: a click that starts inside the popover and
-  // ends outside it is a drag, not a dismissal.
+  // pointerdown, not click: a press that starts inside and ends outside is a drag.
   useEffect(() => {
     if (!open) return;
 
@@ -126,14 +114,9 @@ function Calendar({
   const grid = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(() => clampIso(value, min, max));
   const [month, setMonth] = useState<YearMonth>(() => monthOf(focused));
-  // Left unless that would hang the panel off the right edge, which is exactly
-  // where this filter sits on a wide screen.
   const [alignRight, setAlignRight] = useState(false);
 
-  // True on mount, so opening puts focus in the grid -- which is what makes the
-  // arrows and Escape do anything. Set again only by the key handler: moving
-  // DOM focus when the month buttons change the grid would take focus off the
-  // button being clicked, and one press of "next" would be all anyone could do.
+  // Only the key handler re-raises this; moving focus on month clicks would steal it from the button.
   const claimFocus = useRef(true);
 
   useEffect(() => {
@@ -148,13 +131,9 @@ function Calendar({
     grid.current?.querySelector<HTMLButtonElement>(`[data-iso="${focused}"]`)?.focus();
   }, [focused]);
 
-  // Paging with the keyboard has to carry the grid with it, or the focused day
-  // is in a month nobody can see.
   const focusOn = (next: string) => {
     const landed = clampIso(next, min, max);
-    // Already against the term boundary. Returning early matters: React would
-    // bail on the identical state, the effect below would never run, and the
-    // flag would sit raised until the next month click stole focus mid-press.
+    // Must return early: React bails on identical state, so the flag would stay raised.
     if (landed === focused) return;
 
     claimFocus.current = true;
@@ -162,8 +141,6 @@ function Calendar({
     setMonth(monthOf(landed));
   };
 
-  // Clicking through months leaves the focused day behind, so it is carried to
-  // the first selectable day of wherever we land -- without stealing focus.
   const goMonth = (delta: number) => {
     const next = shiftMonth(month, delta);
     const cells = monthGrid(next);
@@ -198,7 +175,6 @@ function Calendar({
       const shifted = shiftMonth(monthOf(focused), event.key === "PageUp" ? -1 : 1);
       const day = Number(focused.slice(8));
       const candidate = monthGrid(shifted).find((cell) => cell.inMonth && cell.day === day);
-      // A 31st that the next month does not have falls to its last day.
       focusOn(candidate?.iso ?? monthGrid(shifted).filter((cell) => cell.inMonth).at(-1)!.iso);
       return;
     }
@@ -211,9 +187,7 @@ function Calendar({
 
   const days = monthGrid(month);
 
-  // A month is a dead end when none of its own days are selectable. Testing the
-  // whole grid instead would keep the arrow live for a July whose only in-range
-  // cells are the August days it borrows.
+  // Only in-month days count; borrowed neighbour-month cells would keep the arrow live.
   const deadEnd = (delta: number) =>
     !monthGrid(shiftMonth(month, delta)).some(
       (cell) => cell.inMonth && isWithin(cell.iso, min, max)
@@ -304,8 +278,7 @@ function Day({
   return (
     <button
       type="button"
-      // One tab stop for the whole grid, moved by the arrow keys. 42 tabbable
-      // days would be operable and unusable, which is not what AA means.
+      // Roving tabindex: one tab stop for the grid.
       tabIndex={focused ? 0 : -1}
       data-iso={cell.iso}
       disabled={disabled}

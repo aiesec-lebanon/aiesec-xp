@@ -1,7 +1,4 @@
-# Splits each avatar into the parts a member can recolour (D-50), and exports one
-# .glb per character into assets/source/.
-#
-#   blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-parts.py -- <repo-root>
+# blender -b <characters_working.blend> -P scripts/assets/avatar-parts.py -- <repo-root>
 
 import json
 import os
@@ -15,8 +12,7 @@ from mathutils import Vector
 PARTS = ("skin", "hair", "shirt", "trouser", "shoe")
 DETAIL = "detail"
 
-# How far a texel may sit from the nearest reference colour, in sRGB space,
-# before the triangle is handed to `detail` instead of guessed at.
+# sRGB distance beyond which a triangle goes to `detail` rather than being guessed.
 MAX_REF_DISTANCE = 0.28
 
 LUMA_PERCENTILE = 92
@@ -37,12 +33,8 @@ def region_of(bone):
     return "torso"
 
 
-# Reference colours are the cluster means of each character's own baked texture.
-# `rules` narrows the candidates by body region, and by height where colour alone
-# cannot tell two garments apart -- tee-skirt's socks are the same blue as its
-# skirt. A garment's secondary hue is left out on purpose: listing both a shoe's
-# white and its red flashes averaged the part to pink, where leaving the flashes
-# to `detail` keeps them and lets the swatch repaint only the shoe.
+# `zmin` splits garments colour alone cannot tell apart. Secondary hues are omitted
+# so they fall to `detail` instead of averaging the part's tint.
 CHARACTERS = {
     "avatar-hoodie-cargo": {
         "refs": {
@@ -166,8 +158,7 @@ def classify(obj, spec, colour_srgb, centroid, verts):
     region = vertex_region[verts[:, 0]]
     z = centroid[:, 2]
 
-    # sRGB, not linear: one threshold then means roughly the same perceptual gap
-    # across the range.
+    # sRGB so one threshold is roughly perceptually uniform.
     refs = {
         part: linear_to_srgb(np.array([hex_to_linear(h) for h in hexes], np.float32))
         for part, hexes in spec["refs"].items()
@@ -199,11 +190,7 @@ def classify(obj, spec, colour_srgb, centroid, verts):
 
 
 def smooth(verts, label, rounds=3):
-    """Majority vote over edge neighbours, to clear classifier speckle.
-
-    `detail` is sticky: an eye or a printed logo has to survive a vote it would
-    always lose on area.
-    """
+    """`detail` is sticky so small features like eyes survive the majority vote."""
     n = len(label)
     shared = {}
     for f in range(n):
@@ -241,8 +228,6 @@ def smooth(verts, label, rounds=3):
 
 
 def rasterise(label, loops, uv, size):
-    """Paint each triangle's part into UV space, so the luminance map can be
-    normalised per part."""
     order = [DETAIL] + list(PARTS)
     index = {p: i for i, p in enumerate(order)}
     mask = np.full((size, size), -1, np.int8)
@@ -286,12 +271,7 @@ def rasterise(label, loops, uv, size):
 
 
 def luminance_map(px, mask, order, tmp_dir, name):
-    """Rewrite the baked texture as a per-part-normalised luminance map, with the
-    default colour each part needs to look unchanged.
-
-    Normalising per part rather than globally is what lets near-black hair be
-    tinted to anything other than another near-black.
-    """
+    """Per-part normalisation lets near-black hair be tinted to a light colour."""
     size = mask.shape[0]
     h, w = px.shape[:2]
     if (h, w) != (size, size):
@@ -322,8 +302,7 @@ def luminance_map(px, mask, order, tmp_dir, name):
         mean_luma = max(float(normalised.mean()), 1e-4)
         defaults[part] = np.clip(mean_colour / mean_luma, 0.0, 1.0)
 
-    # Unclaimed texels fall back to a global normalisation, so the atlas padding
-    # does not read as black where filtering reaches into it.
+    # Unclaimed padding gets a global normalisation so filtering does not pull in black.
     rest = out == 0
     if rest.any():
         global_scale = max(float(np.percentile(luma, LUMA_PERCENTILE)), 1e-6)
@@ -356,9 +335,7 @@ def build_material(name, part, base_image, normal_image, colour):
     if colour is None:
         tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
     else:
-        # The tint must reach Base Color through an explicit multiply: a socket's
-        # default_value is ignored once a texture is linked, so every part would
-        # export the same white factor and dedup would collapse them into one.
+        # A linked socket's default_value is ignored on export, so tint via an explicit multiply.
         mix = tree.nodes.new("ShaderNodeMix")
         mix.data_type = "RGBA"
         mix.blend_type = "MULTIPLY"
@@ -385,8 +362,7 @@ def build_material(name, part, base_image, normal_image, colour):
     return mat
 
 
-# T-pose is a rigging convention, not a way to stand. Both sides take the same
-# sign: these rigs mirror the arm bones by roll, so negating one sends it up.
+# Same sign on both sides: these rigs mirror arm bones by roll.
 A_POSE = {"leftarm": 0.95, "rightarm": 0.95, "leftforearm": 0.10, "rightforearm": 0.10}
 
 
@@ -403,8 +379,7 @@ def pose_arms(rig):
 
 
 def stand_at_origin(obj):
-    """Centre on x/y and put the feet on z=0; the models carry scattered
-    authoring offsets, one of them a metre below the floor."""
+    """Some models carry authoring offsets, one a metre below the floor."""
     root = obj.parent if obj.parent is not None else obj
     bpy.context.view_layer.update()
     corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]

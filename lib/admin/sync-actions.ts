@@ -21,10 +21,7 @@ const hackathonSchema = z.discriminatedUnion("enabled", [
   z.object({ enabled: z.literal("false") }),
 ]);
 
-/**
- * Switches hackathon mode on for a chosen number of hours, or off. It is stored
- * as an end time (D-66), so it lapses back to the daily cadence by itself.
- */
+// Stored as an end time so it lapses back to the daily cadence by itself.
 export async function setHackathonModeAction(
   _previous: ActionState | null,
   formData: FormData
@@ -68,7 +65,6 @@ const REFRESHED_PATHS: Record<SyncJobName, string[]> = {
   roster: ["/admin/assignments", "/admin/sync", "/leaderboard", "/leaderboard/lcs", "/tv"],
 };
 
-/** Runs a sync job now, whatever the schedule says. */
 export async function runSyncJobAction(
   _previous: ActionState | null,
   formData: FormData

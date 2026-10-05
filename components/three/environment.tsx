@@ -8,9 +8,7 @@ export type SceneEnvironmentProps = Omit<EnvironmentProps, "preset" | "files" | 
   environment?: HdriEnvironment;
 };
 
-// drei's `preset` prop resolves to the pmndrs GitHub CDN. These are the same
-// CC0 Poly Haven maps, extracted from @pmndrs/assets into public/hdri at install
-// time, so the lighting works offline and under a self-only CSP.
+// drei's preset prop loads from a CDN; local HDRIs keep a self-only CSP working.
 export function SceneEnvironment({ environment = "city", ...props }: SceneEnvironmentProps) {
   return <Environment files={hdriPath(environment)} {...props} />;
 }

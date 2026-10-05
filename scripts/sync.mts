@@ -1,5 +1,3 @@
-// Runs every sync pass. Becomes the cron target in step 7; for now it is how
-// the passes are exercised against live GIS.
 import { runAllPasses } from "@/lib/sync/run";
 
 const results = await runAllPasses();

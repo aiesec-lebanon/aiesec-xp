@@ -7,7 +7,6 @@ import { CharacterGroup } from "@/components/studio/character-group";
 import { memberAvatars } from "@/lib/design/avatar";
 import { characterFor } from "@/lib/design/character";
 import { GhostNumber, Rise } from "@/components/studio/motion";
-import { Crown } from "@/components/studio/podium";
 import { RangeFilter } from "@/components/studio/range-filter";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +28,6 @@ export default async function LcLeaderboardPage({
 
   const [leader, ...rest] = standings;
 
-  // The bodies on the leading LC's plinth are its own top members, so the group
-  // on the page is the group that put it there rather than decoration.
   const top = leader
     ? members.filter((standing) => standing.officeId === leader.officeId).slice(0, 10)
     : [];
@@ -42,12 +39,7 @@ export default async function LcLeaderboardPage({
     characterId: characters.get(standing.memberId)?.id,
   }));
 
-  const totalMembers = standings.reduce((sum, entry) => sum + entry.memberCount, 0);
-
   return (
-    // One column, not a split: there are three entities and there will be
-    // three for a while, so the whole board is a leader and two rows under it.
-    // flex-1 under the layout's header, and nothing here overflows it.
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-wall">
       <div className="flex shrink-0 flex-wrap items-end justify-between gap-4 px-6 pt-2 pb-3 sm:px-11">
         <RangeFilter
@@ -57,9 +49,6 @@ export default async function LcLeaderboardPage({
           min={range.floor}
           max={range.ceiling}
         />
-        {/* <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
-          {standings.length} entit{standings.length === 1 ? "y" : "ies"} · {totalMembers} members
-        </p> */}
       </div>
 
       {!analyticsOk ? (
@@ -68,9 +57,6 @@ export default async function LcLeaderboardPage({
         </p>
       ) : null}
 
-      {/* The leader takes whatever height is left after the two rows under it,
-          so the board ends on the dock instead of running past it. Scrolls only
-          if the window is too short for the group canvas to keep its floor. */}
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pb-3 sm:px-11">
         {leader ? (
           <Rise

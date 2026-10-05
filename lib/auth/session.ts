@@ -4,21 +4,13 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { sessionSecret } from "@/lib/env";
 
-// Our own session, not AIESEC's. The user's OAuth token is used once, for the
-// currentPerson call at login, and then discarded: it is never stored, never
-// placed in a cookie, and never used for sync (Architecture.md 4.1). This is the
-// deliberate departure from auth-template, which keeps and refreshes it.
-//
-// HMAC-signed rather than encrypted: the payload is a person id and a role,
-// both of which the user already knows. Integrity is what matters, so a signed
-// cookie is enough and avoids a JWT dependency.
+// HMAC-signed, not encrypted: the payload holds nothing the user doesn't already know.
 
 export const SESSION_COOKIE = "xp_session";
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 
 export type SessionPayload = {
-  /** GIS person id. */
   sub: string;
   /** Issued at, epoch seconds. */
   iat: number;
@@ -59,8 +51,7 @@ export function readSession(cookieValue: string | undefined): SessionPayload | n
   const presented = Buffer.from(cookieValue.slice(separator + 1), "base64url");
   const expected = Buffer.from(sign(body), "base64url");
 
-  // Equal length is checked first: timingSafeEqual throws on a mismatch, and
-  // that throw would itself be a signal.
+  // timingSafeEqual throws on unequal lengths.
   if (presented.length !== expected.length) return null;
   if (!timingSafeEqual(presented, expected)) return null;
 
@@ -81,9 +72,7 @@ export function sessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    // Strict would drop the cookie on the cross-site navigation back from
-    // AIESEC auth, leaving the user looking at a logged-out page after a
-    // successful login.
+    // Strict would drop the cookie on the cross-site redirect back from AIESEC auth.
     sameSite: "lax" as const,
     path: "/",
     expires: expiresAt,

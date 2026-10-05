@@ -35,31 +35,21 @@ export function Character({
   greetKey,
   heightFraction,
 }: {
-  /** The member this body stands for. Decides the variant, and labels the image. */
   name: string;
-  /** Rendered height in pixels; the intrinsic aspect ratio sets the width. */
   height: number;
   idle?: Idle;
   priority?: boolean;
   className?: string;
-  /** Render the model live. Worth a canvas only where one body is shown. */
   stage?: boolean;
-  /** What the body does while it stands there. Only reaches the live stage. */
   mood?: CharacterMood;
-  /** Radians of yaw, so bodies either side of a group angle inwards. */
+  /** Radians of yaw. */
   facing?: number;
-  /** The member's chosen character, instead of the one `name` hashes to. */
   idOverride?: string;
-  /** Load the social clips. Needed by the `empty` mood and by most beats. */
+  /** Load the social clips; needed by the `empty` mood and most beats. */
   social?: boolean;
-  /** A one-shot played because something happened on this surface. */
   beat?: CharacterBeat | null;
-  /** Greet once per browser session, keyed per surface. */
   greetKey?: string;
-  /**
-   * Share of the canvas the body fills. Lower it where a clip raises the arms
-   * well above standing height, or the pose is cropped by its own frame.
-   */
+  /** Lower it for clips that raise the arms above standing height, or the pose crops. */
   heightFraction?: number;
 }) {
   const id = idOverride ?? characterFor(name).id;
@@ -81,8 +71,6 @@ export function Character({
     );
   }
 
-  // The still is rendered from the same .glb (D-52), so it is the same
-  // character in the same pose as the live stage.
   return (
     <Image
       data-model-slot="character"
@@ -97,7 +85,6 @@ export function Character({
   );
 }
 
-/** The member's profile picture: their character's face, for rows and pills. */
 export function CharacterAvatar({
   name,
   idOverride,
@@ -131,7 +118,6 @@ export function CharacterAvatar({
   );
 }
 
-/** The radial contact shadow that plants a body on the floor. */
 export function ContactShadow({
   width,
   height = 52,
@@ -143,7 +129,6 @@ export function ContactShadow({
   height?: number;
   opacity?: number;
   className?: string;
-  /** For a caller that sizes the body itself, and has to lift the shadow with it. */
   style?: CSSProperties;
 }) {
   return (

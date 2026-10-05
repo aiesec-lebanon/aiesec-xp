@@ -1,15 +1,4 @@
-# Exports the four avatars, rigged, into assets/source/ (D-53).
-#
-#   blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-export.py -- <repo-root> [fbx-dir]
-#
-# The bind pose stays the Mixamo T-pose, because that is what the clips in
-# avatar-animations.glb are authored against -- a body is never seen in it, since
-# an idle plays from the first frame. Every character is normalised to 1.5m with
-# its feet on the floor and the transform frozen into the data, so three's Box3
-# reports the same size for all four.
-#
-# Juno comes from the Mixamo auto-rigger rather than the .blend: her original rig
-# was a 24-bone skeleton of separate origin that the clips cannot drive.
+# blender -b <characters_working.blend> -P scripts/assets/avatar-export.py -- <repo-root> [fbx-dir]
 
 import json
 import os
@@ -38,13 +27,7 @@ def select_only(*objects):
 
 
 def matte_material(mesh):
-    """Take the shine off, and unwire anything left self-lit.
-
-    Mixamo's default roughness of 0.5 reads as wet plastic on a cloth character,
-    and a missing metallic factor is read by glTF as fully metal, so both are set
-    explicitly. The auto-rigger also hands back an emission texture that nothing
-    asked for.
-    """
+    """Mixamo roughness 0.5 reads as plastic and glTF treats a missing metallic as metal; also drops a stray emission map."""
     for slot in mesh.material_slots:
         material = slot.material
         if material is None or not material.node_tree:
@@ -68,12 +51,7 @@ def matte_material(mesh):
 
 
 def normalise(mesh, rig):
-    """1.5m tall, feet on the floor, centred -- frozen into the data.
-
-    Left as an object transform this would be a trap: a skinned mesh's node
-    transform is ignored when it is drawn but not when it is measured, so the
-    sizes would disagree again.
-    """
+    """Frozen into the data: a skinned mesh's node transform is ignored when drawn but not when measured."""
     bpy.context.view_layer.update()
     corners = [mesh.matrix_world @ Vector(c) for c in mesh.bound_box]
     height = max(c.z for c in corners) - min(c.z for c in corners)
@@ -91,12 +69,7 @@ def normalise(mesh, rig):
 
 
 def load_external(name, fbx_dir):
-    """Bring in a character that was rigged outside the .blend.
-
-    The auto-rigger returns the texture re-encoded -- same name, different
-    pixels, and visibly deeper and darker than the art. The .blend still holds
-    the original, so the returned material is pointed back at it.
-    """
+    """The auto-rigger re-encodes the texture darker, so materials are pointed back at the .blend's original image."""
     originals = {image.name: image for image in bpy.data.images}
 
     before = set(bpy.data.objects.keys())
@@ -115,8 +88,6 @@ def load_external(name, fbx_dir):
         for node in material.node_tree.nodes:
             if node.type != "TEX_IMAGE" or node.image is None:
                 continue
-            # The re-encode keeps the name but lands as a second datablock, so
-            # the original is whichever one was already here.
             stem = node.image.name.split(".")[0]
             original = originals.get(stem)
             if original is not None and original is not node.image:

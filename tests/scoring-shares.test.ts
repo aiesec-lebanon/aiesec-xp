@@ -7,7 +7,7 @@ const SHARES = { TM: 40, TL: 30, LCVP: 25, MCP: 10 };
 
 const shareOf = (split: Map<string, number>, member: bigint) => split.get(String(member));
 
-describe("creditShares (D-83)", () => {
+describe("creditShares", () => {
   it("gives the main manager everything and everyone else their role's %", () => {
     const split = creditShares(
       [

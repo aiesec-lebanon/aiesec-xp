@@ -9,7 +9,6 @@ import { useActionToast } from "@/components/studio/toast";
 const SECONDARY =
   "whitespace-nowrap rounded-[10px] border border-ink bg-surface-raised px-4 py-2 text-[13px] font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-50";
 
-/** Runs a sync job now. Shared by the EP table's Refresh and the Sync page. */
 export function RunJobButton({
   job,
   label,

@@ -2,16 +2,9 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
-// A select with a search box, for lists too long to scroll: forty members, or
-// every manager on the assignment console. It follows the ARIA combobox
-// pattern -- focus stays in the search input and the arrow keys move a virtual
-// cursor through the listbox -- because a native <select> has no filter, and
-// typeahead on it only matches the first letters of a name.
-
 export type SearchOption = {
   value: string;
   label: string;
-  /** Shown beside the label and searched with it, e.g. a role. */
   hint?: string;
 };
 
@@ -35,12 +28,9 @@ export function SearchSelect({
   options: readonly SearchOption[];
   value: string;
   onChange: (value: string) => void;
-  /** What is being chosen, for assistive technology: "Manager", "Credit EP 123 to". */
   label: string;
-  /** Shown while nothing is chosen. */
   placeholder?: string;
   searchPlaceholder?: string;
-  /** Submits the value with a form when set. */
   name?: string;
   emptyText?: string;
   disabled?: boolean;
@@ -120,7 +110,6 @@ export function SearchSelect({
         setCursor(Math.max(last, 0));
         break;
       case "Enter":
-        // A search box inside a form would otherwise submit it.
         event.preventDefault();
         choose(matches[cursor]);
         break;
@@ -198,7 +187,7 @@ export function SearchSelect({
                   role="option"
                   aria-selected={option.value === value}
                   data-index={index}
-                  // Keeps focus in the search box, so choosing does not blur it first.
+                  // Keep focus in the search box so choosing doesn't blur it first.
                   onPointerDown={(event) => event.preventDefault()}
                   onPointerMove={() => setCursor(index)}
                   onClick={() => choose(option)}

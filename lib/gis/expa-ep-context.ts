@@ -11,32 +11,24 @@ import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
 import { termStart } from "@/lib/term";
 
-// What EXPA says about each EP on the assignment console, read at display time
-// so it matches EXPA by construction. Nothing here is stored (D-42): names are
-// read per view and discarded, which is the path D-61 carves out for this
-// console.
+// Read at display time and never stored: EP names must not be persisted.
 
 export type ExpaManager = { id: bigint; fullName: string };
 
 export type ExpaEp = {
   fullName: string | null;
-  /** EXPA's status, never behind any of the EP's applications (D-78). */
   status: string | null;
   signedUpAt: Date | null;
-  /** The EP's record or any application, whichever moved last (D-76). */
   lastActionAt: Date | null;
-  /** A member this term who has never applied -- not an EP, so no row. */
   isMemberNotEp: boolean;
-  /** Who manages them in EXPA (D-74); null when EXPA did not say. */
+  // null when EXPA did not say, which is not the same as nobody.
   managers: ExpaManager[] | null;
-  /** Products of their applications that are not withdrawn or rejected. */
   activeProgrammeIds: number[];
 };
 
 export type ExpaEpDirectory = {
   byEp: Map<string, ExpaEp>;
-  /** False when a GIS read failed part way: what is here is partial, and the
-   * page should say so rather than present missing EPs as none. */
+  // False when a GIS read failed part way, so the page can say the list is partial.
   ok: boolean;
 };
 
@@ -46,13 +38,8 @@ type Application = { status: string | null; updatedAt: Date | null; programmeId:
 const PAGE_SIZE = 200;
 const MAX_PAGES = 20;
 
-/**
- * Everyone with a last action since `floor`, by two reads newest first -- the
- * people themselves, and their applications, because an application moving
- * does not move its person's `updated_at` (measured: 40 of 73 EPs had an
- * application newer than their own record) -- plus by id anyone in `alsoIds`,
- * the EPs who can score, whatever their last action.
- */
+// Applications are scanned separately because an application moving does not
+// bump its person's updated_at in GIS.
 export async function expaEpDirectory({
   floor,
   alsoIds,
@@ -126,9 +113,7 @@ export async function expaEpDirectory({
   };
 
   try {
-    // Independent reads, so in parallel: each is a few seconds of GIS. Settled
-    // rather than raced, so a failure in one never leaves the other still
-    // writing into the maps while they are read below.
+    // allSettled, not all: a failure must not leave the other scan still writing into the maps.
     const scans = await Promise.allSettled([scanApplications(), scanPeople()]);
     const failed = scans.find((scan): scan is PromiseRejectedResult => scan.status === "rejected");
     if (failed) throw failed.reason;

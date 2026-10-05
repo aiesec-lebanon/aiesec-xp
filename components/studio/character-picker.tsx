@@ -36,8 +36,7 @@ export function useCharacterChoice(initialCharacter: string) {
     setIndex((current) => (current + by + CHARACTER_FORMS.length) % CHARACTER_FORMS.length);
   };
 
-  // A form that ships in fewer palettes than the one before it would otherwise
-  // leave the switcher pointing past the end of its list.
+  // Forms ship different palette counts; clamp so the index can't run past the list.
   const safeTone = Math.min(tone, available.length - 1);
   const palette = available[safeTone]!;
   const character = CHARACTERS.find(
@@ -47,7 +46,6 @@ export function useCharacterChoice(initialCharacter: string) {
   return { character, index, step, tone: safeTone, setTone, palette };
 }
 
-/** The set: a body on the cyclorama, an arrow either side, and its name. */
 export function CharacterCarousel({
   memberName,
   index,
@@ -62,7 +60,6 @@ export function CharacterCarousel({
   step: (by: number) => void;
   tone: number;
   setTone: (at: number) => void;
-  /** What the body does about something the member just did. */
   beat?: CharacterBeat | null;
   height?: number;
 }) {
@@ -74,25 +71,17 @@ export function CharacterCarousel({
     (option) => option.form === form.id && option.palette === palette.id,
   )!;
 
-  // Everything one press away, and nothing further: all sixteen bodies is seven
-  // megabytes on a screen a member sees once, over Lebanese mobile data. What is
-  // one press away is each form in the palette being worn, and this form in each
-  // of the others.
+  // Preload only what's one press away; all sixteen bodies is ~7MB over mobile data.
   useEffect(() => {
     for (const other of CHARACTER_FORMS) {
       const wears = palettesFor(other).some((option) => option.id === palette.id);
       preloadCharacter(variantId(other.id, wears ? palette.id : "p1"));
     }
     for (const other of available) preloadCharacter(variantId(form.id, other.id));
-    // `available` is derived from the form and is a fresh array every render, so
-    // listing it would re-run this on every one.
+    // `available` is a fresh array every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.id, palette.id]);
 
-  // A runway turn, now and then, while nothing else has asked the body to do
-  // anything -- both the character lab and the first-run picker use this set
-  // (D-60), and a body that only ever idles is oddly stiller than one that is
-  // meant to be tried on. `beat` from the parent (a save reaction) always wins.
   const flourish = useCatwalkFlourish(beat === null);
 
   return (
@@ -105,13 +94,10 @@ export function CharacterCarousel({
       <div aria-hidden className="absolute inset-x-0 bottom-0 h-24 bg-floor" />
       <div aria-hidden className="absolute inset-x-0 bottom-24 h-0.5 bg-horizon" />
 
-      {/* The switcher lives on the set rather than in a side panel: four
-          thumbnails in a 280px column overflowed it. */}
       <StepButton side="left" onClick={() => step(-1)} reduceMotion={reduceMotion} />
       <StepButton side="right" onClick={() => step(1)} reduceMotion={reduceMotion} />
 
-      {/* The canvas spans the whole set rather than sitting in a narrow box in
-          the middle of it. floorFraction lands the feet on the horizon. */}
+      {/* floorFraction lands the feet on the horizon. */}
       <CharacterStage
         id={character.id}
         name={memberName}
@@ -140,9 +126,6 @@ export function CharacterCarousel({
           ))}
         </div>
 
-        {/* The palette is a second choice, not a fifth character, so it sits
-            under the name rather than on the arrows. Each swatch shows the skin
-            over the top it comes with, which is what actually differs. */}
         <div className="mt-2.5 flex gap-2">
           {available.map((option, at) => (
             <button
@@ -205,7 +188,6 @@ function StepButton({
 
 const CATWALK = { min: 12, max: 26 };
 
-/** A turn on the spot, now and then, while nothing else has a say (D-60). */
 function useCatwalkFlourish(active: boolean): CharacterBeat | null {
   const reduceMotion = useReduceMotion();
   const [beat, setBeat] = useState<CharacterBeat | null>(null);

@@ -6,11 +6,7 @@ import { isAuthorisedCron } from "@/lib/cron-auth";
 import type { SyncJobName, SyncTrigger } from "@/lib/sync/cadence";
 import { runSyncJob } from "@/lib/sync/jobs";
 
-/**
- * What a scheduler gets back: statuses and counts, never error detail. The
- * GitHub Actions logs that print this are public on this repository, so the
- * detail stays in the platform's logs and on /admin/sync.
- */
+// Statuses and counts only, never error detail: the GitHub Actions logs printing this are public.
 export async function handleCron(
   request: Request,
   job: SyncJobName,
@@ -32,8 +28,7 @@ export async function handleCron(
     eventsWritten,
   }));
 
-  // 500 on any failure, so the workflow run fails and GitHub notifies someone
-  // rather than relying on anyone reading the body.
+  // 500 on any failure so the workflow run fails and GitHub notifies someone.
   return NextResponse.json(
     { job, outcome: "ran", ok: run.ok, durationMs: run.durationMs, steps },
     { status: run.ok ? 200 : 500 }

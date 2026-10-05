@@ -10,7 +10,7 @@ import {
 
 const at = (iso: string) => new Date(`${iso}T09:00:00.000Z`);
 
-describe("lastAction (D-76)", () => {
+describe("lastAction", () => {
   it("takes whichever of the EP's record and applications moved last", () => {
     expect(lastAction([at("2026-08-20"), at("2026-09-25"), at("2026-09-01")])).toEqual(at("2026-09-25"));
   });
@@ -34,18 +34,18 @@ describe("byNewest", () => {
   });
 
   it("puts an EP with no date after every dated one", () => {
-    const rows = [row("1", null, "Aline"), row("2", at("2026-08-01"), "Zeina")];
+    const rows = [row("1", null, "Alex"), row("2", at("2026-08-01"), "Sam")];
     expect(rows.sort(byNewest).map((r) => r.epPersonId)).toEqual(["2", "1"]);
   });
 
   it("breaks a tie on the day by name, named EPs first, then by id", () => {
     const day = at("2026-09-01");
-    const rows = [row("30", day), row("20", day, "Rami"), row("10", day, "Maya"), row("5", day)];
+    const rows = [row("30", day), row("20", day, "Sam"), row("10", day, "Alex"), row("5", day)];
     expect(rows.sort(byNewest).map((r) => r.epPersonId)).toEqual(["10", "20", "30", "5"]);
   });
 });
 
-describe("displayStatus (D-78)", () => {
+describe("displayStatus", () => {
   const app = (status: string, day = "2026-09-01") => ({ status, updatedAt: at(day) });
 
   it("shows EXPA's own status for a sign-up", () => {
@@ -62,7 +62,7 @@ describe("displayStatus (D-78)", () => {
   });
 
   it("keeps the furthest stage when an EP applies again after realizing", () => {
-    // Measured: realized in February, a new open application in September.
+    // Realized in February, then a new open application in September.
     expect(displayStatus("realized", [app("open", "2026-09-27")])).toBe("realized");
   });
 

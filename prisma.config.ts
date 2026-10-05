@@ -1,24 +1,20 @@
 import { defineConfig } from "@prisma/config";
 
-// Next.js loads .env.local by itself; the Prisma CLI does not, and reads .env.
-// Rather than keep a second copy of the credentials, load the same file the app
-// uses. process.loadEnvFile is built into Node, so this needs no dependency.
+// The Prisma CLI doesn't load .env.local the way Next.js does.
 try {
   process.loadEnvFile(".env.local");
 } catch {
-  // Absent in CI and on Vercel, where the platform injects the variables.
+  // Absent in CI and on Vercel.
 }
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
-  // Configuration is seeded by migration, not by a seed script, so a deploy
-  // cannot reach a running state with no active config.
+  // Config is seeded by migration so no deploy runs without an active config.
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    // Migrations run over the session-mode pooler. The transaction-mode pooler
-    // in DATABASE_URL cannot run DDL or hold advisory locks.
+    // The transaction-mode pooler in DATABASE_URL can't run DDL or hold advisory locks.
     url: process.env.DIRECT_URL,
   },
 });
