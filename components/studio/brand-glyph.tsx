@@ -1,0 +1,22 @@
+// "XP" is Fredoka Bold traced to outlines, so the mark is identical wherever it
+// renders -- including app/icon.svg, which the browser draws without our fonts.
+// Keep the two in step when either changes.
+const XP_PATH =
+  "M50.04 56.52Q49.5 57 49.09 57.15Q48.68 57.3 48.3 57.11Q47.92 56.92 47.46 56.4L38.06 46.08Q37.4 45.38 37.39 44.8Q37.38 44.22 38.16 43.5Q38.7 43 39.11 42.85Q39.52 42.7 39.91 42.89Q40.3 43.08 40.74 43.62L50.14 53.96Q50.82 54.7 50.84 55.25Q50.86 55.8 50.04 56.52ZM38.18 56.52Q37.38 55.8 37.39 55.25Q37.4 54.7 38.08 53.96L47.48 43.62Q47.94 43.08 48.32 42.89Q48.7 42.7 49.11 42.85Q49.52 43 50.06 43.5Q50.86 44.22 50.84 44.8Q50.82 45.38 50.16 46.08L40.76 56.4Q40.32 56.92 39.93 57.11Q39.54 57.3 39.13 57.15Q38.72 57 38.18 56.52ZM53.52 57Q52.62 57 52.24 56.73Q51.86 56.46 51.78 56.03Q51.7 55.6 51.7 55.16V44.84Q51.7 44.4 51.78 43.98Q51.86 43.56 52.24 43.29Q52.62 43.02 53.54 43.02H57.52Q58.28 43.02 59.16 43.33Q60.04 43.64 60.83 44.28Q61.62 44.92 62.12 45.88Q62.62 46.84 62.62 48.16Q62.62 49.46 62.12 50.42Q61.62 51.38 60.83 52.01Q60.04 52.64 59.16 52.95Q58.28 53.26 57.5 53.26H55.36V55.18Q55.36 55.62 55.28 56.04Q55.2 56.46 54.82 56.73Q54.44 57 53.52 57ZM55.36 49.6H57.52Q57.78 49.6 58.12 49.47Q58.46 49.34 58.72 49.02Q58.98 48.7 58.98 48.14Q58.98 47.72 58.78 47.39Q58.58 47.06 58.25 46.87Q57.92 46.68 57.5 46.68H55.36Z";
+
+// The ring is the reward progress bar: APL, APD, then a short RE arc, with the
+// gap before the start standing for the distance still to go.
+export function BrandGlyph({ size = 30 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden focusable="false" className="block shrink-0">
+      <rect x="0.75" y="0.75" width="98.5" height="98.5" rx="30" fill="var(--surface-raised)" stroke="var(--surface-line)" strokeWidth="1.5" />
+      <circle cx="50" cy="50" r="28" fill="none" stroke="var(--surface-sunken)" strokeWidth="10" />
+      <g fill="none" strokeWidth="10" strokeLinecap="round" transform="rotate(-90 50 50)">
+        <circle cx="50" cy="50" r="28" stroke="var(--stage-apl)" strokeDasharray="40 135.9" />
+        <circle cx="50" cy="50" r="28" stroke="var(--stage-apd)" strokeDasharray="40 135.9" strokeDashoffset="-58.6" />
+        <circle cx="50" cy="50" r="28" stroke="var(--stage-re)" strokeDasharray="22 153.9" strokeDashoffset="-117.2" />
+      </g>
+      <path d={XP_PATH} fill="var(--ink-primary)" />
+    </svg>
+  );
+}
