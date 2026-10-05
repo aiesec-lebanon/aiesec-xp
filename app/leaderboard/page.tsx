@@ -1,17 +1,20 @@
 import Link from "next/link";
 
+import { ROLE_SENIORITY } from "@/lib/auth/roles";
 import { requireMemberPage } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { officeLabel } from "@/lib/design/names";
 import { mcDirectEntityId } from "@/lib/env";
 import { individualStandings } from "@/lib/leaderboard";
 import { resolveRange } from "@/lib/leaderboard-range";
+import { loadCurrentWeights } from "@/lib/scoring/weight-periods";
 import { termStart } from "@/lib/term";
 
 import { CharacterAvatar } from "@/components/studio/character";
 import { RollingNumber } from "@/components/studio/rolling-number";
 import { memberAvatars } from "@/lib/design/avatar";
 import { Lift, Rise } from "@/components/studio/motion";
+import { PointsInfo, type PointsGuide } from "@/components/studio/points-info";
 import { Podium, type PodiumPlace } from "@/components/studio/podium";
 import { RangeFilter } from "@/components/studio/range-filter";
 
@@ -32,7 +35,7 @@ export default async function LeaderboardPage({
   const user = await requireMemberPage("/leaderboard");
   const params = await searchParams;
 
-  const [officeRows, floor] = await Promise.all([
+  const [officeRows, floor, current] = await Promise.all([
     // isMc excluded: 182 is the query/country root, not a distinct filterable
     // entity -- filtering by it would just repeat "Everyone" (D-57), the same
     // reason it's excluded from the LC leaderboard's ranked rows.
@@ -41,6 +44,7 @@ export default async function LeaderboardPage({
       select: { id: true, name: true },
     }),
     termStart(),
+    loadCurrentWeights(),
   ]);
 
   // MC-direct's committee (D-57) gets no chip: only LCs are filterable (D-84).
@@ -91,8 +95,28 @@ export default async function LeaderboardPage({
     name: standing.fullName,
     office: standing.officeName,
     points: standing.points,
+    aplCount: standing.aplCount,
+    apdCount: standing.apdCount,
+    reCount: standing.reCount,
     characterId: characters.get(standing.memberId)?.id,
   }));
+
+  const seniority = (role: string) => {
+    const index = ROLE_SENIORITY.indexOf(role);
+    return index === -1 ? ROLE_SENIORITY.length : index;
+  };
+  const guide: PointsGuide | null = current && {
+    periodLabel: current.label,
+    aplPoints: current.config.aplPoints,
+    apdPoints: current.config.apdPoints,
+    rePoints: current.config.rePoints,
+    productWeights: { ...current.config.productWeights },
+    directionWeights: { ...current.config.directionWeights },
+    roleShares: Object.entries(current.config.roleShares)
+      .filter(([, share]) => share > 0)
+      .sort(([a], [b]) => seniority(a) - seniority(b) || a.localeCompare(b))
+      .map(([role, share]) => ({ role, share })),
+  };
 
   // Every link carries the range, so changing office or turning a page does not
   // silently drop the dates being looked at.
@@ -134,25 +158,28 @@ export default async function LeaderboardPage({
               keep={selected === undefined ? {} : { office: String(selected) }}
             />
             
-            <nav aria-label="Filter by office" className="flex flex-wrap gap-2">
-              <Link
-                href={href({ office: undefined, page: 1 })}
-                aria-current={selected === undefined ? "true" : undefined}
-                className={chip(selected === undefined)}
-              >
-                Everyone
-              </Link>
-              {offices.map((office) => (
+            <div className="flex items-center gap-2">
+              <nav aria-label="Filter by office" className="flex flex-wrap gap-2">
                 <Link
-                  key={String(office.id)}
-                  href={href({ office: office.id, page: 1 })}
-                  aria-current={selected === office.id ? "true" : undefined}
-                  className={chip(selected === office.id)}
+                  href={href({ office: undefined, page: 1 })}
+                  aria-current={selected === undefined ? "true" : undefined}
+                  className={chip(selected === undefined)}
                 >
-                  {office.label}
+                  Everyone
                 </Link>
-              ))}
-            </nav>
+                {offices.map((office) => (
+                  <Link
+                    key={String(office.id)}
+                    href={href({ office: office.id, page: 1 })}
+                    aria-current={selected === office.id ? "true" : undefined}
+                    className={chip(selected === office.id)}
+                  >
+                    {office.label}
+                  </Link>
+                ))}
+              </nav>
+              {guide ? <PointsInfo guide={guide} /> : null}
+            </div>
 
             {/* <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
               {standings.length} member{standings.length === 1 ? "" : "s"}
