@@ -8,15 +8,6 @@ import { formatPoints } from "@/lib/design/points";
 
 const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
-/**
- * A score that rolls when it changes.
- *
- * `CountUp` counts from zero the first time it is scrolled into view, which is
- * an entrance. This is the other thing: it holds its value until the number
- * actually moves, then rolls the digits that differ. Each digit is a hair slower
- * than the one to its right, so the number settles from the end rather than
- * snapping as a block.
- */
 export function RollingNumber({
   value,
   className = "",
@@ -34,8 +25,7 @@ export function RollingNumber({
     previous.current = value;
   }, [value]);
 
-  // Not rounded to a whole number: a shared EP splits its points (D-73), and
-  // 0.5 shown as 1 is a score the member doesn't have.
+  // Not rounded: a shared EP splits its points into fractions.
   const text = formatPoints(value);
 
   if (reduceMotion) return <span className={className}>{text}</span>;
@@ -70,8 +60,7 @@ function Digit({
     <span aria-hidden className="relative inline-block h-[1em] w-[0.62em] overflow-hidden align-baseline">
       <m.span
         className="absolute inset-x-0 top-0 flex flex-col items-center"
-        // In em, not percent: a percentage here is a share of the ten-digit
-        // column, so one digit would travel ten lines instead of one.
+        // em, not %: a percentage is of the ten-digit column, not one digit.
         animate={{ y: `${-index}em` }}
         initial={{ y: `${-index}em` }}
         transition={{

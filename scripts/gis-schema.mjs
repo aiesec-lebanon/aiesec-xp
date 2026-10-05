@@ -1,12 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { buildClientSchema, getIntrospectionQuery, printSchema } from "graphql";
 
-// Captures the GIS schema as SDL so codegen is reproducible in CI without the
-// service token. The GIS schema is a public third-party contract; committing it
-// pins what we generated against and turns schema drift into a reviewable diff.
-//
-// Run this deliberately, not on every build: regenerating should be a commit.
-
 process.loadEnvFile(".env.local");
 
 const endpoint = process.env.GIS_GRAPHQL_URL;

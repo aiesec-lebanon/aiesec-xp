@@ -43,8 +43,8 @@ next-env.d.ts
 # env: the example is the one file that ships
 !.env.example
 
-# spike output contains real GIS data (EP names, emails)
-/scripts/spike/out/
+# old GIS spike output (real GIS data)
+/scripts/spike/
 
 # vendored agent skills, restorable from skills-lock.json
 /.agents/
@@ -55,7 +55,6 @@ next-env.d.ts
 # vendor 3D assets, regenerated from node_modules by postinstall
 /public/draco/
 /public/hdri/
-/public/fonts/
 
 # Blender authoring files: tens of MB of packed source textures, and the
 # pipeline's tracked input is the exported .glb (assets/README.md), not these.

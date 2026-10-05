@@ -3,12 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// The floating dock. Deliberately not a Motion component: the provider loads
-// only Motion's DOM animation features, not its layout projection, so a shared
-// `layoutId` lozenge would render without the slide that justifies it. A CSS
-// colour transition is what this direction asks for anyway -- nothing animates
-// except the idle breath and what you touch.
-
 const TABS = [
   { href: "/", label: "Home" },
   { href: "/leaderboard", label: "Members" },
@@ -24,9 +18,6 @@ export function Dock() {
   return (
     <nav
       aria-label="Sections"
-      // Translucent with a blur: the dock floats over a scrolling page, and a
-      // solid pill let the text underneath read through it as if it were part
-      // of the same line.
       className="flex gap-1 rounded-full bg-surface-raised/85 p-1.5 shadow-e2 ring-1 ring-surface-sunken backdrop-blur-md"
     >
       {TABS.map((tab) => {

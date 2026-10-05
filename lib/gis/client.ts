@@ -6,10 +6,7 @@ import { gisEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { getSdk } from "@/gis/generated";
 
-// The only module in the product that reads GIS_SERVICE_TOKEN. Nothing here is
-// exported that carries the token, and the SDK it returns exposes exactly the
-// five operations in gis/operations.graphql -- there is no method that accepts
-// a caller-supplied query (Architecture.md 4.4).
+// The only reader of GIS_SERVICE_TOKEN: never export, log or serialise it.
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -30,8 +27,7 @@ function createSdk() {
     try {
       return await action();
     } catch (error) {
-      // graphql-request attaches the failing request, headers included, to the
-      // error. Logging it raw would print the token; redact() strips it.
+      // graphql-request attaches the request headers (the token) to the error; the logger redacts it.
       logger.error("GIS request failed", {
         operationName,
         elapsedMs: Date.now() - startedAt,
@@ -42,7 +38,7 @@ function createSdk() {
   });
 }
 
-export class GisError extends Error {
+class GisError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "GisError";

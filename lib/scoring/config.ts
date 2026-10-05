@@ -3,13 +3,7 @@ import type { ScoreConfig } from "@prisma/client";
 import type { ScoringConfig } from "@/lib/scoring/engine";
 import { normaliseRole, type RoleShares } from "@/lib/scoring/shares";
 
-/**
- * The stored config row as the pure engine wants it.
- *
- * Shared rather than inlined at each call site: the ledger replay and the
- * live-scored leaderboards (D-58) both read the same row, and a mapping that
- * drifted between them would show two different scores for the same work.
- */
+// Shared by the replay and live leaderboards so the two can never score the same work differently.
 export function toScoringConfig(config: ScoreConfig): ScoringConfig {
   return {
     version: config.version,
@@ -24,7 +18,6 @@ export function toScoringConfig(config: ScoreConfig): ScoringConfig {
   };
 }
 
-/** Keys normalised, anything that is not a number dropped rather than trusted. */
 export function readRoleShares(value: unknown): RoleShares {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const shares: Record<string, number> = {};

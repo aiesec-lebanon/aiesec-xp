@@ -12,10 +12,7 @@ export type GameIconProps = {
   size?: number | string;
 } & (Labelled | Decorative);
 
-// An icon is either information or ornament, and the two need opposite treatment
-// in the accessibility tree. Making it a required choice in the type means a
-// nameless, unhidden icon -- the one that reads out as "graphic" to a screen
-// reader -- cannot be written by accident.
+// Label-or-decorative is required by the type so an unnamed, unhidden icon can't be written.
 export function GameIcon({ icon: Icon, label, decorative, className, style, size }: GameIconProps) {
   if (decorative) {
     return (

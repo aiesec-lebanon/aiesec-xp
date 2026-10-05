@@ -11,9 +11,6 @@ import { GameIcon, type GameIconComponent } from "@/components/icons";
 
 import { CharacterAvatar } from "./character";
 
-// Hover opens it, but hover is never the only way in: the caret is a real
-// button, so the menu also answers a click, Enter, Space and the keyboard --
-// and exists at all on a touch screen, where there is no hover to give.
 const OPEN_DELAY = 120;
 const CLOSE_DELAY = 260;
 

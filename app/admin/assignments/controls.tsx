@@ -37,7 +37,6 @@ export function ImportButtons() {
   );
 }
 
-/** Credits one more member with an EP, picked from a searchable list. */
 export function AddManagerForm({
   epPersonId,
   epName,
@@ -89,7 +88,6 @@ export function AddManagerForm({
   );
 }
 
-/** Makes a manager already on the EP its main manager (D-83). */
 export function MakeMainButton({
   epPersonId,
   epName,
@@ -123,7 +121,6 @@ export function MakeMainButton({
   );
 }
 
-/** Removes a credit, or undoes a removal. */
 export function CreditToggle({
   kind,
   epPersonId,

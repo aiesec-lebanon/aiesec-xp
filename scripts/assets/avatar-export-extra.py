@@ -1,11 +1,4 @@
-# Exports characters that live in characters.blend rather than the working file.
-#
-#   blender -b D:\Blender\characters.blend -P scripts/assets/avatar-export-extra.py -- <repo-root>
-#
-# characters.blend also holds two rigs the shared clip library cannot drive --
-# Claire's 149-bone Maya rig and a 138-bone one, both split across many meshes.
-# Only bodies on Mixamo's 65-bone skeleton are listed here, because that is what
-# `avatar-animations.glb` is authored against (D-53).
+# blender -b <characters.blend> -P scripts/assets/avatar-export-extra.py -- <repo-root>
 
 import json
 import os
@@ -36,20 +29,7 @@ EXPECTED_BONES = 65
 
 
 def fix_bone_namespace(mesh, rig):
-    """Rename a rig's bones (and the mesh's matching vertex groups) back onto
-    the `mixamorig:` namespace the shared clip library is authored against.
-
-    Blender auto-suffixes a rig's bones to `mixamorig1:` when it imports a
-    second FBX that declares the same armature name as one already in the
-    file -- which is what happened importing Ch29 alongside Ch03 into
-    characters.blend, both Mixamo exports named plain `mixamorig`. The clips in
-    avatar-animations.glb only ever address `mixamorig:...`, so `bindable()` in
-    character-model.tsx finds zero matching bones for a body on any other
-    namespace and every track is dropped -- the body plays nothing and sits in
-    its bind T-pose forever. Vertex groups must be renamed with the bones: the
-    armature modifier binds a vertex group to a deform bone by name, and
-    renaming one without the other unbinds the mesh from its own skeleton.
-    """
+    """Blender renames a second imported `mixamorig` to `mixamorig1:`; the clips only bind `mixamorig:`. Vertex groups must follow the bones."""
     renamed = 0
     for bone in rig.data.bones:
         namespace, _, rest = bone.name.partition(":")
@@ -65,15 +45,7 @@ def fix_bone_namespace(mesh, rig):
 
 
 def opaque(mesh):
-    """Unwire transparency and the specular map.
-
-    These two arrive from a non-PBR Specular/Glossiness source, where the maps
-    mean something other than what a Principled BSDF reads them as. Ch29 had a
-    map on Alpha, which exported as an alpha-blended material and punched ragged
-    holes through its arms, and a second one on Specular IOR Level that washed
-    the whole body out. Neither is transparent or shiny by intent: they are
-    cloth. `matte_material` already does the same for Emission.
-    """
+    """Unwire Alpha and Specular maps that came from a Specular/Glossiness source and are not meant as PBR inputs."""
     for slot in mesh.material_slots:
         material = slot.material
         if material is None or not material.node_tree:

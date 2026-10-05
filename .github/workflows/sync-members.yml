@@ -1,6 +1,5 @@
-# Members: the office tree and the roster (D-66), on the 1st of each month. An
-# admin can also run it from /admin/sync, which is the thing to do at a term
-# handover. Needs the same repository settings as sync-ep-data.yml.
+# Office tree and roster, monthly; also runnable from /admin/sync at a term handover.
+# Needs the same repository settings as sync-ep-data.yml.
 name: Sync members
 
 on:

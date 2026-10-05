@@ -2,12 +2,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
-// A result banner that stays on screen forever is not a status update, it's
-// clutter: on /admin/assignments a credited-EP confirmation used to sit next
-// to its row permanently, and a table of several dozen rows filled up with
-// stale "done" messages nobody needed to keep reading. A toast reports the
-// same thing and then gets out of the way.
-
 export type ToastTone = "ok" | "error";
 type ToastEntry = { id: number; message: string; tone: ToastTone };
 
@@ -69,22 +63,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Pushes a temporary status message. Call it once per result, not per render:
- * `useEffect` watching a `useActionState` result is the usual caller. */
-export function useToast(): (message: string, tone?: ToastTone) => void {
+function useToast(): (message: string, tone?: ToastTone) => void {
   const addToast = useContext(ToastContext);
   if (!addToast) throw new Error("useToast must be used within a ToastProvider");
   return addToast;
 }
 
-/**
- * Toasts a `useActionState` result the moment it changes, for the common case
- * where a server action's outcome is a one-off "here's what happened" and
- * nothing in the form depends on reading it back afterwards. Not a fit for a
- * result that drives further UI (a confirm prompt, a validation message tied
- * to a field) -- that still wants the state rendered directly, since a toast
- * disappears whether or not the thing it was explaining has been acted on.
- */
 export function useActionToast(state: { ok: boolean; message: string } | null): void {
   const toast = useToast();
 

@@ -53,19 +53,13 @@ export default async function HomePage() {
   ]);
 
 
-  // First run: a member picks their character before anything else (D-52).
   if (!avatar.chosen) redirect("/welcome");
 
   const standing = progress.standing;
   const points = standing?.points ?? 0;
   const next = pace(progress, window);
 
-  // What the body has to say about the numbers beside it. An empty board gets a
-  // restless idle rather than a cheerful one, because a character celebrating
-  // nothing is the product not knowing what state it is in. Rank 1 is handled
-  // by `HeroCharacter` itself (D-60): a fixed "celebrate" on every render read
-  // as a single flash rather than someone who has actually won, so it now
-  // replays on its own timer and sometimes breaks into dancing instead.
+  // Rank 1 gets no beat here: `HeroCharacter` replays its own celebration on a timer.
   const leading = points > 0 && standing?.rank === 1;
   const heroBeat: CharacterBeat | null =
     points === 0 || leading ? null : next === null ? "thumbsUp" : null;
@@ -75,8 +69,6 @@ export default async function HomePage() {
     : 0;
   const nudge = progress.nextUp ? await closingMove(gap) : null;
 
-  // The member just ahead wears their own character too, not the one their name
-  // happens to hash to.
   const chasing = progress.nextUp
     ? (
         await memberAvatars([
@@ -173,10 +165,7 @@ export default async function HomePage() {
   }
 
   return (
-    // Below `lg` the three columns stack, which is taller than any phone, so
-    // the page grows and scrolls like every other screen. From `lg` up it is
-    // pinned to the viewport and the stage absorbs whatever is left over, so a
-    // member never scrolls to find their own score or the chips under it.
+    // Below `lg` the columns stack and the page scrolls; from `lg` it is pinned to the viewport.
     <Cyclorama
       floor="30%"
       className="flex min-h-full shrink-0 flex-col lg:min-h-0 lg:flex-1 lg:shrink"
@@ -199,14 +188,9 @@ export default async function HomePage() {
           </Rise>
         )}
 
-        {/* The stage. The ghost numeral sits behind the body, the two readings
-            flank it, and nothing moves except the idle breath. How tall the
-            body is drawn is decided by `HeroStage` from the room left here. */}
         <HeroStage
           name={user.fullName}
           idOverride={avatar.character.id}
-          // Calm, not the wandering pool: a hero shot whose gaze roams reads as
-          // distracted rather than present.
           mood={points > 0 ? "calm" : "empty"}
           beat={heroBeat}
           leading={leading}
@@ -252,8 +236,6 @@ export default async function HomePage() {
               />
 
               {progress.nextUp ? (
-                // Pointing at the rival you are pointing at: the body reacts to
-                // what the member is doing, not just to what the numbers say.
                 <BeatOnHover beat="point" className="mt-4 inline-flex items-center gap-3 rounded-[18px] bg-surface-raised px-4 py-3 text-left shadow-e2">
                   <CharacterAvatar
                     name={progress.nextUp.fullName}
@@ -278,9 +260,6 @@ export default async function HomePage() {
           }
         />
 
-        {/* The dock is chrome now, not a lozenge floating over the end of the
-            page, so the chips no longer have to clear it -- the page's own end
-            gutter is what sits under them. */}
         <Rise delay={0.24} className="shrink-0">
           <StatChips chips={chips} />
         </Rise>

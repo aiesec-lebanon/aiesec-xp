@@ -14,7 +14,6 @@
     "db:status": "prisma migrate status",
     "gis:schema": "node scripts/gis-schema.mjs",
     "gis:codegen": "graphql-codegen",
-    "gis:spike": "node scripts/spike/run.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "assets:vendor": "node scripts/assets/sync-vendor-assets.mjs",
@@ -26,7 +25,6 @@
     "@prisma/client": "^7.10.0",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
-    "@react-three/rapier": "^2.2.0",
     "graphql-request": "^7.4.0",
     "motion": "^13.2.0",
     "next": "16.3.5",
@@ -34,7 +32,6 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-icons": "^5.7.0",
-    "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "three": "^0.186.0",
     "zod": "^4.6.4"

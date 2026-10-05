@@ -6,14 +6,6 @@ import { logger } from "@/lib/logger";
 import { score, type RewardDefinition } from "@/lib/scoring/engine";
 import { loadConfigAt } from "@/lib/scoring/weight-periods";
 
-// Rebuilds the derived tables from events, assignments and config (D-15).
-//
-// The ledger is never patched. A config change, an import or an override drops
-// what was derived and recomputes it, which is what makes those changes safe to
-// make: there is no accumulated state to get out of step. The ledger holds the
-// active window only, and each event is scored with its own period's weights
-// (D-85), so a replay never changes what a past period earned.
-
 export type ReplayResult = {
   configVersion: number;
   ledgerEntries: number;
@@ -47,8 +39,7 @@ export async function replay(actorId: bigint): Promise<ReplayResult> {
     rewards: definitions,
   });
 
-  // One transaction: a half-rebuilt ledger would show people scores that never
-  // existed.
+  // One transaction: a half-rebuilt ledger would show scores that never existed.
   await db.$transaction([
     db.scoreLedgerEntry.deleteMany({}),
     db.rewardGrant.deleteMany({}),

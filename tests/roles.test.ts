@@ -11,7 +11,6 @@ import {
   type PositionInput,
 } from "@/lib/auth/roles";
 
-// The seeded matchers, as measured against office 182 at the spike (O-03).
 const MATCHERS: Matcher[] = [
   { field: "ROLE_NAME", pattern: "MCP" },
   { field: "TITLE", pattern: "MCVP IM" },
@@ -83,7 +82,7 @@ describe("scope", () => {
   });
 });
 
-describe("term (D-71)", () => {
+describe("term", () => {
   it("denies a position that ended before the term, though EXPA still calls it active", () => {
     const ended = position({ endDate: new Date("2026-07-31T00:00:00Z") });
     expect(resolve([ended]).role).toBe("DENIED");
@@ -233,7 +232,7 @@ describe("office access", () => {
   });
 });
 
-describe("scoring office (D-32)", () => {
+describe("scoring office", () => {
   it("picks the most senior position, so points land in one LC only", () => {
     const chosen = chooseScoringOffice([
       position({ officeId: AUB, roleName: "TM" }),
@@ -272,9 +271,8 @@ describe("scoring office (D-32)", () => {
   });
 });
 
-describe("primaryRole (D-73)", () => {
+describe("primaryRole", () => {
   it("shares under the most senior role a member holds", () => {
-    // Measured: an LCP who is also LCVP MKT, and a TL who is also LCVP MoGX.
     expect(primaryRole([{ roleName: "LCVP" }, { roleName: "LCP" }])).toBe("LCP");
     expect(primaryRole([{ roleName: "TL" }, { roleName: "LCVP" }])).toBe("LCVP");
   });

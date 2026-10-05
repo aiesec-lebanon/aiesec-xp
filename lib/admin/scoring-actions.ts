@@ -11,12 +11,7 @@ import { readWeightsForm, sameWeights, validateWeights, type Weights } from "@/l
 
 export type ActionState = { ok: boolean; message: string };
 
-/**
- * Saves the current period's weights (D-85) as a new config version rather
- * than an edit: every ledger entry names the version that produced it, and
- * the past periods keep pointing at theirs, so only the current period is
- * re-scored.
- */
+// A new config version, never an edit: past periods keep pointing at the version that scored them.
 export async function saveWeightsAction(
   _previous: ActionState | null,
   formData: FormData
@@ -84,8 +79,7 @@ export async function saveWeightsAction(
     throw error;
   }
 
-  // The new weights are already live on the leaderboards, which score on
-  // request. If this fails, the next sync's replay brings the ledger in line.
+  // Leaderboards score on request, so if this fails the next sync's replay catches up.
   await replay(admin.id);
 
   for (const path of ["/admin/scoring", "/admin/assignments", "/", "/me", "/leaderboard", "/leaderboard/lcs", "/tv"]) {

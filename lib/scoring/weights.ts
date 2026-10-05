@@ -1,8 +1,5 @@
 import { normaliseRole, SHARE_FIELD_PREFIX, validateRoleShares, type RoleShares } from "@/lib/scoring/shares";
 
-// The weights an admin edits on /admin/scoring for the current period (D-85).
-// Pure, so parsing and validation are tested directly.
-
 export type Weights = {
   aplPoints: number;
   apdPoints: number;
@@ -21,12 +18,7 @@ function number(raw: FormDataEntryValue | null): number {
   return Number(raw);
 }
 
-/**
- * Reads the form against the current weights. Programmes and directions are
- * only ever the ones already configured: the programmes double as what sync
- * collects (lib/sync/run.ts), and one with no weight scores zero by design
- * (D-30), so neither is something this form adds or removes.
- */
+// Programmes come only from the current weights: they also define what sync collects.
 export function readWeightsForm(form: FormData, current: Weights): Weights {
   const roleShares: Record<string, number> = {};
   for (const [key, raw] of form.entries()) {
@@ -52,7 +44,6 @@ function nonNegative(value: number): boolean {
   return Number.isFinite(value) && value >= 0;
 }
 
-/** First problem first, in the order the form shows the fields. */
 export function validateWeights(weights: Weights): string[] {
   const problems: string[] = [];
   if (!nonNegative(weights.aplPoints)) problems.push("Application points need to be 0 or more.");

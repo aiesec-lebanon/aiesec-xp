@@ -1,10 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-// Architecture.md 4.3 requires a test that fails if the service token can appear
-// in serialised output. This is that test. It is deliberately paranoid: the
-// token has entity-wide read access to AIESEC data, so one leaked log line or
-// error payload is a disclosure.
-
 const SERVICE_TOKEN = "spike-service-token-value-0123456789abcdef";
 const CLIENT_SECRET = "aiesec-client-secret-value-abcdef0123456789";
 const SESSION_SECRET = "session-secret-value-0123456789abcdefghijklmno";

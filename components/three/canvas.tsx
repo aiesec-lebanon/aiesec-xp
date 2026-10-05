@@ -9,21 +9,12 @@ import { SURFACE } from "@/lib/design/tokens";
 
 export type XpCanvasProps = {
   children: ReactNode;
-  /** Rendered when WebGL is unavailable or the context is lost. */
   fallback: ReactNode;
-  /** Raised when the GPU context is lost, so the caller can drop to `fallback`. */
   onContextLost?: () => void;
-  /** Leave the canvas unpainted, for a scene composited over DOM drawn behind it. */
   transparent?: boolean;
 } & Omit<CanvasProps, "children" | "fallback">;
 
-// Defaults chosen for the two screens this has to survive: a mid-range Android
-// phone and whatever the office TV is. dpr is clamped rather than left to
-// devicePixelRatio, which on a 3x phone quadruples the fragment cost for no
-// visible gain, and AdaptiveDpr drops it further under load instead of dropping
-// frames. The frame loop runs for everyone by default (D-46); `demand` renders
-// the scene once and then only on invalidation, for the member who asked for
-// less motion -- the still image, not the animation.
+// dpr is clamped: on a 3x phone devicePixelRatio quadruples fragment cost for no visible gain.
 export function XpCanvas({
   children,
   fallback,
@@ -36,9 +27,7 @@ export function XpCanvas({
 
   const handleCreated = useCallback<NonNullable<CanvasProps["onCreated"]>>(
     (state) => {
-      // Backgrounding a tab on mobile routinely takes the context with it, and
-      // three does not recover on its own; showing the DOM equivalent beats
-      // showing a dead black rectangle.
+      // Mobile tab backgrounding drops the context and three doesn't recover on its own.
       state.gl.domElement.addEventListener("webglcontextlost", (event) => {
         event.preventDefault();
         setContextLost(true);
@@ -68,5 +57,3 @@ export function XpCanvas({
     </Canvas>
   );
 }
-
-export default XpCanvas;

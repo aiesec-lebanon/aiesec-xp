@@ -16,17 +16,8 @@ export type CurrentUser = ResolvedAccess & {
   profilePhotoUrl: string | null;
 };
 
-/**
- * Resolves the signed-in member and their access from stored positions.
- *
- * Role is recomputed from position rows on every request rather than carried in
- * the session cookie, so a terminated officer loses access at the next sync
- * rather than at the next login (D-23). Admin mutations go further and
- * re-verify against live GIS (Architecture.md 11) via requireAdminLive.
- *
- * Memoised per request by React cache, so a page and its layout resolving the
- * user do not hit the database twice.
- */
+// Role is recomputed from stored positions per request, not carried in the cookie,
+// so a terminated officer loses access at the next sync rather than next login.
 export const currentUser = cache(async (): Promise<CurrentUser | null> => {
   const store = await cookies();
   const session = readSession(store.get(SESSION_COOKIE)?.value);

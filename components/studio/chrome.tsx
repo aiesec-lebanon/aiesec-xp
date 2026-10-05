@@ -35,16 +35,6 @@ export function SignOutButton({ full = false }: { full?: boolean }) {
   );
 }
 
-/**
- * The bar every member-facing screen opens with: the logo, the profile pill
- * (its hover dropdown holding Profile, and Admin where it applies), and sign
- * out. Rendered once from the root layout rather than per page, so it is
- * never missing and never drifts between screens.
- *
- * Absent for a visitor with no session and for `DENIED`: neither has a
- * console to open, and each of those screens carries its own sign-in or
- * sign-out affordance already.
- */
 export function Header({
   user,
   characterId,
@@ -58,11 +48,6 @@ export function Header({
     <header className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 pb-1 pt-5 sm:px-11">
       <BrandMark />
 
-      {/* The dock lives up here with the rest of the chrome. At the bottom of
-          the screen it was a lozenge floating over the end of every page, which
-          worked on a leaderboard and sat awkwardly on everything else. On a
-          narrow screen it drops to its own line under the brand rather than
-          squeezing the profile pill off the edge. */}
       <div className="order-3 flex w-full justify-center sm:order-2 sm:w-auto">
         <DockSlot />
       </div>
@@ -80,11 +65,6 @@ export function Header({
   );
 }
 
-/**
- * The one line at the foot of every screen. Deliberately quiet: it is a
- * signature, not a navigation surface, and it is the last thing that should
- * compete with a member's own score.
- */
 export function SiteFooter() {
   return (
     <footer className="shrink-0 px-6 pb-2 pt-2 text-center sm:px-11">

@@ -1,84 +1,40 @@
 # Attributions
 
-Third-party assets used in AIESEC XP, and where each came from.
+Third-party assets used in AIESEC XP. AIESEC XP is an internal tool behind AIESEC sign-in and
+is not distributed, so credit is recorded here rather than in the UI. If it is ever opened
+publicly, the items marked *unconfirmed* must be settled first.
 
-**This file is the whole of the product's attribution surface (D-49).** AIESEC XP
-is internal: every viewer signs in through AIESEC OAuth2 and holds an active
-position in office 182 or a descendant, there is no public route, and nothing is
-distributed outside the MC. Credit is therefore recorded here, next to the source,
-and never rendered in the UI — no footer credits line, no licence notice, no
-about page. Anyone who can reach the product can reach this file.
+## Game Icons — CC BY 3.0
 
-If AIESEC XP is ever opened beyond the member wall, this stops being sufficient
-and every line below marked *unconfirmed* has to be settled first.
-
-## Credited here
-
-**Game Icons** — https://game-icons.net — CC BY 3.0
-
-The funnel-stage, rank and reward icons are from the Game Icons collection,
-delivered through [`react-icons`](https://react-icons.github.io/react-icons/)
-(MIT). Individual icons are by contributors to game-icons.net including Lorc,
-Delapouite and Skoll. See https://game-icons.net/about.html#authors for the full
-list.
-
-## Character renders — licence unconfirmed
-
-`public/characters/avatar-*.png` and `avatar-*-portrait.png` are renders of the four CGTrader characters
-described below, produced by `scripts/assets/avatar-stills.py` from the shipped
-`.glb` files and used on every screen that shows more than one body at a time
-(D-52, `components/studio/character.tsx`). They inherit the same open licence
-question as the models they were rendered from.
-
-## Character animation — Mixamo
-
-The clips in `public/models/avatar-animations.glb` are from
-[Mixamo](https://www.mixamo.com) (Adobe), which grants royalty-free use of its
-animations, including commercially, to anyone with a free Adobe account. Juno's
-skeleton is also Mixamo's, from its auto-rigger.
-
-This is the first source in the product that is free but **account-gated rather
-than CC0** (D-47, D-53). Nothing is fetched from Adobe at runtime: the clips are
-baked into our own `.glb` and served from our origin like everything else.
+Funnel-stage, rank and reward icons are from [game-icons.net](https://game-icons.net),
+delivered through [`react-icons`](https://react-icons.github.io/react-icons/) (MIT), by
+contributors including Lorc, Delapouite and Skoll. Full list:
+https://game-icons.net/about.html#authors
 
 ## Character models — licence unconfirmed
 
-The four member-avatar characters — `avatar-hoodie-joggers`, `avatar-tee-shorts`,
-`avatar-hoodie-cargo` and `avatar-tee-skirt` — were obtained as free downloads
-from [CGTrader](https://www.cgtrader.com). Three carry a Mixamo auto-rig, which
-their `mixamorig:` bone naming and the export paths still packed into the source
-file both record; the fourth has a 24-bone rig of separate origin.
+The avatar characters `avatar-hoodie-joggers`, `avatar-tee-shorts`, `avatar-hoodie-cargo` and
+`avatar-tee-skirt` were free downloads from [CGTrader](https://www.cgtrader.com); the source of
+`avatar-crop-jeans` and `avatar-crop-joggers` (Nour and Lina) is not recorded. CGTrader free downloads ship under more than one licence
+(Royalty-Free permits embedding in an application; Editorial does not), and the files do not
+say which. Before any external release, record the product URL, author and licence per model.
 
-This is the only asset class in the product that is not CC0. CGTrader free
-downloads ship under more than one licence: its Royalty-Free terms permit
-embedding in an application, while its Editorial terms would forbid it. The
-distinction is not visible in the downloaded files, so it would have to come from
-the source pages.
+The stills in `public/characters/` are renders of these models and share the same question.
 
-D-49 accepts that as an open question rather than a blocker, because this is an
-internal tool that is not distributed. Still worth recording if anyone goes back
-to the source pages, and required before any external release: the CGTrader
-product URL, the author and the licence actually granted, per model.
+## Character animation — Mixamo
 
-## Public domain — no attribution required
+Clips in `public/models/avatar-animations*.glb` are from [Mixamo](https://www.mixamo.com)
+(Adobe), royalty-free including commercial use with a free Adobe account. Juno's skeleton is
+from Mixamo's auto-rigger. Nothing is fetched from Adobe at runtime.
 
-Credited anyway, because knowing where an asset came from is worth more than the
-licence strictly demands.
+## Public domain
 
-- **Poly Haven** — https://polyhaven.com — CC0. Environment maps, reached through
+- **Poly Haven** — https://polyhaven.com — CC0 environment maps, via
   [`@pmndrs/assets`](https://github.com/pmndrs/assets) (CC0).
-- **Kenney** — https://kenney.nl — CC0. Game asset packs.
-- **`@pmndrs/assets`** — CC0. Also the source of `suzi.glb`, the model the `/lab`
-  route uses to prove the Draco pipeline.
 
-## Open source software
+## Open source
 
-Typefaces are served under the SIL Open Font License, built from `google/fonts`
-into `lib/design/faces/` with each family's `OFL.txt` beside it, so no request
-reaches Google at build time or runtime (D-67). STUDIO uses four (D-48):
-Fredoka, Figtree, Baloo 2 and Space Mono.
-
-The 3D stack — three.js, @react-three/fiber, @react-three/drei, @pmndrs/assets,
-Motion, Recharts, react-icons and glTF-Transform — is MIT or CC0.
-@react-three/rapier is MIT and wraps Rapier (@dimforge), Apache-2.0. The Draco
-decoder shipped from `three` is Apache-2.0 (Google).
+- Typefaces (SIL Open Font License): Fredoka, Figtree, Baloo 2, Space Mono — built into
+  `lib/design/faces/` with each family's `OFL.txt`.
+- three.js, @react-three/fiber, @react-three/drei, Motion, react-icons, glTF-Transform — MIT.
+- Draco decoder (shipped with `three`) — Apache-2.0.

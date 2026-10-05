@@ -3,10 +3,8 @@ import { useEffect, useState } from "react";
 import { useReduceMotion } from "@/components/motion/motion-provider";
 import type { CharacterBeat } from "@/lib/design/character";
 
-/** Yaw towards a neighbour being spoken to, against 0.42 for standing inwards. */
-export const TOWARDS = 0.62;
-/** Standing angled into the group rather than square to camera. */
-export const INWARDS = 0.42;
+const TOWARDS = 0.62;
+const INWARDS = 0.42;
 
 const EXCHANGE = { gapMin: 5, gapMax: 13, hold: 3.4, reply: 0.9 };
 const ONLOOKER_CHANCE = 0.4;
@@ -15,19 +13,10 @@ export type Exchange = {
   speaker: number;
   listener: number;
   onlooker: number | null;
-  /** The listener only answers once the speaker has started. */
   replying: boolean;
-  /** Alternates the talk clip so a pair does not repeat itself. */
   tick: number;
 };
 
-/**
- * Picks a pair, now and then, and lets the rest of the group ignore them.
- *
- * A group where everybody reacts at once is as artificial as a group where
- * nobody does, so the third body only looks over some of the time, and the gap
- * between exchanges is never the same twice.
- */
 export function useGroupExchange(count: number): Exchange | null {
   const reduceMotion = useReduceMotion();
   const [exchange, setExchange] = useState<Exchange | null>(null);
@@ -69,12 +58,10 @@ export function useGroupExchange(count: number): Exchange | null {
     return () => clearTimeout(timer);
   }, [running, count]);
 
-  // Derived rather than cleared, so stopping does not cost a render pass.
   return running ? exchange : null;
 }
 
-/** Who this body is attending to, if anyone. */
-export function partnerOf(exchange: Exchange | null, index: number): number | null {
+function partnerOf(exchange: Exchange | null, index: number): number | null {
   if (!exchange) return null;
   if (exchange.speaker === index) return exchange.listener;
   if (exchange.listener === index || exchange.onlooker === index) return exchange.speaker;
@@ -89,12 +76,7 @@ export function beatFor(exchange: Exchange | null, index: number): CharacterBeat
   return null;
 }
 
-/**
- * Which way to look, in radians of yaw.
- *
- * The bodies are exported facing +Z, so a positive yaw turns towards +x. A body
- * left of the group therefore needs a *positive* angle to look into it.
- */
+// Bodies are exported facing +Z, so positive yaw turns towards +x.
 export function facingFor(
   exchange: Exchange | null,
   index: number,

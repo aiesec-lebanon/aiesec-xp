@@ -43,7 +43,6 @@ export default async function MePage({
   ]);
 
 
-  // First run: a member picks their character before anything else (D-52).
   if (!avatar.chosen) redirect("/welcome");
 
   const weeks = weeklyPoints(progress.trail, window);

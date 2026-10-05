@@ -112,7 +112,7 @@ describe("points", () => {
     expect(stages(run([event({ eventType })]).ledger)).toEqual([`${eventType}:${points}`]);
   });
 
-  it("orders APL below APD below RE (D-05)", () => {
+  it("orders APL below APD below RE", () => {
     const [apl, apd, re] = (["APL", "APD", "RE"] as const).map(
       (eventType) => run([event({ eventType })]).ledger[0].points
     );
@@ -130,7 +130,7 @@ describe("points", () => {
     expect(run([event({ eventType: "RE" })], [assignment()], { config }).ledger[0].points).toBe(5);
   });
 
-  it("weights incoming and outgoing equally by default (D-03)", () => {
+  it("weights incoming and outgoing equally by default", () => {
     const out = run([event({ eventType: "RE", direction: "OUTGOING" })]).ledger[0].points;
     const inc = run([event({ eventType: "RE", direction: "INCOMING" })]).ledger[0].points;
     expect(out).toBe(inc);
@@ -141,7 +141,7 @@ describe("points", () => {
     expect(run([event()], [assignment()], { config }).ledger[0].points).toBe(0.02);
   });
 
-  it("scores an unconfigured programme at zero and reports it (D-30)", () => {
+  it("scores an unconfigured programme at zero and reports it", () => {
     const result = run([event({ programmeId: 99 })]);
     expect(result.ledger).toHaveLength(0);
     expect(result.anomalies[0].kind).toBe("UNKNOWN_PROGRAMME_WEIGHT");
@@ -152,7 +152,7 @@ describe("points", () => {
   });
 });
 
-describe("each stage scores in the window it happens in (D-75)", () => {
+describe("each stage scores in the window it happens in", () => {
   it("credits every stage whose own date is inside the window, each on that date", () => {
     const result = run([
       event({ eventType: "APL", occurredAt: IN }),
@@ -172,7 +172,7 @@ describe("each stage scores in the window it happens in (D-75)", () => {
   });
 
   it("gives a realization from last term that completes this term nothing", () => {
-    // Measured: realized 2 Jul, completed 15 Aug, term from 1 Aug.
+    // Realized 2 Jul, completed 15 Aug, term from 1 Aug.
     const window: Window = { startsAt: new Date("2026-08-01T00:00:00Z"), endsAt: null };
     const result = run(
       [
@@ -218,7 +218,7 @@ describe("each stage scores in the window it happens in (D-75)", () => {
   });
 });
 
-describe("display window (D-08)", () => {
+describe("display window", () => {
   it("ignores an event before the window opens", () => {
     expect(run([event({ occurredAt: BEFORE })]).ledger).toHaveLength(0);
   });
@@ -237,7 +237,7 @@ describe("display window (D-08)", () => {
     expect(run([event({ occurredAt: IN })], [assignment()], { window }).ledger).toHaveLength(1);
   });
 
-  it("scores an in-window APD even though its APL fell outside (D-08)", () => {
+  it("scores an in-window APD even though its APL fell outside", () => {
     const result = run([
       event({ eventType: "APL", occurredAt: BEFORE }),
       event({ eventType: "APD", occurredAt: IN }),
@@ -247,7 +247,7 @@ describe("display window (D-08)", () => {
   });
 });
 
-describe("breaks (D-10, D-26, D-28)", () => {
+describe("breaks", () => {
   it("negates points and the count", () => {
     const result = run([
       event({ eventType: "APD", occurredAt: IN }),
@@ -270,7 +270,7 @@ describe("breaks (D-10, D-26, D-28)", () => {
     });
   });
 
-  it("ignores a break whose stage event is outside the window (D-26)", () => {
+  it("ignores a break whose stage event is outside the window", () => {
     const result = run([
       event({ eventType: "APD", occurredAt: BEFORE }),
       event({ eventType: "APD_BROKEN", occurredAt: IN }),
@@ -310,7 +310,7 @@ describe("breaks (D-10, D-26, D-28)", () => {
     expect(total(result.ledger)).toBe(10);
   });
 
-  it("ignores a break the stage has since overtaken: approve, break, re-approve (D-28)", () => {
+  it("ignores a break the stage has since overtaken: approve, break, re-approve", () => {
     const result = run([
       event({ eventType: "APD", occurredAt: LATER_IN }),
       event({ eventType: "APD_BROKEN", occurredAt: ALSO_IN }),
@@ -333,7 +333,7 @@ describe("breaks (D-10, D-26, D-28)", () => {
   });
 });
 
-describe("net APL (D-41)", () => {
+describe("net APL", () => {
   it.each(["withdrawn", "rejected"])("does not score a %s application", (status) => {
     expect(run([event({ applicationStatus: status })]).ledger).toHaveLength(0);
   });
@@ -400,7 +400,7 @@ describe("attribution", () => {
     expect(result.ledger[0].points).toBe(1);
   });
 
-  it("credits whoever holds the EP now, for every event (D-73 supersedes D-36)", () => {
+  it("credits whoever holds the EP now, for every event", () => {
     const result = run([event({ occurredAt: IN }), event({ eventType: "APD", occurredAt: LATER_IN })], [
       assignment({ memberId: BOB }),
     ]);
@@ -408,7 +408,7 @@ describe("attribution", () => {
   });
 });
 
-describe("main manager and role shares (D-83)", () => {
+describe("main manager and role shares", () => {
   const shares = { TM: 40, TL: 30, LCVP: 25, MCP: 10 };
   const config = { ...CONFIG, roleShares: shares };
   const mainIs = (member: bigint) => new Map([[String(EP), member]]);
@@ -540,7 +540,7 @@ describe("replay", () => {
   });
 });
 
-describe("each period keeps its own weights (D-85)", () => {
+describe("each period keeps its own weights", () => {
   const CHANGE = new Date("2026-08-10T00:00:00Z");
   const OLD = CONFIG;
   const NEW: ScoringConfig = { ...CONFIG, version: 2, aplPoints: 2, apdPoints: 3, roleShares: { TL: 50 } };
@@ -619,7 +619,7 @@ describe("rewards", () => {
     expect(result.grants[0].earnedAt).toEqual(ALSO_IN);
   });
 
-  it("withdraws the grant when a break drops the count back below (D-10)", () => {
+  it("withdraws the grant when a break drops the count back below", () => {
     const result = run(
       [
         event({ eventType: "APD", applicationId: 1n, occurredAt: IN }),
@@ -735,7 +735,7 @@ describe("officePoints", () => {
     expect(points).toBe(44);
   });
 
-  it("scores zero for a programme with no configured weight (D-30)", () => {
+  it("scores zero for a programme with no configured weight", () => {
     expect(officePoints({ 5: { APL: 100, APD: 100, RE: 100 } }, CONFIG)).toBe(0);
   });
 

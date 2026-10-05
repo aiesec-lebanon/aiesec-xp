@@ -2,9 +2,6 @@
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
 
-// Architecture.md 9: skeletons, never spinners. The shimmer is itself motion, so
-// it follows the switch too -- a member who reduced motion gets the plate
-// without the sweep.
 export function SceneSkeleton({ className = "" }: { className?: string }) {
   const reduceMotion = useReduceMotion();
 

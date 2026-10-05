@@ -7,12 +7,8 @@ import { isInTermPosition, primaryRole } from "@/lib/auth/roles";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
 import { termStart } from "@/lib/term";
 
-/**
- * Members who hold a position this term, as a Prisma filter: the database form
- * of `isInTermPosition()` (lib/auth/roles.ts, D-71) -- change them together.
- * "Has any stored position" is not the same thing: a denied sign-in and a
- * departed officer both leave position rows behind.
- */
+// Prisma twin of isInTermPosition() in lib/auth/roles.ts; change them together.
+// "Has any stored position" isn't enough: denied sign-ins and departed officers leave rows.
 export async function inTermMemberWhere(): Promise<Prisma.MemberWhereInput> {
   const [operating, floor] = await Promise.all([operatingOfficeIds(), termStart()]);
 
@@ -27,11 +23,7 @@ export async function inTermMemberWhere(): Promise<Prisma.MemberWhereInput> {
   };
 }
 
-/**
- * Every member this term, keyed by id, with the role they share an EP's points
- * under (D-73). A member absent from the map cannot be credited at all (D-71).
- * Narrowed to `memberIds` when given.
- */
+// A member absent from the map cannot be credited at all.
 export async function inTermRoles(memberIds?: readonly bigint[]): Promise<Map<string, string | null>> {
   const [operating, floor] = await Promise.all([operatingOfficeIds(), termStart()]);
   const operatingSet = new Set(operating.map(String));

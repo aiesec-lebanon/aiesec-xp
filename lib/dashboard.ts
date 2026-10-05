@@ -1,16 +1,8 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import { personName } from "@/lib/design/names";
 import type { DateRange } from "@/lib/leaderboard-range";
-import { individualStandings, trailLabel, type PersonalProgress } from "@/lib/leaderboard";
-
-// What the member-facing screens need on top of the rankings: the window they
-// are being measured in, the weekly shape of their own points, and the pace that
-// turns a closing date into a this-week number.
-//
-// Nothing here scores anything. The engine decides points; this reads the ledger
-// the engine produced and answers questions about time.
+import { individualStandings, type PersonalProgress } from "@/lib/leaderboard";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -18,7 +10,6 @@ export type ActiveWindow = {
   label: string;
   startsAt: Date;
   endsAt: Date | null;
-  /** Null where the window has no end, which is a window that never closes. */
   daysLeft: number | null;
   weeksLeft: number | null;
 };
@@ -41,17 +32,10 @@ export async function activeWindow(): Promise<ActiveWindow | null> {
 export type Pace = {
   reward: PersonalProgress["rewards"][number];
   remaining: number;
-  /** How many more per week to arrive before the window closes. */
   perWeek: number | null;
 };
 
-/**
- * The next reward still ahead of this member, and what it costs per week.
- *
- * The highest-leverage element on the page, so it is deliberately conservative:
- * a window with no end, or one already closed, produces no rate rather than a
- * number that reads as achievable when nothing is.
- */
+// Deliberately conservative: an open-ended or closed window yields no rate rather than a misleading one.
 export function pace(progress: PersonalProgress, window: ActiveWindow | null): Pace | null {
   const reward = progress.rewards.find((candidate) => !candidate.earned);
   if (!reward) return null;
@@ -66,16 +50,8 @@ export function pace(progress: PersonalProgress, window: ActiveWindow | null): P
   };
 }
 
-/**
- * The smallest single scored event that would close a points gap.
- *
- * The comp writes "one approval to catch up" as copy. It is read here from the
- * active `ScoreConfig` instead, because a member who acts on a promise the
- * scoring rules do not keep stops believing the rest of the page -- and the
- * point values are admin-editable (D-15), so the sentence cannot be a constant.
- * Product multipliers are deliberately not applied: they vary per EP, and the
- * base weight is the guarantee.
- */
+// Read from config because point values are admin-editable. Product multipliers are
+// left out on purpose: they vary per EP, and the base weight is the guarantee.
 export async function closingMove(gap: number): Promise<string | null> {
   if (gap <= 0) return null;
 
@@ -102,13 +78,7 @@ export async function closingMove(gap: number): Promise<string | null> {
 
 export type Week = { label: string; startsAt: Date; points: number };
 
-/**
- * The member's points bucketed into calendar weeks across the active window.
- *
- * Weeks with nothing in them are kept: a gap is the point of the chart, and
- * dropping empty buckets would quietly redraw a fortnight of silence as
- * continuous work.
- */
+// Empty weeks are kept: dropping them would redraw a gap as continuous work.
 export function weeklyPoints(
   trail: PersonalProgress["trail"],
   window: ActiveWindow | null,
@@ -147,45 +117,6 @@ export function weeklyPoints(
   return weeks;
 }
 
-export type ActivityItem = {
-  memberId: bigint;
-  fullName: string;
-  eventType: string;
-  points: number;
-  occurredAt: Date;
-};
-
-/**
- * The most recent scored events, for the /tv ticker.
- *
- * Names come from the member table, never from GIS or from the event: an
- * `ExchangeEvent` holds no EP name by construction (D-42), and what the ticker
- * announces is which member earned something, not who the EP was (D-44).
- */
-export async function recentActivity(limit = 12): Promise<ActivityItem[]> {
-  const entries = await db.scoreLedgerEntry.findMany({
-    orderBy: { occurredAt: "desc" },
-    take: limit,
-    select: {
-      memberId: true,
-      stage: true,
-      points: true,
-      countDelta: true,
-      occurredAt: true,
-      member: { select: { fullName: true } },
-    },
-  });
-
-  return entries.map((entry) => ({
-    memberId: entry.memberId,
-    fullName: personName(entry.member.fullName),
-    eventType: trailLabel(entry.stage, Number(entry.countDelta)),
-    points: Number(entry.points),
-    occurredAt: entry.occurredAt,
-  }));
-}
-
-/** The top of the individual board, for /tv and the podium. */
 export async function topMembers(count: number, range: DateRange) {
   return (await individualStandings(range))
     .filter((standing) => standing.points > 0)

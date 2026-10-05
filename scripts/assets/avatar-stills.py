@@ -1,7 +1,4 @@
-# Renders one transparent still per character into public/characters/, from the
-# same .glb the 3D stage loads (D-50) -- so the two are the same character.
-#
-#   blender -b -P scripts/assets/avatar-stills.py -- <repo-root>
+# blender -b -P scripts/assets/avatar-stills.py -- <repo-root>
 
 import os
 import sys
@@ -20,11 +17,6 @@ FORMS = [
 
 
 def names(repo_root):
-    """Every body in public/models: the four forms and each one's palettes.
-
-    Discovered rather than listed, so adding a palette to `avatar-variants.py`
-    does not also mean remembering to add it here.
-    """
     models = os.path.join(repo_root, "public", "models")
     found = {f[: -len(".glb")] for f in os.listdir(models) if f.endswith(".glb")}
     ordered = []
@@ -36,16 +28,12 @@ WIDTH = 560
 HEIGHT = 780
 MARGIN = 1.10
 
-# The profile picture, as a share of body height. These characters are drawn
-# with large heads, so the top fifth is already face.
+# Portrait crop as a share of body height.
 PORTRAIT = 320
 PORTRAIT_SPAN = 0.36
 PORTRAIT_DROP = 0.17
 
-# Per form, because a head is a share of the body and these bodies disagree
-# about it: the four kids are drawn with heads about a quarter of their height,
-# where the two adult figures are nearer a seventh, so the crop tuned for one
-# frames mostly chest on the other.
+# The adult figures have proportionally smaller heads than the default forms.
 PORTRAIT_FIT = {
     "avatar-crop-joggers": (0.23, 0.105),
     "avatar-crop-jeans": (0.23, 0.105),
@@ -104,17 +92,13 @@ STAGE_OBJECTS = {"cam", "key", "fill", "rim"}
 
 
 def clear_models():
-    """Leave only the camera and the lights. Allow-list, because a background
-    Blender still reads the user's startup file and whatever sits in it."""
+    """Allow-list: a background Blender still loads the user's startup file."""
     for obj in list(bpy.data.objects):
         if obj.name not in STAGE_OBJECTS:
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
-# Arms down, the angles the clips settle into. Binding a real clip would be
-# truer, but a glTF action arrives slotted to the armature it was imported with
-# and re-slotting it onto another rig is fragile; a still only needs the body out
-# of its T-pose bind.
+# Approximates the clips' rest; re-slotting a real glTF action onto another rig is fragile.
 A_POSE = {"leftarm": 0.95, "rightarm": 0.95, "leftforearm": 0.10, "rightforearm": 0.10}
 
 
@@ -140,8 +124,7 @@ def render_one(repo_root, name):
     # Posed vertices, not obj.bound_box, which still reports the authored T-pose.
     depsgraph = bpy.context.evaluated_depsgraph_get()
     corners = []
-    # Named explicitly and everything else hidden: deleting strays is not enough,
-    # something here puts a primitive back at the origin after every import.
+    # Hide strays rather than delete: something re-adds a primitive after each import.
     body = bpy.context.scene.objects[f"{name}-mesh"]
     for obj in bpy.context.scene.objects:
         if obj.type == "MESH" and obj.name != body.name:
@@ -172,8 +155,6 @@ def render_one(repo_root, name):
     bpy.ops.render.render(write_still=True)
     print(f"STILL {name} {os.path.getsize(out)}")
 
-    # The profile picture: head and a little shoulder, square, so it can be
-    # cropped to a circle anywhere without losing the face.
     top = max(c.z for c in corners)
     span, drop = PORTRAIT_FIT.get(name.split("-p")[0] if "-p" in name else name,
                                   (PORTRAIT_SPAN, PORTRAIT_DROP))
@@ -190,8 +171,7 @@ def render_one(repo_root, name):
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    # Absolute: a bare "." is resolved by Blender against its own notion of the
-    # working directory, not the shell's, and the renders landed on C:\.
+    # A relative path resolves against Blender's working directory, not the shell's.
     repo_root = os.path.abspath(argv[0] if argv else os.getcwd())
     os.makedirs(os.path.join(repo_root, "public", "characters"), exist_ok=True)
 

@@ -1,4 +1,3 @@
-// Dry run of the sheet import. Writes nothing.
 import { importAssignments } from "@/lib/import/run-import";
 
 const result = await importAssignments(0n, { dryRun: true });
