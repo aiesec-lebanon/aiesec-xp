@@ -2,10 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { defaultWindowRange, toDateInputValue } from "@/lib/admin/window";
 
-// Covers what the admin's screen falls back to when no DisplayWindow row is
-// active: the current calendar month, UTC bounds, so a fresh deployment or a
-// term start without a configured window still has something sensible to show.
-
 describe("defaultWindowRange", () => {
   it("spans the 1st to the last day of the reference month, in UTC", () => {
     const { startsAt, endsAt } = defaultWindowRange(new Date("2026-02-15T10:00:00.000Z"));

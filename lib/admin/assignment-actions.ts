@@ -12,23 +12,14 @@ import { directoryKey, normaliseLabel, parseManagerCsv, SheetShapeError, type Di
 import { inTermMemberWhere } from "@/lib/org/members";
 import { replay } from "@/lib/scoring/replay";
 
-// Every action re-verifies the actor against live GIS (Architecture.md 11):
-// these change who is credited with a reward, which is exactly the case where a
-// position revoked since the last sync must take effect now.
+// Actions re-verify the actor against live GIS so a position revoked since the last sync takes effect now.
 
 const bigintish = z
   .string()
   .regex(/^\d+$/)
   .transform((value) => BigInt(value));
 
-/**
- * Every row audited here carries a BigInt column, and native JSON.stringify
- * throws on a bigint rather than converting it. Stringifying it instead is
- * enough: an audit entry is read, never diffed back into a typed value.
- *
- * A missing side -- no row before a first credit, or nothing after a delete --
- * is stored as SQL NULL: a Json column does not take a bare `null`.
- */
+// JSON.stringify throws on bigint; a Json column needs DbNull rather than a bare null.
 function toAuditJson(
   value: unknown
 ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
@@ -108,7 +99,6 @@ function parseCredit(formData: FormData) {
   });
 }
 
-/** The EP as the admin saw it on the row, for the confirmation only. */
 function epLabel(formData: FormData): string {
   const name = formData.get("epName");
   return typeof name === "string" && name.trim() !== "" ? name.trim() : "this EP";
@@ -117,11 +107,6 @@ function epLabel(formData: FormData): string {
 const NOT_A_MEMBER = "Only people with a member position this term can earn points.";
 const RELOAD = "Something went wrong. Reload the page and try again.";
 
-/**
- * Credits one more member with an EP (D-73), beside whoever EXPA and the sheet
- * already name. Marked ADMIN, which no sync clears; adding someone an admin had
- * removed brings them back.
- */
 export async function addManagerAction(
   _previous: ActionState | null,
   formData: FormData
@@ -133,9 +118,7 @@ export async function addManagerAction(
   const { epPersonId, memberId } = parsed.data;
 
   const [member, before] = await Promise.all([
-    // Enforced here, not just by the picker: the form is user input, and
-    // crediting an EP to anyone who is not a member this term -- another EP,
-    // a departed officer -- is never meaningful (D-71).
+    // Enforced server-side too: the form is user input.
     db.member.findFirst({
       where: { id: memberId, ...(await inTermMemberWhere()) },
       select: { fullName: true },
@@ -158,12 +141,7 @@ export async function addManagerAction(
   return { ok: true, message: `${personName(member.fullName)} now earns points for ${epLabel(formData)}.` };
 }
 
-/**
- * Takes a member's credit for an EP away, whichever source gave it (D-73). The
- * row stays, marked removed, so the next EXPA or sheet sync cannot hand the
- * credit straight back. A manager EXPA lists who has not been synced yet gets
- * that row now, for the same reason.
- */
+// The row is kept, marked removed, so the next EXPA or sheet sync cannot hand the credit back.
 export async function removeManagerAction(
   _previous: ActionState | null,
   formData: FormData
@@ -180,8 +158,6 @@ export async function removeManagerAction(
   ]);
   if (!member) return { ok: false, message: "This person isn't a member, so they aren't earning points for this EP." };
 
-  // Removing the main clears the pick (D-83): the EP goes back to everyone
-  // taking their role's %, or a lone manager taking it all.
   const removal = { removedAt: new Date(), removedBy: admin.id, isMain: false };
   const after = await db.epAssignment.upsert({
     where: { epPersonId_memberId: { epPersonId, memberId } },
@@ -196,12 +172,6 @@ export async function removeManagerAction(
   return { ok: true, message: `${personName(member.fullName)} no longer earns points for ${epLabel(formData)}.` };
 }
 
-/**
- * Makes a manager already on the EP its main manager (D-83): full points and a
- * whole count for every event, while everyone else takes their role's %. The
- * pick holds them on the EP whatever EXPA or the sheet later say; only an admin
- * changes it, by picking someone else or removing them.
- */
 export async function setMainManagerAction(
   _previous: ActionState | null,
   formData: FormData
@@ -249,11 +219,7 @@ export async function setMainManagerAction(
   };
 }
 
-/**
- * Undoes a removal. When nothing else names the member any more -- EXPA or the
- * sheet has since dropped them -- restoring is an admin crediting them, so the
- * row is marked ADMIN rather than coming back with no source that counts.
- */
+// If no source names the member any more, restoring marks the row ADMIN so it still counts.
 export async function restoreManagerAction(
   _previous: ActionState | null,
   formData: FormData
@@ -304,11 +270,6 @@ async function rebuildFromSheet(adminId: bigint): Promise<void> {
   refresh();
 }
 
-/**
- * Matches an EP manager's name in the sign-up sheet to a member (D-80), for the
- * same name, LC and team the sheet uses. Preferred over the sheet's own
- * directory tab, so the sheet cannot quietly undo it.
- */
 export async function saveSheetMappingAction(
   _previous: ActionState | null,
   formData: FormData
@@ -346,7 +307,6 @@ export async function saveSheetMappingAction(
   };
 }
 
-/** Removes a console match, so the name goes back to the sheet's own directory. */
 export async function clearSheetMappingAction(
   _previous: ActionState | null,
   formData: FormData
@@ -373,14 +333,7 @@ function csvFailure(message: string, problems: string[] = []): CsvImportState {
   return { ok: false, message, problems };
 }
 
-/**
- * Matches many EP manager names at once from an uploaded CSV with the same
- * columns as the sheet's directory tab. Each row is saved as a console match,
- * exactly as if it had been matched one by one, so it takes precedence over
- * the tab. A row that cannot be trusted -- no EXPA ID, not a member this term,
- * or the same name given two different people -- is skipped and reported,
- * never guessed.
- */
+// Untrustworthy rows (no ID, not a member, same name given two people) are skipped, never guessed.
 export async function importSheetMappingsCsvAction(
   _previous: CsvImportState | null,
   formData: FormData

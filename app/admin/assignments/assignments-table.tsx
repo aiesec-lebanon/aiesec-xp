@@ -9,7 +9,6 @@ import { FUNNEL_STATUSES } from "@/lib/admin/ep-order";
 import { RunJobButton } from "../run-job-button";
 import { AddManagerForm, CreditToggle, MakeMainButton } from "./controls";
 
-// D-04: the products in scope.
 const PROGRAMMES: Record<number, string> = { 7: "GV", 8: "GTa", 9: "GTe" };
 
 const STATUS_TONE: Record<string, string> = {
@@ -32,8 +31,7 @@ function statusLabel(status: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// EXPA's funnel order, so the filter reads top to bottom; anything else EXPA
-// reports (withdrawn, broken, deleted) follows, alphabetically.
+// Funnel order first; other EXPA statuses (withdrawn, broken, deleted) follow alphabetically.
 function statusRank(status: string): number {
   const index = (FUNNEL_STATUSES as readonly string[]).indexOf(status);
   return index === -1 ? FUNNEL_STATUSES.length : index;
@@ -52,19 +50,11 @@ const SOURCE_LABEL: Record<CreditSource, string> = { EXPA: "EXPA", SHEET: "Sheet
 export type ManagerChip = {
   memberId: string;
   fullName: string;
-  /** The member's saved character, so their portrait matches everywhere else (D-51). */
   characterId: string | null;
-  /**
-   * active: earns a share of the EP's points. removed: an admin took the credit
-   * away, and no sync gives it back. pending: EXPA names a member the next
-   * refresh will credit. outside: EXPA names someone who isn't a member this
-   * term, who can't be credited.
-   */
+  /** removed: no sync gives it back. pending: next refresh credits it. outside: not a member this term. */
   state: "active" | "removed" | "pending" | "outside";
-  /** The EP's main manager (D-83), who takes the full points. */
   isMain: boolean;
   sources: CreditSource[];
-  /** Fraction of each of the EP's events this member takes, when more than one is on it. */
   share: number | null;
   role: string | null;
 };
@@ -76,9 +66,9 @@ export type AssignmentRow = {
   fullName: string | null;
   lastActionLabel: string | null;
   signedUpLabel: string | null;
-  /** Products of live applications; empty for a sign-up (D-72). */
+  /** Empty for a sign-up. */
   products: number[];
-  /** What EXPA says, never behind the EP's applications (D-78); null when unread. */
+  /** Never behind the EP's applications; null when unread. */
   status: string | null;
   managers: ManagerChip[];
 };
@@ -94,9 +84,7 @@ export function AssignmentsTable({
 }: {
   rows: AssignmentRow[];
   members: MemberOption[];
-  /** When EP data was last refreshed, e.g. "Last refreshed 4 min ago". */
   refreshed: string;
-  /** When the current window opened: the table lists EPs updated since (D-76). */
   since: string;
 }) {
   const [q, setQ] = useState("");
@@ -453,11 +441,6 @@ function Manager({ chip, epPersonId, epName }: { chip: ManagerChip; epPersonId: 
   );
 }
 
-/**
- * Which page buttons to show around the current one, with a gap marker where
- * a run of pages is skipped -- always first, last and the current page's
- * immediate neighbours, so a jump never needs more than one click either way.
- */
 function pageNumbers(current: number, total: number): (number | "…")[] {
   const window = new Set([1, total, current, current - 1, current + 1]);
   const pages = [...window].filter((page) => page >= 1 && page <= total).sort((a, b) => a - b);

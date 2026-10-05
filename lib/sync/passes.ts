@@ -2,17 +2,12 @@ import type { Direction, FunnelEvent } from "@prisma/client";
 
 import type { ApplicationsQuery } from "@/gis/generated";
 
-// Pure mapping from a GIS application row to the events it implies. No I/O, so
-// the date-selection and supersession rules can be tested without a database
-// or a live API.
-
 export type ApplicationRow = NonNullable<
   NonNullable<NonNullable<ApplicationsQuery["allOpportunityApplication"]>["data"]>[number]
 >;
 
 export type ScopeSide = "PERSON" | "OPPORTUNITY";
 
-/** Every event one application row can carry, in funnel order. */
 export const EVENT_TYPES = [
   "APL",
   "APD",
@@ -21,8 +16,7 @@ export const EVENT_TYPES = [
   "RE_BROKEN",
 ] as const satisfies readonly FunnelEvent[];
 
-// Scoring facts only. No EP name and no opportunity title: those are read live
-// from GIS when something is displayed, never stored (D-42).
+// No EP name or opportunity title: those are read live from GIS, never stored.
 export type MappedEvent = {
   applicationId: bigint;
   eventType: FunnelEvent;
@@ -57,12 +51,7 @@ function toBigInt(value: string | number | null | undefined): bigint | null {
   }
 }
 
-/**
- * When an event occurred, by type.
- *
- * RE takes the earlier of the physical and remote dates (D-29), and a broken
- * realization likewise, since remote realization can break on its own date.
- */
+// RE and RE_BROKEN take the earlier of the physical and remote dates; remote can break on its own date.
 export function occurrenceDate(row: ApplicationRow, eventType: FunnelEvent): Date | null {
   const meta = row.meta;
 
@@ -80,11 +69,7 @@ export function occurrenceDate(row: ApplicationRow, eventType: FunnelEvent): Dat
   }
 }
 
-/**
- * A break is superseded when the stage it reverses has a later date, which is
- * how an approve, break, re-approve sequence ends up scoring as approved
- * (D-28). Superseded breaks are not ingested at all.
- */
+// A break is superseded when its stage has a later date, so approve-break-reapprove scores as approved.
 export function isBreakSuperseded(row: ApplicationRow, eventType: FunnelEvent): boolean {
   const stage = eventType === "APD_BROKEN" ? "APD" : eventType === "RE_BROKEN" ? "RE" : null;
   if (!stage) return false;
@@ -96,15 +81,10 @@ export function isBreakSuperseded(row: ApplicationRow, eventType: FunnelEvent): 
 
 export type MapOptions = {
   side: ScopeSide;
-  /** Programme ids that are in scope, taken from the active config. */
   allowedProgrammeIds: ReadonlySet<number>;
 };
 
-/**
- * Every event one GIS application row implies, or none when the row should not
- * be ingested. Never throws: a malformed row must not abort a pass and strand
- * the watermark, and the counts reported by the run make a skipped row visible.
- */
+// Never throws: a malformed row must not abort a pass and strand the watermark.
 export function mapApplication(row: ApplicationRow, { side, allowedProgrammeIds }: MapOptions): MappedEvent[] {
   const applicationId = toBigInt(row.id);
   const epPersonId = toBigInt(row.person?.id);
@@ -123,8 +103,7 @@ export function mapApplication(row: ApplicationRow, { side, allowedProgrammeIds 
         occurredAt,
         epPersonId,
         programmeId,
-        // D-25: the person side is what decides direction, so an application
-        // that is Lebanese on both sides is OUTGOING and stored once.
+        // The person side decides direction, so a Lebanese-on-both-sides application is OUTGOING once.
         direction: side === "PERSON" ? "OUTGOING" : "INCOMING",
         applicationStatus: row.status ?? null,
       },
@@ -132,7 +111,6 @@ export function mapApplication(row: ApplicationRow, { side, allowedProgrammeIds 
   });
 }
 
-/** Who manages the EP in EXPA, by person id (D-74). */
 export function managerIds(managers: readonly ({ id: string } | null)[] | null | undefined): bigint[] {
   const ids = new Set<string>();
   for (const manager of managers ?? []) {

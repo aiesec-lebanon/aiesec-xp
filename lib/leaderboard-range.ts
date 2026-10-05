@@ -1,21 +1,13 @@
-// Turns two query-string dates into the range a leaderboard is scored over
-// (D-58). Pure, and deliberately free of "server-only" and any db import, so it
-// can be unit tested directly -- the same reason lib/admin/window.ts is.
-
 import { toDateInputValue } from "@/lib/admin/window";
 
 export type DateRange = { startsAt: Date; endsAt: Date };
 
 export type ResolvedRange = DateRange & {
-  /** What the date inputs show. Always the range actually used, never what was
-   * asked for, so a clamped request is visible rather than silent. */
+  // The range actually used, not what was asked for, so a clamped request is visible.
   from: string;
   to: string;
-  /** The earliest selectable date, for the inputs' `min`. */
   floor: string;
-  /** Today, for the inputs' `max`. */
   ceiling: string;
-  /** True when this is the untouched term-start-to-today default. */
   isDefault: boolean;
 };
 
@@ -45,14 +37,6 @@ function endOfDay(date: Date): Date {
   );
 }
 
-/**
- * Resolves `?from=&to=` against the term start.
- *
- * Bad input is clamped into range rather than rejected, because the only thing
- * a leaderboard can usefully do with an impossible date is show a possible one.
- * Every bound is echoed back in `from` / `to`, so what the inputs display is
- * always what was scored.
- */
 export function resolveRange(
   params: { from?: string; to?: string },
   termStart: Date,
@@ -61,8 +45,7 @@ export function resolveRange(
   const floor = startOfDay(termStart);
   const ceiling = startOfDay(now);
 
-  // A term configured into the future would otherwise produce a range that ends
-  // before it begins.
+  // A term configured in the future would otherwise end before it begins.
   const latest = ceiling < floor ? floor : ceiling;
 
   const requestedFrom = parse(params.from);

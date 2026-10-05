@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { resolveRange } from "@/lib/leaderboard-range";
 
-// D-58. The leaderboards take any historic range, floored at the term start:
-// nothing before it was collected, and nothing before it could be attributed to
-// the right member anyway. Every bound is echoed back, so a request that gets
-// clamped is visible in the date inputs rather than silently ignored.
-
 const TERM_START = new Date("2026-08-01T00:00:00.000Z");
 const NOW = new Date("2026-09-18T14:30:00.000Z");
 

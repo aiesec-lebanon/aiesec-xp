@@ -23,31 +23,24 @@ export type ImportIssue = {
   detail: string;
 };
 
-/** One manager name as the sheet uses it, and who it matches. */
 export type SheetManagerName = {
   name: string;
   lc: string;
   team: string;
-  /** How many EPs the sheet gives this name. */
   eps: number;
   status: "matched" | "unlisted" | "ambiguous" | "not-member";
   memberId: string | null;
   source: DirectorySource | null;
-  /** The console's own match for this name, which an admin can clear. */
   mappingId: string | null;
 };
 
 export type ImportResult = {
   dryRun: boolean;
-  /** False when there is no sheet set up, or it could not be read. */
   sheetRead: boolean;
   sheetLabel: string | null;
   epsListed: number;
-  /** EPs whose manager matched a member this term. */
   epsMatched: number;
-  /** EPs the sheet lists with no manager, which the sheet credits to nobody. */
   epsUnassigned: number;
-  /** EPs whose sheet credit was written; zero on a dry run. */
   assignmentsWritten: number;
   names: SheetManagerName[];
   issues: ImportIssue[];
@@ -58,13 +51,7 @@ export const NOT_SHARED_MESSAGE =
 
 type Fetcher = (url: string) => Promise<{ status: number; ok: boolean; text: () => Promise<string> }>;
 
-/**
- * Reads one tab as CSV, turning every way Google can refuse into a message an
- * admin can act on.
- *
- * Exported and fetch-injectable so the refusal paths are testable: an unshared
- * sheet must be a reported issue, never something that takes the page down.
- */
+// An unshared sheet must be a reported issue, never something that takes the page down.
 export async function readSheetCsv(
   spreadsheetId: string,
   tabName: string,
@@ -124,19 +111,6 @@ function emptyResult(dryRun: boolean, sheetLabel: string | null, issues: ImportI
   };
 }
 
-/**
- * Reads the MC's sign-up sheet (D-80): each EP's manager in MasterSheet is
- * looked up in the managers' directory -- the sheet's own tab, and the matches
- * an admin made on the console -- and the EP is credited to them. A name that
- * matches nobody, or more than one member, credits nobody and is reported.
- *
- * Dry run by default: the console's preview reads the sheet without writing.
- * The EP data job runs it for real after every sync.
- *
- * Only the EP ID, its manager, LC and team are read. The sheet also carries
- * names, dates of birth, emails, phone numbers and notes, none of which this
- * system may hold (D-42).
- */
 export async function importAssignments(
   actorId: bigint,
   { dryRun = true }: { dryRun?: boolean } = {}
@@ -185,8 +159,7 @@ export async function importAssignments(
   const directory = mergeDirectory(fromSheet, mapped);
   const mappingByKey = new Map(mapped.map((entry) => [directoryKey(entry), entry.id]));
 
-  // What the sheet says about each EP it lists: a member, or nobody. An EP whose
-  // manager cannot be matched is left out, so it keeps the credit it has.
+  // EPs whose manager can't be matched are left out, so they keep their existing credit.
   const desired = new Map<string, Set<string>>();
   const firstLine = new Map<string, { lineNumber: number; memberId: string | null }>();
   const conflicted = new Set<string>();
@@ -225,8 +198,7 @@ export async function importAssignments(
 
     const previous = firstLine.get(ep);
     if (previous) {
-      // The same EP on two lines under two different people is a disagreement
-      // in the MC's own records, not something to settle by reading order.
+      // Conflicting lines are not settled by reading order; neither is used.
       if (previous.memberId !== memberId && !conflicted.has(ep)) {
         conflicted.add(ep);
         issues.push({
@@ -253,8 +225,7 @@ export async function importAssignments(
 
     await db.assignmentSheet.update({ where: { id: sheet.id }, data: { lastImportAt: new Date() } });
 
-    // The sync imports on every run, so an unchanged system run is not worth
-    // an audit row; an admin's import always is.
+    // The sync imports every run, so only audit system runs that changed something.
     const changed = changes.created + changes.flagged + changes.cleared + changes.dropped;
     if (actorId !== SYSTEM_ACTOR || changed > 0) {
       await db.auditLog.create({

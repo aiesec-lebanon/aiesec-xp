@@ -30,8 +30,7 @@ import {
 } from "./assignments-table";
 
 export const dynamic = "force-dynamic";
-// The EP table's Refresh and every credit change are server actions, which run
-// under this page's limit.
+// The Refresh and credit-change server actions run under this page's limit.
 export const maxDuration = 300;
 
 type Credit = {
@@ -74,8 +73,6 @@ export default async function AssignmentsAdminPage() {
   const current = await currentWindow();
   const [preview, roles, credits, scorable, eventsJob, config] = await Promise.all([
     importAssignments(currentUser.id, { dryRun: true }),
-    // Only members this term can be credited -- never an EP, never a departed
-    // officer (D-71) -- each with the role they share under (D-73).
     inTermRoles(),
     db.epAssignment.findMany({
       select: {
@@ -100,10 +97,7 @@ export default async function AssignmentsAdminPage() {
   const scorableIds = scorable.map((row) => row.epPersonId);
   const expa = await expaEpDirectory({ floor: current.startsAt, alsoIds: scorableIds });
 
-  // Everyone who can appear in a chip, the picker or the sheet's name list:
-  // this term's members, the register's, anyone EXPA names who holds a member
-  // row, and whoever a sheet name matches. Named from every member, not just
-  // this term's, so a credit held by someone whose term ended still says who.
+  // Looked up across all members, not just this term's, so a past-term credit still has a name.
   const namedIds = new Set<string>([
     ...roles.keys(),
     ...credits.map((credit) => String(credit.memberId)),
@@ -117,7 +111,6 @@ export default async function AssignmentsAdminPage() {
     select: { id: true, fullName: true },
   });
   const memberName = new Map(named.map((member) => [String(member.id), personName(member.fullName)]));
-  // The saved character, so a member's portrait here is the one in the header (D-51).
   const avatars = await memberAvatars(named);
   const characterOf = (id: string) => avatars.get(BigInt(id))?.id ?? null;
 
@@ -140,7 +133,6 @@ export default async function AssignmentsAdminPage() {
       main,
       roleShares
     );
-    // A lone manager with no pick takes everything, which needs no label.
     const showShares = counting.length > 1 || main !== null;
 
     const chips: ManagerChip[] = held
@@ -160,8 +152,7 @@ export default async function AssignmentsAdminPage() {
         };
       });
 
-    // Managers EXPA names that the register does not hold yet: a member the
-    // next sync will credit, or someone who is not a member and never will be.
+    // Managers EXPA names that the register doesn't hold yet.
     for (const manager of context?.managers ?? []) {
       const id = String(manager.id);
       if (held.some((credit) => String(credit.memberId) === id)) continue;
@@ -185,13 +176,8 @@ export default async function AssignmentsAdminPage() {
     );
   }
 
-  // Everyone updated since the current window opened (D-76). An EP who scores
-  // in the window is always among them -- a stage never postdates its
-  // application's last action -- but they are added by id as well, so an EXPA
-  // outage never hides someone who is earning points. The window's end is not
-  // applied: GIS keeps only the latest update, so an EP updated inside the
-  // window and again after it would otherwise vanish. A member who has never
-  // applied is not an EP.
+  // Scorers are added by id too so an EXPA outage can't hide them. No end bound:
+  // GIS keeps only the latest update, so an EP updated again after the window would vanish.
   const listedIds = new Set<string>(scorableIds.map(String));
   for (const [id, context] of expa.byEp) {
     if (context.isMemberNotEp) continue;

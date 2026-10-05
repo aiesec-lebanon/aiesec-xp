@@ -1,20 +1,11 @@
-# EP data: sync passes 1-5b and the ledger rebuild (D-66). The work runs on
-# Vercel; this only calls the route, because Vercel's Hobby plan allows a cron
-# once a day and GitHub's floor is five minutes.
-#
-# The five-minute tick carries no policy of its own. The app decides whether it
-# has work -- only while hackathon mode is on in /admin/sync, or when the daily
-# run was missed -- so switching modes never means editing this file.
-#
-# Repository settings (Settings > Secrets and variables > Actions):
-#   secret   CRON_SECRET  the same value as the Vercel environment variable
-#   variable APP_URL      the production domain, e.g. https://aiesec-xp.vercel.app
+# Triggers the EP data sync on Vercel (Hobby crons run only daily). The app decides
+# whether the five-minute tick has work, so switching modes never edits this file.
+# Needs secret CRON_SECRET (same as Vercel) and variable APP_URL (production domain).
 name: Sync EP data
 
 on:
   schedule:
-    # Every five minutes, clear of the top of the hour, when GitHub's queue is
-    # busiest and scheduled runs are most often delayed.
+    # Offset from the top of the hour, when GitHub delays scheduled runs most.
     - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     # Daily at 00:45 UTC: 03:45 in Beirut in summer, 02:45 in winter.
     - cron: "45 0 * * *"
@@ -40,8 +31,7 @@ jobs:
           : "${APP_URL:?Set the APP_URL repository variable}"
           : "${CRON_SECRET:?Set the CRON_SECRET repository secret}"
 
-          # The daily schedule and a manual run are the daily run; the other
-          # schedule is the hackathon tick.
+          # A manual run counts as the daily run.
           cadence=hackathon
           if [ -z "$SCHEDULE" ] || [ "$SCHEDULE" = "45 0 * * *" ]; then cadence=daily; fi
 

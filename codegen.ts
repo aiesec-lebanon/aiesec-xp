@@ -1,8 +1,6 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
-// Generates against the committed SDL, not the live API, so CI needs no token
-// and a schema change is a deliberate commit. Refresh the SDL with
-// `npm run gis:schema`.
+// Uses the committed SDL so CI needs no token; refresh with `npm run gis:schema`.
 const config: CodegenConfig = {
   schema: "gis/schema.graphql",
   documents: "gis/operations.graphql",

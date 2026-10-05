@@ -24,7 +24,7 @@ function period(version: number, startsAt: string, endsAt: string | null, savedA
   return { startsAt: day(startsAt), endsAt: endsAt ? endOf(endsAt) : null, savedAt: day(savedAt), config: config(version) };
 }
 
-describe("weightsAt (D-85)", () => {
+describe("weightsAt", () => {
   it("uses the period a moment falls in", () => {
     const at = weightsAt([
       period(1, "2026-08-01", "2026-08-31", "2026-08-01"),

@@ -48,7 +48,6 @@ export default async function ScoringAdminPage() {
     if (role) held.set(role, (held.get(role) ?? 0) + 1);
   }
 
-  // Every role someone holds this term, and any role that already has a share.
   const rows: RoleRow[] = [...new Set([...held.keys(), ...Object.keys(shares)])]
     .sort((a, b) => seniority(a) - seniority(b) || a.localeCompare(b))
     .map((role) => ({ role, members: held.get(role) ?? 0, share: shares[role] ?? 0 }));

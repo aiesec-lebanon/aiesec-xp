@@ -6,15 +6,9 @@ import { CHARACTERS, characterById, characterFor, type CharacterDefinition } fro
 
 export type MemberAvatar = {
   character: CharacterDefinition;
-  /** False until the member has picked one for themselves. */
   chosen: boolean;
 };
 
-/**
- * The member's character, falling back to the one their name hashes to. The
- * fallback is why no screen is ever empty, and `chosen` is what the first-run
- * picker keys off.
- */
 export async function memberAvatar(memberId: bigint, fullName: string): Promise<MemberAvatar> {
   const row = await db.memberAvatar.findUnique({
     where: { memberId },
@@ -26,7 +20,6 @@ export async function memberAvatar(memberId: bigint, fullName: string): Promise<
     : { character: characterFor(fullName), chosen: false };
 }
 
-/** The characters of many members at once, for a leaderboard or a roster. */
 export async function memberAvatars(
   members: readonly { id: bigint; fullName: string }[],
 ): Promise<Map<bigint, CharacterDefinition>> {

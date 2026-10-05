@@ -33,9 +33,7 @@ const TRIGGER_LABEL: Record<SyncTrigger, string> = {
   MANUAL: "by an admin",
 };
 
-// A failed run stores which steps failed, as "step: detail; step: detail". The
-// detail is for whoever maintains the platform and stays in the logs; an admin
-// is told which part of the refresh stopped.
+// lastError is "step: detail; step: detail"; admins see only the step, details stay in logs.
 const STEP_LABEL: Record<string, string> = {
   applications: "reading applications from EXPA",
   managers: "reading EP managers from EXPA",
@@ -57,8 +55,7 @@ const CHIP = "rounded-full px-3 py-1 text-[11px] font-bold tracking-[0.05em]";
 function jobStatus(state: SyncJob | null, now: Date): JobStatus {
   if (!state?.lastStatus) return "never";
   if (state.lastStatus === "RUNNING") {
-    // A run the platform killed never records its outcome; its lease lapsing
-    // is how that shows.
+    // A killed run never records its outcome; only its lapsed lease shows it.
     return state.leaseUntil && state.leaseUntil > now ? "running" : "interrupted";
   }
   return state.lastStatus === "SUCCESS" ? "succeeded" : "failed";

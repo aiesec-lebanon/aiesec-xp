@@ -3,9 +3,7 @@ import "server-only";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
-// Prisma 7 takes its connection from a driver adapter rather than the schema.
-// DATABASE_URL is the transaction-mode pooler; migrations use DIRECT_URL and
-// are configured separately in prisma.config.ts.
+// DATABASE_URL is the transaction-mode pooler; migrations use DIRECT_URL via prisma.config.ts.
 function createClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {

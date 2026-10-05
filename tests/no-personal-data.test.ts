@@ -3,11 +3,6 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-// D-42, D-44. EP personal data lives in EXPA and only in EXPA, and this product
-// neither assigns EPs nor displays them. These tests read the schema and the GIS
-// operations as text, so a name column or a name selection fails here rather
-// than being noticed after it has already collected a few thousand rows.
-
 const root = resolve(__dirname, "..");
 const schema = readFileSync(resolve(root, "prisma/schema.prisma"), "utf8");
 const operations = readFileSync(resolve(root, "gis/operations.graphql"), "utf8");
@@ -48,7 +43,7 @@ describe("ExchangeEvent holds no EP personal data", () => {
     expect(body).toMatch(/epPersonId\s+BigInt/);
   });
 
-  it("carries only what scoring reads (D-44)", () => {
+  it("carries only what scoring reads", () => {
     for (const dropped of ["personHomeLcId", "opportunityHomeLcId", "gisManagerIds"]) {
       expect(body).not.toContain(dropped);
     }
@@ -68,7 +63,7 @@ describe("the sync query does not request what it must not store", () => {
   });
 });
 
-describe("the manager sync reads ids only (D-74)", () => {
+describe("the manager sync reads ids only", () => {
   const body = operationBody("EpManagers");
 
   it("selects no name for the EP or their managers", () => {
@@ -81,11 +76,11 @@ describe("the manager sync reads ids only (D-74)", () => {
 });
 
 describe("no operation reads EP data for display", () => {
-  it("has no EpDetails query: viewing EP data is EXPA's job (D-44)", () => {
+  it("has no EpDetails query: viewing EP data is EXPA's job", () => {
     expect(operations).not.toMatch(/query EpDetails/);
   });
 
-  it("has no EpDirectory query: assignment happens in the sheet, not here (D-44)", () => {
+  it("has no EpDirectory query: assignment happens in the sheet, not here", () => {
     expect(operations).not.toMatch(/query EpDirectory/);
   });
 });
@@ -93,7 +88,7 @@ describe("no operation reads EP data for display", () => {
 describe("the assignment register holds no EP personal data", () => {
   const body = modelBody("EpAssignment");
 
-  it("stores no EP name: the sheet supplies an id, so a name is never needed (O-08)", () => {
+  it("stores no EP name: the sheet supplies an id, so a name is never needed", () => {
     expect(body).not.toMatch(FORBIDDEN);
   });
 

@@ -47,27 +47,8 @@ export type GroupMember = {
 
 const SURPRISE_CLIPS = ["cheer", "cheer-2", "clap", "rally", "victory", "dance", "dance-silly", "dance-silly-2"];
 
-/**
- * Several bodies in one canvas, standing in a circle on one floor, a camera
- * orbiting around them.
- *
- * The group used to stand in a depth-staggered row in front of a fixed
- * camera (D-55) -- a stage a static viewer stands in front of. A circle asks
- * the opposite of the layout: nobody has a back row, everybody is close to
- * everybody else, and a camera that orbits is what makes it read as a circle
- * rather than a row seen from an angle (D-63). Reviewed first as a standalone
- * artifact before landing here, because the failure modes of several
- * independently wandering bodies -- walking through each other, spinning
- * the wrong way round a turn, jumping mid-stride -- are much cheaper to find
- * on a page that is not the shipped leaderboard.
- *
- * All the physics for every body -- position, facing, collision, who is
- * talking to whom, who is jumping -- is decided in one place (`Bodies`'
- * own frame, below) rather than independently per body, because collision
- * and conversation both need to see every position at once. Each body only
- * *reads* the result to drive its own node and its own React state; see the
- * comment on `Slot` in group-wander.ts for why the split runs this way round.
- */
+// Movement is decided centrally in `Bodies` (collision and conversation need every
+// position at once); each GroupBody only reads its slot.
 export function CharacterGroup({
   members,
   mood = "celebrate",
@@ -77,16 +58,8 @@ export function CharacterGroup({
   floorFraction = 0.12,
   eager = false,
 }: {
-  /** Order does not matter any more -- a circle has no best seat. */
   members: GroupMember[];
   mood?: CharacterMood;
-  /**
-   * Lets each body break from `mood` into dancing now and then, on its own
-   * independent timer, and adds the jump-in-place bursts that go with it.
-   * Everybody reacting on the same beat is as artificial as nobody reacting
-   * (D-54), and a group that all danced or jumped together would be the same
-   * fault at a different clip (D-62/D-63).
-   */
   flourish?: boolean;
   className?: string;
   heightFraction?: number;
@@ -154,11 +127,6 @@ function Bodies({
   const reduceMotion = useReduceMotion();
   const camera = useThree((state) => state.camera);
 
-  // One shared array, owned here and mutated only from this component's own
-  // frame and the two schedulers below -- every body reads its own entry
-  // (and its neighbours', for collision and conversation) but never writes
-  // one, which is what let those reads stay plain, ref-cheap lookups instead
-  // of needing their own state.
   const slots = useRefArray<Slot>(members.length, (index) => {
     const place = places[index]!;
     return makeSlot(place.x, place.z, place.angle + Math.PI);
@@ -175,12 +143,11 @@ function Bodies({
 
     for (let index = 0; index < list.length; index += 1) {
       const slot = list[index]!;
-      const inBeat = false; // beats are fire-and-forget from here; see GroupBody.
 
       if (slot.moveState === "seek") {
         tickSeek(slot, index, list, delta);
       } else {
-        tickStand(slot, list, delta, camera.position, inBeat);
+        tickStand(slot, list, delta, camera.position);
       }
       tickBounce(slot, delta, jump && slot.moveState === "stand");
     }
@@ -209,9 +176,6 @@ function Bodies({
   );
 }
 
-/** The camera. The wall, floor and horizon stay exactly where they are --
- * only this moves, which is what makes a ring of bodies actually read as a
- * circle rather than a row seen edge-on. */
 function OrbitingCamera({
   distance,
   lookY,
@@ -228,8 +192,7 @@ function OrbitingCamera({
   const seeded = useRef(false);
 
   useEffect(() => {
-    // A random starting angle, seeded once on mount -- reading `Math.random`
-    // during render is what this effect avoids.
+    // Seeded in an effect: Math.random during render is impure.
     angle.current = Math.random() * Math.PI * 2;
     seeded.current = true;
   }, []);
@@ -245,12 +208,6 @@ function OrbitingCamera({
   return <PerspectiveCamera ref={camera} makeDefault fov={42} near={0.1} far={60} />;
 }
 
-/**
- * One body: the shadow, a bounce group for the jump offset, and the model
- * itself. Reads its own entry in the shared `slots` every frame -- never
- * writes one, which is `Bodies`' job -- and owns its own Group node and its
- * own `mood`/`lock`/`beat` React state, which is what it writes.
- */
 function GroupBody({
   id,
   index,
@@ -286,7 +243,6 @@ function GroupBody({
     if (!node) return;
     node.position.set(place.x, 0, place.z);
     node.rotation.y = place.angle + Math.PI;
-    // Mount only: this component's own frame below owns both from here on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -301,11 +257,7 @@ function GroupBody({
 
     setLock(slot.lockWant);
 
-    // A beat can repeat the same clip two exchanges in a row ("agree" is a
-    // single clip), which a plain string can't tell apart from "still
-    // playing the last one" -- `beatToken` is what actually changed, and a
-    // one-frame null in between is what lets CharacterModel's own beat
-    // effect, which only fires on a *change*, re-fire the repeat.
+    // A one-frame null lets CharacterModel's change-only beat effect re-fire a repeated clip.
     if (slot.beatToken !== appliedBeatToken.current) {
       appliedBeatToken.current = slot.beatToken;
       pendingBeat.current = slot.beatWant;
@@ -343,7 +295,6 @@ function tickStand(
   slots: readonly Slot[],
   delta: number,
   cameraPos: { x: number; y: number; z: number },
-  inBeat: boolean,
 ) {
   if (slot.exchangeRole && slot.exchangePartner !== null) {
     const partner = slots[slot.exchangePartner];
@@ -358,7 +309,7 @@ function tickStand(
 
   if (slot.lockWant !== null) slot.lockWant = null;
 
-  if (!slot.exchangeRole && !inBeat) {
+  if (!slot.exchangeRole) {
     slot.standTimer -= delta;
     if (slot.standTimer <= 0) {
       if (Math.random() < WANDER_CHANCE) {
@@ -373,9 +324,6 @@ function tickStand(
 }
 
 function tickSeek(slot: Slot, index: number, slots: readonly Slot[], delta: number) {
-  // Meeting someone ends the walk on the spot, before anything else moves
-  // this frame -- a different animation, exactly as asked, never another
-  // walk into the body it just met.
   for (let i = 0; i < slots.length; i += 1) {
     if (i === index) continue;
     const other = slots[i]!;
@@ -415,10 +363,7 @@ function tickSeek(slot: Slot, index: number, slots: readonly Slot[], delta: numb
   const speedScale = clamp01(alignment) * clamp01(distance / DECEL_RADIUS);
   const speed = WALK_SPEED * speedScale;
 
-  // Turn-left/turn-right are decorative here, not the rotation authority:
-  // the body's actual heading is always the damped value above, so nothing
-  // about this clip ending or crossfading out can ever snap it back to a
-  // stale direction.
+  // Turn clips are cosmetic; heading always comes from the damped value above.
   slot.lockWant =
     alignment < TURN_ALIGN ? (angleDiff(slot.facing, desiredHeading) > 0 ? "turn-right" : "turn-left") : "walk";
 
@@ -428,9 +373,6 @@ function tickSeek(slot: Slot, index: number, slots: readonly Slot[], delta: numb
   slot.z = nz;
 }
 
-/** Jump-in-place: its own rare event, never while walking, eased in and out
- * so a burst starting or ending is never a pop. `wantsToJump` is only ever
- * true for a group that opted into flourishing -- a calm group never jumps. */
 function tickBounce(slot: Slot, delta: number, wantsToJump: boolean) {
   if (wantsToJump) {
     slot.nextJump -= delta;
@@ -454,13 +396,7 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-/**
- * A soft blob under each body.
- *
- * There is no ground plane in this scene to catch a real shadow, and a single
- * DOM ellipse under the canvas cannot ground bodies standing at different
- * depths -- it lands under the nearest one and leaves the rest floating.
- */
+// No ground plane to catch real shadows, so each body gets a blob.
 function useShadowTexture(): CanvasTexture {
   return useMemo(() => {
     const size = 128;

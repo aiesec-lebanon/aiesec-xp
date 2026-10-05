@@ -9,13 +9,7 @@ export type GisIdentity = NonNullable<CurrentPersonQuery["currentPerson"]>;
 
 const IDENTITY_TIMEOUT_MS = 10_000;
 
-/**
- * The single call made with the user's own OAuth token. The token arrives as an
- * argument, is used here, and is never returned, stored or logged.
- *
- * Built on the same generated SDK as the service-token client, so even this
- * one-off path can only issue operations from gis/operations.graphql.
- */
+// The only call made with the user's own OAuth token; it is never returned, stored or logged.
 export async function fetchIdentity(userAccessToken: string): Promise<GisIdentity> {
   const client = new GraphQLClient(gisEnv().GIS_GRAPHQL_URL, {
     headers: { Authorization: userAccessToken },

@@ -1,12 +1,6 @@
 import { indexAssignments, type Assignment } from "@/lib/scoring/attribution";
 import { creditShares, type RoleShares } from "@/lib/scoring/shares";
 
-// The scoring engine. Pure: no database, no network, no clock. Everything it
-// needs arrives as an argument, so the same inputs always produce the same
-// ledger and a replay is a function call rather than a procedure.
-//
-// This is the part that must never be wrong (Architecture.md 7).
-
 export type FunnelEventType = "APL" | "APD" | "RE" | "APD_BROKEN" | "RE_BROKEN";
 export type ScoredStageValue = "APL" | "APD" | "RE";
 export type DirectionValue = "OUTGOING" | "INCOMING";
@@ -34,10 +28,8 @@ export type ScoringConfig = {
   roleShares: RoleShares;
 };
 
-/** The weights a moment is scored with: each period keeps its own (D-85). */
 export type ConfigAt = (at: Date) => ScoringConfig;
 
-/** One set of weights for every moment. */
 export function constantConfig(config: ScoringConfig): ConfigAt {
   return () => config;
 }
@@ -55,13 +47,11 @@ export type RewardDefinition = {
 export type LedgerEntry = {
   memberId: bigint;
   exchangeEventId: string;
-  /** What the entry pays for: the event's own stage, or the stage a break takes back. */
+  // For a break, the stage it takes back.
   stage: ScoredStageValue;
   configVersion: number;
   points: number;
-  /** This member's fraction of the event: 1 for the main or a sole manager, else their role's % (D-83). */
   share: number;
-  /** The same fraction of the stage's count, negative on a break. */
   countDelta: number;
   occurredAt: Date;
 };
@@ -82,7 +72,6 @@ export type Anomaly = {
 export type ScoreInput = {
   events: readonly ScorableEvent[];
   assignments: readonly Assignment[];
-  /** EP id to the main manager an admin picked, member or not (D-83). */
   mains?: ReadonlyMap<string, bigint>;
   configAt: ConfigAt;
   window: Window;
@@ -108,7 +97,7 @@ const REVERSES: Partial<Record<FunnelEventType, ScoredStageValue>> = {
 
 const STAGE_ORDER: Record<ScoredStageValue, number> = { APL: 0, APD: 1, RE: 2 };
 
-/** `config` is the stage's own weights, which a break takes back unchanged (D-85). */
+// A break takes back the stage using the stage's own weights, not the break's.
 type Credit = { stage: ScoredStageValue; at: Date; source: ScorableEvent; sign: 1 | -1; config: ScoringConfig };
 
 function inWindow(occurredAt: Date, window: Window): boolean {
@@ -127,10 +116,7 @@ function basePoints(stage: ScoredStageValue, config: ScoringConfig): number {
   }
 }
 
-/**
- * Rounded to four places, matching the ledger column. Floating point would
- * otherwise let 0.1 + 0.2 reach a member's visible total.
- */
+// Four places, matching the ledger column, so float noise never reaches a visible total.
 function round(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
@@ -150,34 +136,20 @@ function groupByApplication(events: readonly ScorableEvent[]): ScorableEvent[][]
   return [...byApplication.values()];
 }
 
-/**
- * Every event of an application carries its current status. The APL row's is
- * preferred because it is the one the status refresh always kept current,
- * which matters for rows written before every event was rewritten (D-76).
- */
+// The APL row's status is preferred: older rows may only have it kept current there.
 function applicationStatus(application: readonly ScorableEvent[]): string | null {
   const apl = application.find((event) => event.eventType === "APL" && event.applicationStatus);
   return (apl ?? application.find((event) => event.applicationStatus))?.applicationStatus ?? null;
 }
 
-/**
- * A withdrawn or rejected application never counted, whenever that happened
- * (D-41). Evaluated against current status rather than as a dated reversal,
- * because GIS dates neither transition in a way that can be filtered.
- */
+// Checked against current status, not as a dated reversal: GIS doesn't date withdrawal/rejection usably.
 function isReversedApl(status: string | null, config: ScoringConfig): boolean {
   if (!config.reverseApl) return false;
   const normalised = status?.trim().toLowerCase() ?? "";
   return config.aplReversingStatuses.some((value) => value.trim().toLowerCase() === normalised);
 }
 
-/**
- * What one application earns inside the window: each of its APL, APD and RE
- * whose own date falls inside it, and nothing else (D-75). A stage from before
- * the window earned its points in the window it happened in, so a later stage
- * does not bring it back -- and a status past realization (finished,
- * completed) is not a stage at all.
- */
+// Only stages whose own date is in the window: earlier stages earned in their own window.
 function stageCredits(
   application: readonly ScorableEvent[],
   window: Window,
@@ -196,15 +168,8 @@ function stageCredits(
     .sort((a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage]);
 }
 
-/**
- * A break inside the window takes back the stage it breaks, if that stage was
- * credited inside the window before it (D-26) -- a break of work the window
- * never paid for reduces nothing, so a visible score cannot fall for it.
- *
- * A break the stage has since overtaken is ignored (D-28): approve, break,
- * re-approve scores as approved. Sync already skips such a break at ingest;
- * this covers one ingested before the re-approval happened.
- */
+// A break only reverses a stage credited in this window, so a score can't fall for unpaid work.
+// Overtaken breaks are skipped here too, for ones ingested before the re-approval happened.
 function breakReversals(
   application: readonly ScorableEvent[],
   credits: readonly Credit[],
@@ -268,8 +233,7 @@ export function score({ events, assignments, mains = new Map(), configAt, window
       const { config } = credit;
       const productWeight = config.productWeights[String(programmeId)];
       if (productWeight === undefined) {
-        // Never assumed to be 1: an invented weight is a wrong score that looks
-        // right (D-30).
+        // Never assume 1: an invented weight is a wrong score that looks right.
         report(credit.source, "UNKNOWN_PROGRAMME_WEIGHT", `Programme ${programmeId} has no configured weight`);
         continue;
       }
@@ -277,8 +241,6 @@ export function score({ events, assignments, mains = new Map(), configAt, window
       const directionWeight = config.directionWeights[direction] ?? 0;
       const magnitude = basePoints(credit.stage, config) * productWeight * directionWeight;
       for (const [member, share] of creditShares(creditees, main, config.roleShares)) {
-        // A role with no percentage takes nothing, and an entry for nothing
-        // would only show up in a trail as a zero.
         if (share === 0) continue;
         ledger.push({
           memberId: BigInt(member),
@@ -299,12 +261,7 @@ export function score({ events, assignments, mains = new Map(), configAt, window
 
 export type OfficeFunnelCounts = Record<number, { APL: number; APD: number; RE: number }>;
 
-/**
- * Points for a whole office's raw AIESEC-analytics funnel counts (D-56): LC
- * ranking doesn't need per-EP attribution, so this skips assignment, breaks
- * and APL reversal and applies the same base/product/direction weights
- * `score()` uses per event, directly to an aggregate count per programme.
- */
+// Aggregate analytics counts need no attribution, breaks or APL reversal; same weights as score().
 export function officePoints(
   counts: OfficeFunnelCounts,
   config: Pick<ScoringConfig, "aplPoints" | "apdPoints" | "rePoints" | "productWeights" | "directionWeights">,
@@ -315,7 +272,7 @@ export function officePoints(
 
   for (const [programmeId, stage] of Object.entries(counts)) {
     const productWeight = config.productWeights[programmeId];
-    if (productWeight === undefined) continue; // D-30: unconfigured weight scores zero
+    if (productWeight === undefined) continue;
 
     points +=
       config.aplPoints * productWeight * directionWeight * stage.APL +
@@ -342,10 +299,7 @@ function add(totals: MemberTotals, entry: LedgerEntry): void {
   if (entry.stage === "RE") totals.reCount = roundShare(totals.reCount + entry.countDelta);
 }
 
-/**
- * Counts are net of breaks (D-10), which is what lets a threshold be lost again
- * rather than only reached.
- */
+// Counts are net of breaks, so a threshold can be lost again.
 export function totalsByMember(ledger: readonly LedgerEntry[]): Map<string, MemberTotals> {
   const totals = new Map<string, MemberTotals>();
   for (const entry of ledger) {
@@ -370,13 +324,7 @@ function measure(totals: MemberTotals, kind: ThresholdKind): number {
   }
 }
 
-/**
- * A grant is derived, never patched: a replay that no longer supports one simply
- * does not emit it, and the caller deletes what it no longer sees (D-34).
- *
- * earnedAt is the moment the threshold was actually crossed, found by walking
- * the member's entries in order, so the date survives a replay unchanged.
- */
+// earnedAt is when the threshold was actually crossed, so it survives a replay unchanged.
 export function evaluateRewards(
   ledger: readonly LedgerEntry[],
   rewards: readonly RewardDefinition[]

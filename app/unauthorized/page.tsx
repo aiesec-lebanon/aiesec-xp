@@ -7,8 +7,7 @@ import { Rise } from "@/components/studio/motion";
 export const dynamic = "force-dynamic";
 
 export default async function UnauthorizedPage() {
-  // Reached only with a valid session, so there is a name to greet -- but the
-  // page has to render for a visitor whose session has since gone as well.
+  // The session may have expired since the redirect here.
   const user = await currentUser();
   const name = user?.fullName ?? "Visitor";
 
@@ -18,9 +17,6 @@ export default async function UnauthorizedPage() {
         <BrandMark size={28} type={18} />
       </div>
 
-      {/* The body stands behind the sheet, so only its head and shoulders clear
-          the top edge -- the whole point of the composition is that the member
-          is half in the room. */}
       <div className="pointer-events-none absolute inset-x-0 top-40 z-0 flex justify-center">
         <Character name={name} height={480} idle="squash" />
       </div>

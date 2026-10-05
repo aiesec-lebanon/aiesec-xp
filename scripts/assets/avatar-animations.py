@@ -1,19 +1,4 @@
-# Bakes the Mixamo clips into one shared animation file (D-53).
-#
-#   blender -b D:\Blender\characters_working.blend -P scripts/assets/avatar-animations.py -- <repo-root> <fbx-dir>
-#
-# The clips are retargeted onto one of the characters' own rigs first. A glTF
-# rotation channel replaces a node's local rotation outright, so a clip is only
-# valid against the rest pose it was authored on -- and Mixamo's download rig
-# rests differently from the rigs in the .blend, which collapsed every body that
-# played one. All four characters share a rest, so retargeting once is enough.
-#
-# One file, not one per character: every clip is a set of bone rotations on the
-# Mixamo skeleton, and all four characters carry that skeleton, so the same
-# animation drives any of them. Juno's rig is the 33-bone subset -- the same
-# names without fingers -- so her finger tracks simply find no target.
-#
-# The output carries the skeleton and the clips and no mesh at all.
+# blender -b <characters_working.blend> -P scripts/assets/avatar-animations.py -- <repo-root> <fbx-dir>
 
 import glob
 import json
@@ -23,7 +8,6 @@ import tempfile
 
 import bpy
 
-# Named for what they are used for, not what Mixamo called them.
 CLIPS = {
     # Ambient
     "Breathing Idle": "idle-breathing",
@@ -33,7 +17,7 @@ CLIPS = {
     "Arm Stretching Idle": "idle-stretch",
     "Neck Stretching": "idle-neck-stretch",
     "Bored": "idle-bored",
-    # Transitions -- what makes a walk start and stop instead of snapping
+    # Transitions
     "Start Walking": "walk-start",
     "Walking": "walk",
     "Stop Walking": "walk-stop",
@@ -55,15 +39,11 @@ CLIPS = {
     "Hip Hop Dancing": "dance",
     "Silly Dancing": "dance-silly",
     "Silly Dancing (1)": "dance-silly-2",
-    # Ambient idle, re-added to the pool at the product's request (D-59). Each
-    # puts the body somewhere the set has no prop for -- a chair for the two
-    # sitting idles, a fighting stance for the warrior one -- which is why they
-    # were left out originally; kept in now that the call has been made deliberately.
+    # Ambient idles that imply props the set does not have
     "Sitting Idle": "idle-sitting",
     "Sitting Idle (1)": "idle-sitting-2",
     "Warrior Idle": "idle-warrior",
-    # A one-shot, not a pool member: played on save in the character lab (D-59),
-    # not cycled while a body just stands there.
+    # One-shot played on save, not cycled
     "Catwalk Idle Twist R": "idle-catwalk",
     # Between two bodies standing near each other
     "Talking": "talk",
@@ -75,32 +55,21 @@ CLIPS = {
     "Telling A Secret": "secret",
 }
 
-# Superseded or duplicate clips, left out entirely. All are still in the
-# download folder if that judgement is ever revisited.
+# Superseded or duplicate clips.
 SKIP = {
-    # Superseded by the straight "Walking" cycle: the swap walks in a straight
-    # line, and a turning cycle veers against it.
+    # A turning cycle veers against the straight-line walk.
     "Walking Left Turn",
     "Walking Right Turn",
-    # Near-duplicate of "Look Around Idle" already in the table.
     "Looking Around Idle",
-    # A second, unnamed arm-stretch download alongside "Arm Stretching Idle",
-    # which is already the one in the table. Left out rather than guessed at --
-    # say which one should replace it, if either should.
     "Arm Stretching",
-    # A fighting stance, superseded once "Warrior Idle" -- the clip the name
-    # actually asks for -- was in the download folder.
     "Offensive Idle",
     "Jumping",
 }
 
-# Any of the four would do -- they share a rest pose, and only rotation is
-# exported, so this rig's scale and position never reach the output.
+# Any rig works: all share a rest pose and only rotation is exported.
 REFERENCE_RIG = "avatar-hoodie-cargo-rig"
 
-# Two files rather than one. Everything that stands on a screen needs the core;
-# only a few surfaces need a body to talk, point or dance, and carrying those
-# everywhere put 1.3MB on every page that shows a character.
+# Split so pages that only need the core clips do not download the social ones.
 LIBRARIES = {
     "avatar-animations": [
         "idle-breathing", "idle-happy", "idle-happy-2", "idle-look-around", "idle-stretch",
@@ -144,19 +113,7 @@ def remove_fcurve(action, fcurve):
 
 
 def trim(action):
-    """Strip every location channel, leaving rotation only.
-
-    Mixamo writes bone translations in its own units: on these clips the hips
-    travel up to 12 units, on a character that is 1.5 units tall. Blender hides
-    it because the armature it was imported onto carries a compensating scale,
-    but exported to glTF and bound to our skeletons it throws the hips eight body
-    heights away and the mesh with it.
-
-    Rotation-only is the usual way to share one clip across characters of
-    different proportions anyway, and these are all in-place clips, so the only
-    thing lost is the vertical bob -- which the stage puts back itself for the
-    jump, where it actually reads.
-    """
+    """Mixamo translations are in its own units and throw the hips far off once bound to our skeletons."""
     dropped = 0
     for fcurve in list(action_fcurves(action)):
         if fcurve.data_path.endswith("location"):
@@ -166,13 +123,7 @@ def trim(action):
 
 
 def decimate(action, tolerance=0.01):
-    """Drop keyframes a straight line already accounts for.
-
-    Mixamo keys every bone on every frame. Most of that is a slow curve sampled
-    far finer than anyone can see, and the file is served over mobile data, so
-    a key is kept only where dropping it would visibly bend the curve. The
-    tolerance is in quaternion units, where 0.01 is about half a degree.
-    """
+    """Drop keys a straight line already accounts for; tolerance 0.01 is about half a degree."""
     removed = 0
     for fcurve in action_fcurves(action):
         points = fcurve.keyframe_points
@@ -201,16 +152,8 @@ def decimate(action, tolerance=0.01):
     return removed
 
 
-
-
 def retarget(target, source, frame_start, frame_end):
-    """Copy the clip onto the character's rig, matching world orientation.
-
-    Copy Rotation rather than Copy Transforms: the two skeletons are the same
-    hierarchy at very different scales, so matching world *positions* would tear
-    the limbs apart, while matching world *orientations* is exactly what a
-    rotation-only clip needs.
-    """
+    """Copy Rotation, not Copy Transforms: the skeletons differ in scale, so matching positions tears limbs."""
     for bone in target.pose.bones:
         if bone.name not in source.pose.bones:
             continue
@@ -244,12 +187,7 @@ def retarget(target, source, frame_start, frame_end):
 
 
 def write_library(source, path, names):
-    """Copy the exported file, keeping only the named clips.
-
-    Splitting here rather than exporting twice keeps one retarget pass: the
-    accessors the dropped clips referenced are left orphaned, and
-    `npm run assets:models` prunes them.
-    """
+    """Orphaned accessors left behind are pruned by `npm run assets:models`."""
     with open(source, "rb") as handle:
         blob = handle.read()
 
@@ -270,14 +208,7 @@ def write_library(source, path, names):
 
 
 def rotation_only(path):
-    """Delete every translation and scale channel from the exported file.
-
-    Dropping the fcurves is not enough: the exporter writes a TRS channel for
-    each animated bone whatever the action holds, and a zeroed translation is
-    worse than a wrong one -- it overrides the character's own rest offsets and
-    drops the hips to the parent origin. The orphaned accessors left behind are
-    pruned by `npm run assets:models`.
-    """
+    """The exporter writes TRS channels regardless of the action; a zeroed translation overrides rest offsets."""
     with open(path, "rb") as handle:
         blob = handle.read()
 
@@ -301,8 +232,7 @@ def rotation_only(path):
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    # Absolute: a bare "." resolves against Blender's own working directory,
-    # not the shell's, and would otherwise write the libraries onto C:\.
+    # A relative path resolves against Blender's working directory, not the shell's.
     repo_root = os.path.abspath(argv[0] if argv else os.getcwd())
     fbx_dir = argv[1] if len(argv) > 1 else r"D:\Blender\mixamo\download"
 
@@ -354,8 +284,7 @@ def main():
     if not report["clips"]:
         raise RuntimeError("no clips were retargeted")
 
-    # ACTIONS mode exports every action in the file, and the .blend carries a
-    # bindpose action per character that nothing should ship.
+    # ACTIONS mode exports every action, including the .blend's bindpose actions.
     wanted = {clip["name"] for clip in report["clips"]}
     for action in list(bpy.data.actions):
         if action.name not in wanted:

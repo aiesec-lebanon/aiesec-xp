@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { contentSecurityPolicy } from "@/lib/security/csp";
 
-// Architecture.md 11 requires the policy; the 3D stack requires specific
-// allowances inside it. Both halves are asserted here because the failure mode
-// is silent and late: Rapier and every Draco-compressed model work in a
-// development build with 'unsafe-eval' and then break in production.
-
 function directive(policy: string, name: string): string {
   const found = policy.split("; ").find((part) => part.startsWith(`${name} `));
   if (!found) throw new Error(`no ${name} directive in policy`);

@@ -12,8 +12,8 @@ const { issueSession, readSession } = await import("@/lib/auth/session");
 
 describe("session cookie", () => {
   it("round-trips the person id", () => {
-    const { value } = issueSession(6199568n);
-    expect(readSession(value)?.sub).toBe("6199568");
+    const { value } = issueSession(2000005n);
+    expect(readSession(value)?.sub).toBe("2000005");
   });
 
   it("rejects a tampered payload", () => {

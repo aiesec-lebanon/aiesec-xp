@@ -11,8 +11,6 @@ export type WindowFormDefaults = {
   isDefault: boolean;
 };
 
-/** What the admin form shows: the active window, or the current month if the
- * admin has never set one. */
 export async function activeWindowOrDefault(): Promise<WindowFormDefaults> {
   const window = await db.displayWindow.findFirst({ where: { isActive: true } });
   if (window) {

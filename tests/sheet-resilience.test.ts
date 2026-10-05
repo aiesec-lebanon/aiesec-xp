@@ -6,9 +6,6 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 
 const { readSheetCsv, NOT_SHARED_MESSAGE } = await import("@/lib/import/run-import");
 
-// An unreadable sign-up sheet has to be a reported issue an admin can act on,
-// never something that takes the admin page or the sync down.
-
 function respond(status: number, body: string) {
   return async () => ({ status, ok: status >= 200 && status < 300, text: async () => body });
 }
@@ -36,20 +33,17 @@ describe("an unshared sheet", () => {
   });
 
   it("still reads a sheet that is shared", async () => {
-    const csv = '"Responsible Member","EP ID"\n"Sirine","6023224"';
+    const csv = '"Responsible Member","EP ID"\n"Alex","1000001"';
     await expect(readSheetCsv("id", "MasterSheet", respond(200, csv))).resolves.toBe(csv);
   });
 
   it("does not mistake a leading blank line for HTML", async () => {
-    const csv = '\n"Responsible Member","EP ID"\n"Sirine","1"';
+    const csv = '\n"Responsible Member","EP ID"\n"Alex","1"';
     await expect(readSheetCsv("id", "MasterSheet", respond(200, csv))).resolves.toContain("EP ID");
   });
 });
 
 describe("the import loop's contract", () => {
-  // importAssignments records a read failure as an issue. These assert the shape
-  // that behaviour depends on: a failure is a thrown Error carrying a message
-  // worth showing, so the console can show it instead of failing the page.
   it("throws an Error, so the caller can record its message as an issue", async () => {
     const error = await readSheetCsv("id", "MasterSheet", respond(401, "")).catch((e) => e);
     expect(error).toBeInstanceOf(Error);

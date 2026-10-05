@@ -1,10 +1,5 @@
 import "server-only";
 
-// Every log line passes through redaction. The service token has entity-wide
-// read access to AIESEC data (Architecture.md 4.3), so a single leaked log line
-// is a disclosure, and an error path is exactly where a raw request object tends
-// to get logged by accident.
-
 const SENSITIVE_KEY = /token|secret|password|authorization|cookie|credential/i;
 const REDACTED = "[redacted]";
 
@@ -26,8 +21,7 @@ export function redact(value: unknown, seen = new WeakSet<object>()): unknown {
 
   if (value === null || typeof value !== "object") return value;
 
-  // A cyclic object would otherwise recurse forever; request and error objects
-  // routinely contain cycles.
+  // Request and error objects routinely contain cycles.
   if (seen.has(value)) return "[circular]";
   seen.add(value);
 

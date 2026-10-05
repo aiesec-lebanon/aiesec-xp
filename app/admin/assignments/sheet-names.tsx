@@ -46,7 +46,6 @@ const SECONDARY =
 const QUIET =
   "whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold text-apl-ink transition-colors hover:bg-apl-wash disabled:opacity-40";
 
-/** Every EP manager name the sign-up sheet uses, and who each one is. */
 export function SheetNames({ names, members }: { names: SheetName[]; members: SearchOption[] }) {
   const [showMatched, setShowMatched] = useState(false);
   const open = names.filter((name) => name.status !== "matched");

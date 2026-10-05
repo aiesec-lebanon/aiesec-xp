@@ -12,21 +12,17 @@ import {
   type DirectoryEntry,
 } from "@/lib/import/sheet-parser";
 
-// The MC sheet's MasterSheet header, as exported. Most of these columns are
-// sign-up form data this system must never hold.
+// Most of these columns are sign-up form data this system must never hold.
 const HEADER =
   '"Timestamp","EP ID","Full Name","DOB","Email","Phone","Nationalities","Languages",' +
   '"University","Major","Education Level","Selected Programs","LC Assigned To",' +
   '"Function Assigned to","Exchange Sheet ID","EP Manager","Additional Notes"';
 
-// Synthetic. The shape mirrors a real export -- the same columns, and a
-// comma-bearing Languages value -- but no real EP's data is used as a fixture:
-// a test file is committed, and committing someone's date of birth to prove a
-// parser ignores it would be the exact failure the parser exists to prevent.
+// Synthetic: never commit a real EP's data as a fixture.
 const ROW =
-  '"2026-03-03T19:53:58.138Z","6023224","Test Person","1990-01-01",' +
+  '"2026-03-03T19:53:58.138Z","1000001","Test Person","1990-01-01",' +
   '"test.person@example.invalid","+96100000000","testland","alpha,beta,gamma",' +
-  '"Other","testing","bachelor_ongoing","7","AUB","OGX","x-1","Sirine","called twice"';
+  '"Other","testing","bachelor_ongoing","7","AUB","OGX","x-1","Alex","called twice"';
 
 const TAB = "MasterSheet";
 
@@ -58,15 +54,15 @@ describe("parseCsv", () => {
   });
 });
 
-describe("parseSignups (D-80)", () => {
+describe("parseSignups", () => {
   it("reads the EP, its manager, LC and team", () => {
     const parsed = parseSignups(`${HEADER}\n${ROW}`, TAB);
     expect(parsed.rows).toEqual([
-      { lineNumber: 2, epPersonId: 6023224n, managerLabel: "Sirine", lc: "AUB", team: "OGX" },
+      { lineNumber: 2, epPersonId: 1000001n, managerLabel: "Alex", lc: "AUB", team: "OGX" },
     ]);
   });
 
-  it("carries no sign-up form data into its output at all (D-42)", () => {
+  it("carries no sign-up form data into its output at all", () => {
     const serialised = JSON.stringify(parseSignups(`${HEADER}\n${ROW}`, TAB), (_k, v) =>
       typeof v === "bigint" ? String(v) : v
     );
@@ -85,30 +81,30 @@ describe("parseSignups (D-80)", () => {
   });
 
   it("locates columns by header, not position", () => {
-    const moved = '"EP Manager","EP ID"\n"Sirine","6023224"';
-    expect(parseSignups(moved, TAB).rows[0]).toMatchObject({ managerLabel: "Sirine", epPersonId: 6023224n });
+    const moved = '"EP Manager","EP ID"\n"Alex","1000001"';
+    expect(parseSignups(moved, TAB).rows[0]).toMatchObject({ managerLabel: "Alex", epPersonId: 1000001n });
   });
 
   it("keeps an EP with no manager, which the sheet credits to nobody", () => {
-    const parsed = parseSignups('"EP ID","EP Manager"\n"6023224",""', TAB);
+    const parsed = parseSignups('"EP ID","EP Manager"\n"1000001",""', TAB);
     expect(parsed.rows[0]).toMatchObject({ managerLabel: "", lc: "", team: "" });
     expect(parsed.problems).toHaveLength(0);
   });
 
   it("recognises another tab, which Google returns for a tab name it does not have", () => {
-    // Measured: an unknown tab name answers 200 with the first tab's rows.
-    const otherTab = '"Timestamp","EP ID","Full Name","LC"\n"x","6023224","Test Person","AUB"';
+    // Google answers an unknown tab name with 200 and the first tab's rows.
+    const otherTab = '"Timestamp","EP ID","Full Name","LC"\n"x","1000001","Test Person","AUB"';
     expect(() => parseSignups(otherTab, TAB)).toThrow(/"EP Manager"/);
   });
 
   it("reports an EP ID that is not a number instead of importing it", () => {
-    const parsed = parseSignups('"EP ID","EP Manager"\n"not-a-number","Sirine"', TAB);
+    const parsed = parseSignups('"EP ID","EP Manager"\n"not-a-number","Alex"', TAB);
     expect(parsed.rows).toHaveLength(0);
     expect(parsed.problems[0].reason).toBe("INVALID_EP_ID");
   });
 
   it("reports a row with no EP ID", () => {
-    const parsed = parseSignups('"EP ID","EP Manager"\n"","Sirine"', TAB);
+    const parsed = parseSignups('"EP ID","EP Manager"\n"","Alex"', TAB);
     expect(parsed.problems[0].reason).toBe("MISSING_EP_ID");
   });
 
@@ -130,23 +126,23 @@ describe("parseSignups (D-80)", () => {
 
 describe("normaliseLabel", () => {
   it("ignores case, accents and spacing", () => {
-    expect(normaliseLabel("  Léa   N ")).toBe(normaliseLabel("lea n"));
+    expect(normaliseLabel("  Zoé   T ")).toBe(normaliseLabel("zoe t"));
   });
 
   it("keeps an initial, which is what tells two people apart", () => {
-    expect(normaliseLabel("Ahmad M")).not.toBe(normaliseLabel("Ahmad K"));
+    expect(normaliseLabel("Jordan M")).not.toBe(normaliseLabel("Jordan K"));
   });
 });
 
 // Sheet7 as the MC keeps it: A = LC, B = Team, C = EP Manager Name, D = EXPA ID.
 const DIRECTORY =
-  '"LC","Team","EP Manager Name","EXPA ID"\n"AUB","OGX","Sirine","5663710"\n"LAU","MOGX","Ahmad M","5194055"';
+  '"LC","Team","EP Manager Name","EXPA ID"\n"AUB","OGX","Alex","2000001"\n"LAU","MOGX","Jordan M","2000002"';
 
-describe("parseDirectory (D-80)", () => {
+describe("parseDirectory", () => {
   it("reads each manager's LC, team, name and EXPA ID", () => {
     expect(parseDirectory(DIRECTORY, "Sheet7").entries).toEqual([
-      { name: "Sirine", lc: "AUB", team: "OGX", memberId: 5663710n, source: "SHEET" },
-      { name: "Ahmad M", lc: "LAU", team: "MOGX", memberId: 5194055n, source: "SHEET" },
+      { name: "Alex", lc: "AUB", team: "OGX", memberId: 2000001n, source: "SHEET" },
+      { name: "Jordan M", lc: "LAU", team: "MOGX", memberId: 2000002n, source: "SHEET" },
     ]);
   });
 
@@ -159,13 +155,13 @@ describe("parseDirectory (D-80)", () => {
   });
 
   it("lists managers with no EXPA ID yet", () => {
-    const directory = parseDirectory('"EP Manager Name","EXPA ID"\n"Sirine",""\n"Maram","5790695"', "Sheet7");
-    expect(directory.missingIds).toEqual(["Sirine"]);
+    const directory = parseDirectory('"EP Manager Name","EXPA ID"\n"Alex",""\n"Sam","2000003"', "Sheet7");
+    expect(directory.missingIds).toEqual(["Alex"]);
     expect(directory.entries).toHaveLength(1);
   });
 
   it("reports an EXPA ID that is not a number", () => {
-    const directory = parseDirectory('"EP Manager Name","EXPA ID"\n"Ali","n/a"', "Sheet7");
+    const directory = parseDirectory('"EP Manager Name","EXPA ID"\n"Robin","n/a"', "Sheet7");
     expect(directory.invalid[0].lineNumber).toBe(2);
     expect(directory.entries).toHaveLength(0);
   });
@@ -182,13 +178,13 @@ describe("parseManagerCsv", () => {
   });
 
   it("finds columns by header, in any order", () => {
-    expect(parseManagerCsv("EXPA ID,EP Manager Name\r\n5663710,Sirine\r\n").entries).toEqual([
-      { name: "Sirine", lc: "", team: "", memberId: 5663710n, source: "SHEET" },
+    expect(parseManagerCsv("EXPA ID,EP Manager Name\r\n2000001,Alex\r\n").entries).toEqual([
+      { name: "Alex", lc: "", team: "", memberId: 2000001n, source: "SHEET" },
     ]);
   });
 
   it("explains the expected columns when they are missing", () => {
-    expect(() => parseManagerCsv("Name,ID\nSirine,5663710")).toThrow(/"EP Manager Name" and "EXPA ID"/);
+    expect(() => parseManagerCsv("Name,ID\nAlex,2000001")).toThrow(/"EP Manager Name" and "EXPA ID"/);
   });
 });
 
@@ -196,12 +192,12 @@ function entry(name: string, lc: string, team: string, memberId: bigint, source:
   return { name, lc, team, memberId, source };
 }
 
-describe("resolveManager (D-80)", () => {
+describe("resolveManager", () => {
   const row = (managerLabel: string, lc = "", team = "") => ({ managerLabel, lc, team });
 
   it("matches a name listed once, whatever its LC and team", () => {
-    const directory = [entry("Sirine", "AUB", "OGX", 1n)];
-    expect(resolveManager(directory, row("sirine", "LAU", "MOGX"))).toEqual({
+    const directory = [entry("Alex", "AUB", "OGX", 1n)];
+    expect(resolveManager(directory, row("alex", "LAU", "MOGX"))).toEqual({
       kind: "matched",
       memberId: 1n,
       source: "SHEET",
@@ -209,51 +205,51 @@ describe("resolveManager (D-80)", () => {
   });
 
   it("uses the LC when the same name belongs to two members", () => {
-    const directory = [entry("Ali", "AUB", "OGX", 1n), entry("Ali", "LAU", "OGX", 2n)];
-    expect(resolveManager(directory, row("Ali", "LAU", "OGX"))).toMatchObject({ memberId: 2n });
+    const directory = [entry("Robin", "AUB", "OGX", 1n), entry("Robin", "LAU", "OGX", 2n)];
+    expect(resolveManager(directory, row("Robin", "LAU", "OGX"))).toMatchObject({ memberId: 2n });
   });
 
   it("then the team, when the LC is shared too", () => {
-    const directory = [entry("Ali", "AUB", "OGX", 1n), entry("Ali", "AUB", "MOGX", 2n)];
-    expect(resolveManager(directory, row("Ali", "AUB", "MOGX"))).toMatchObject({ memberId: 2n });
+    const directory = [entry("Robin", "AUB", "OGX", 1n), entry("Robin", "AUB", "MOGX", 2n)];
+    expect(resolveManager(directory, row("Robin", "AUB", "MOGX"))).toMatchObject({ memberId: 2n });
   });
 
   it("matches nobody when the LC and team cannot tell them apart", () => {
-    const directory = [entry("Ali", "AUB", "OGX", 1n), entry("Ali", "AUB", "OGX", 2n)];
-    expect(resolveManager(directory, row("Ali", "AUB", "OGX"))).toEqual({ kind: "ambiguous" });
+    const directory = [entry("Robin", "AUB", "OGX", 1n), entry("Robin", "AUB", "OGX", 2n)];
+    expect(resolveManager(directory, row("Robin", "AUB", "OGX"))).toEqual({ kind: "ambiguous" });
   });
 
   it("matches nobody when the row gives no LC or team to choose by", () => {
-    const directory = [entry("Ali", "AUB", "OGX", 1n), entry("Ali", "LAU", "OGX", 2n)];
-    expect(resolveManager(directory, row("Ali"))).toEqual({ kind: "ambiguous" });
+    const directory = [entry("Robin", "AUB", "OGX", 1n), entry("Robin", "LAU", "OGX", 2n)];
+    expect(resolveManager(directory, row("Robin"))).toEqual({ kind: "ambiguous" });
   });
 
   it("treats one member listed twice as one match", () => {
-    const directory = [entry("Ali", "AUB", "OGX", 1n), entry("Ali", "LAU", "OGX", 1n)];
-    expect(resolveManager(directory, row("Ali"))).toMatchObject({ memberId: 1n });
+    const directory = [entry("Robin", "AUB", "OGX", 1n), entry("Robin", "LAU", "OGX", 1n)];
+    expect(resolveManager(directory, row("Robin"))).toMatchObject({ memberId: 1n });
   });
 
   it("reports a name nobody lists", () => {
-    expect(resolveManager([entry("Sirine", "", "", 1n)], row("Maram"))).toEqual({ kind: "unlisted" });
+    expect(resolveManager([entry("Alex", "", "", 1n)], row("Sam"))).toEqual({ kind: "unlisted" });
   });
 });
 
-describe("mergeDirectory (D-80)", () => {
+describe("mergeDirectory", () => {
   it("lets a match made on the console replace the sheet's for the same name, LC and team", () => {
     const merged = mergeDirectory(
-      [entry("Ali", "AUB", "OGX", 1n), entry("Ali", "LAU", "OGX", 2n)],
-      [entry("ali", "aub", "ogx", 3n, "CONSOLE")]
+      [entry("Robin", "AUB", "OGX", 1n), entry("Robin", "LAU", "OGX", 2n)],
+      [entry("robin", "aub", "ogx", 3n, "CONSOLE")]
     );
-    expect(resolveManager(merged, { managerLabel: "Ali", lc: "AUB", team: "OGX" })).toEqual({
+    expect(resolveManager(merged, { managerLabel: "Robin", lc: "AUB", team: "OGX" })).toEqual({
       kind: "matched",
       memberId: 3n,
       source: "CONSOLE",
     });
-    expect(resolveManager(merged, { managerLabel: "Ali", lc: "LAU", team: "OGX" })).toMatchObject({ memberId: 2n });
+    expect(resolveManager(merged, { managerLabel: "Robin", lc: "LAU", team: "OGX" })).toMatchObject({ memberId: 2n });
   });
 
   it("fills a name the sheet does not list", () => {
-    const merged = mergeDirectory([], [entry("Maram", "LAU", "OGX", 4n, "CONSOLE")]);
-    expect(resolveManager(merged, { managerLabel: "Maram", lc: "LAU", team: "OGX" })).toMatchObject({ memberId: 4n });
+    const merged = mergeDirectory([], [entry("Sam", "LAU", "OGX", 4n, "CONSOLE")]);
+    expect(resolveManager(merged, { managerLabel: "Sam", lc: "LAU", team: "OGX" })).toMatchObject({ memberId: 4n });
   });
 });

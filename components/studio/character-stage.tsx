@@ -18,29 +18,26 @@ import {
 
 import { CharacterModel } from "./character-model";
 
-/** How long a newly chosen body takes to settle into place. */
 const ENTRANCE = 0.42;
 
 export type CharacterStageProps = {
   id: string;
   name: string;
-  /** Rendered height in pixels. Ignored when `fill` is set. */
+  /** Ignored when `fill` is set. */
   height: number;
   mood?: CharacterMood;
   eager?: boolean;
-  /** Let the member turn the body. For the lab, not for a dashboard. */
   interactive?: boolean;
-  /** Fill the parent instead of a portrait box. */
   fill?: boolean;
   heightFraction?: number;
   floorFraction?: number;
-  /** Radians of yaw while standing, so bodies either side of a group angle inwards. */
+  /** Radians of yaw. */
   facing?: number;
-  /** Load the social clips. Needed by `empty` and by every beat but `greet`. */
+  /** Load the social clips; needed by `empty` and every beat but `greet`. */
   social?: boolean;
-  /** A one-shot played because something happened. Changing it is the trigger. */
+  /** Changing it is the trigger. */
   beat?: CharacterBeat | null;
-  /** Greet once per browser session, so returning to the page is not a fanfare. */
+  /** Greets once per browser session. */
   greetKey?: string;
   className?: string;
 };
@@ -105,9 +102,7 @@ export function CharacterStage({
           <OrbitControls
             makeDefault
             enablePan={false}
-            // Turning is the whole interaction. Zoom took the body off its floor
-            // and out of the frame it was composed for, and scrolling over a
-            // canvas mid-page stole the page's own scroll.
+            // Zoom would hijack page scroll and pull the body out of its frame.
             enableZoom={false}
             target={[0, -0.2, 0]}
             minPolarAngle={0.7}
@@ -119,15 +114,6 @@ export function CharacterStage({
   );
 }
 
-/**
- * One body on stage at a time, swapped where it stands.
- *
- * It used to walk: the outgoing character left the frame the way the arrow
- * pointed and the next followed it in. That read badly -- the body spent the
- * transition in profile, off-centre, and a swap interrupted mid-stride left it
- * stranded at the edge of the canvas. Choosing a character is not a journey, so
- * the new one simply arrives, settles, and says hello.
- */
 function Swap({
   id,
   mood,
@@ -148,15 +134,13 @@ function Swap({
   const [shown, setShown] = useState(id);
   const [entry, setEntry] = useState<string | null>(null);
 
-  // Derived during render rather than in an effect, so the body that mounts is
-  // already the one holding its greeting.
+  // Set during render so the body that mounts already holds its greeting.
   if (shown !== id) {
     setShown(id);
     setEntry(beatClip("greet"));
   }
 
-  // Let go of it once it has played, or a surface beat clearing later would fall
-  // back to the greeting and wave again for no reason.
+  // Clear it after playing, or a later beat clearing would fall back to the greeting.
   useEffect(() => {
     if (!entry) return;
     const timer = setTimeout(() => setEntry(null), 2400);
@@ -178,7 +162,6 @@ function Swap({
   );
 }
 
-/** Settles a body into place: down a little, up to full size, once. */
 function Entrance({ children }: { children: ReactNode }) {
   const group = useRef<Group>(null);
   const elapsed = useRef(0);
@@ -208,12 +191,6 @@ function Entrance({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * The greeting fires on the first view of a surface in a browser session.
- *
- * A wave on every render is not a greeting, it is a tic -- and the thing being
- * greeted is the member arriving, which happens once.
- */
 function useSessionGreeting(key: string | undefined): string | null {
   const reduceMotion = useReduceMotion();
   const [greeting, setGreeting] = useState<string | null>(null);
@@ -225,7 +202,6 @@ function useSessionGreeting(key: string | undefined): string | null {
       if (sessionStorage.getItem(storageKey)) return;
       sessionStorage.setItem(storageKey, "1");
     } catch {
-      // Private mode, or storage refused. A missed greeting is not worth a throw.
       return;
     }
     const enter = setTimeout(() => setGreeting(beatClip("greet")), 700);

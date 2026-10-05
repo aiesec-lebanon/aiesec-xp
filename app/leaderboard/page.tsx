@@ -33,9 +33,7 @@ export default async function LeaderboardPage({
   const params = await searchParams;
 
   const [officeRows, floor] = await Promise.all([
-    // isMc excluded: 182 is the query/country root, not a distinct filterable
-    // entity -- filtering by it would just repeat "Everyone" (D-57), the same
-    // reason it's excluded from the LC leaderboard's ranked rows.
+    // The MC is the country root; filtering by it would just repeat "Everyone".
     db.office.findMany({
       where: { isOperating: true, isMc: false },
       select: { id: true, name: true },
@@ -43,15 +41,14 @@ export default async function LeaderboardPage({
     termStart(),
   ]);
 
-  // MC-direct's committee (D-57) gets no chip: only LCs are filterable (D-84).
+  // Only LCs are filterable, so MC-direct's committee gets no chip.
   const directEntityId = mcDirectEntityId();
   const offices = officeRows
     .filter((office) => office.id !== directEntityId)
     .map((office) => ({ id: office.id, label: officeLabel(office.name) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Unfiltered is the whole term to today (D-58), not the active display
-  // window: the window is the reward race, this board is the record.
+  // Unfiltered is the whole term to today, not the active display window.
   const range = resolveRange(params, floor);
 
   const selected =
@@ -73,9 +70,6 @@ export default async function LeaderboardPage({
   );
   const rows = rest.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // One query for the podium and the page of rows together, so a leaderboard
-  // shows each member as the character they picked rather than the one their
-  // name happens to hash to.
   const top = standings.slice(0, 3);
   const characters = await memberAvatars(
     [...top, ...rows].map((standing) => ({
@@ -84,8 +78,6 @@ export default async function LeaderboardPage({
     })),
   );
 
-  // The podium always shows the top three of whatever is being looked at, so a
-  // filtered board still has a winner rather than three empty plinths.
   const places: PodiumPlace[] = top.map((standing) => ({
     rank: standing.rank as 1 | 2 | 3,
     name: standing.fullName,
@@ -94,8 +86,6 @@ export default async function LeaderboardPage({
     characterId: characters.get(standing.memberId)?.id,
   }));
 
-  // Every link carries the range, so changing office or turning a page does not
-  // silently drop the dates being looked at.
   const href = (next: { office?: bigint; page?: number }) => {
     const query = new URLSearchParams();
     const office = "office" in next ? next.office : selected;
@@ -117,10 +107,6 @@ export default async function LeaderboardPage({
     }`;
 
   return (
-    // flex-1 under the layout's header, and nothing here overflows it: at lg
-    // and up the whole board is on screen with no page scroll at all. Below
-    // that the two columns stack and only the row list scrolls, so the filters
-    // and the dock stay put.
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-wall">
       <div className="shrink-0 bg-surface pb-3">
         <Rise className="flex flex-col gap-4 px-6 pt-2 sm:px-11">
@@ -153,21 +139,12 @@ export default async function LeaderboardPage({
                 </Link>
               ))}
             </nav>
-
-            {/* <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
-              {standings.length} member{standings.length === 1 ? "" : "s"}
-              {range.to === range.ceiling ? " · live" : ""}
-            </p> */}
           </div>
         </Rise>
       </div>
 
       <div className="h-0.5 shrink-0 bg-horizon" />
 
-      {/* The split. Stacked below lg, because three bodies and ten rows side by
-          side stop being readable long before a phone's width -- and there the
-          column scrolls as one page, which is what a thumb expects. At lg the
-          scrolling stops and everything is on screen at once. */}
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-3 sm:px-11 lg:flex-row lg:gap-7 lg:overflow-hidden">
         <section className="h-[38vh] min-h-[280px] shrink-0 lg:h-auto lg:min-h-0 lg:w-[360px] xl:w-[440px] 2xl:w-[520px]">
           {places.length > 0 ? (
@@ -202,13 +179,7 @@ export default async function LeaderboardPage({
             </div>
           </Rise>
 
-          {/* At lg the rows share the height they are given rather than each
-              taking a fixed amount, so ten of them land exactly on the bottom
-              of the column. The cap stops them becoming slabs on a tall
-              monitor; the floor keeps the avatar from being squeezed out, and
-              is why this scrolls rather than hides: on a window under about
-              810px ten rows at their smallest still do not fit, and a row you
-              cannot reach is worse than a scrollbar on one column. */}
+          {/* Rows share the column height at lg; their min height means short windows scroll. */}
           <ol className="flex flex-col gap-1.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {rows.map((standing) => {
               const isSelf = standing.memberId === user.id;

@@ -5,17 +5,8 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 
 import { useReduceMotion } from "@/components/motion/motion-provider";
 
-// Every animated primitive this direction uses, in one client module. `m` rather
-// than `motion` because the provider mounts LazyMotion in strict mode: the
-// animation runtime arrives after first paint, and strict mode makes that saving
-// impossible to undo by accident.
-//
-// Nothing here consults the operating system's prefers-reduced-motion. The
-// member's own switch is the trigger (D-46), read through useReduceMotion.
-
 const EASE = [0.2, 0.8, 0.25, 1] as const;
 
-/** The page's entrance: content settles down onto the paper, once, in order. */
 export function Rise({
   children,
   delay = 0,
@@ -44,7 +35,6 @@ export function Rise({
   );
 }
 
-/** A card that lifts under the pointer. Used for the floor chips and list rows. */
 export function Lift({
   children,
   className,
@@ -56,7 +46,6 @@ export function Lift({
   className?: string;
   lift?: number;
   as?: "div" | "li";
-  /** Travel to a new position when the list reorders. Needs domMax. */
   layout?: boolean;
 }) {
   const reduceMotion = useReduceMotion();
@@ -78,14 +67,7 @@ export function Lift({
   );
 }
 
-/**
- * A score that counts up to itself once, when it first comes into view.
- *
- * The DOM is written directly rather than through state, because these are the
- * largest numerals on the page and re-rendering a React tree sixty times a
- * second to move one of them is the wrong trade. The final value is the server's
- * text before any of this runs, so it is correct without JavaScript.
- */
+// Writes the DOM directly to avoid re-rendering 60x/s; the server text is already the final value.
 export function CountUp({
   value,
   decimals = 0,
@@ -95,7 +77,6 @@ export function CountUp({
 }: {
   value: number;
   decimals?: number;
-  /** How the settled value reads; the count itself moves at `decimals` places. */
   format?: (value: number) => string;
   duration?: number;
   className?: string;
@@ -130,13 +111,11 @@ export function CountUp({
   );
 }
 
-/** A bar that grows out of the floor when the chart scrolls into view. */
 export function GrowBar({
   height,
   colour,
   delay = 0,
 }: {
-  /** Share of the track, 0 to 1. */
   height: number;
   colour: string;
   delay?: number;
@@ -159,13 +138,6 @@ export function GrowBar({
   );
 }
 
-/**
- * The stage's ghost numeral, sized to the frame it sits in.
- *
- * It is set in the numeral face at 400px in the comps, which overflows a narrow
- * viewport; measuring the frame and scaling to it keeps the proportion the
- * design depends on at every width.
- */
 export function GhostNumber({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);

@@ -27,8 +27,8 @@ const COLUMNS: { header: string; required: boolean; note: string }[] = [
 ];
 
 const EXAMPLE: string[][] = [
-  ["AUB", "OGX", "Ahmad M", "1234567"],
-  ["LAU", "MOGX", "Ahmad K", "7654321"],
+  ["AUB", "OGX", "Alex A", "1234567"],
+  ["LAU", "MOGX", "Sam B", "7654321"],
 ];
 
 const PRIMARY =
@@ -53,7 +53,6 @@ function download(filename: string, rows: string[][]): void {
   URL.revokeObjectURL(url);
 }
 
-/** Matches many EP manager names to members at once from a CSV. */
 export function CsvImport({ unmatched }: { unmatched: NameToMatch[] }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const form = useRef<HTMLFormElement>(null);

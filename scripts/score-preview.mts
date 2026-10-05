@@ -1,6 +1,3 @@
-// Runs the scoring engine over what is actually in the database and prints the
-// result. Read-only: it writes no ledger, and exists to sanity-check the engine
-// against real data before the leaderboard is built on it.
 import { db } from "@/lib/db";
 import { creditRegister } from "@/lib/assignments/register";
 import { score } from "@/lib/scoring/engine";

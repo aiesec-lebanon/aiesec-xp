@@ -8,20 +8,20 @@ describe("personName", () => {
     ["john doe", "John Doe"],
     ["JOHN DOE", "John Doe"],
     ["jOHN", "John"],
-    ["  maria   el  khoury ", "Maria El Khoury"],
-    ["abi-nader", "Abi-Nader"],
-    ["Ahmad M", "Ahmad M"],
+    ["  mia   van  berg ", "Mia Van Berg"],
+    ["smith-jones", "Smith-Jones"],
+    ["Jordan M", "Jordan M"],
     ["élise", "Élise"],
   ])("writes %j as %j", (raw, expected) => {
     expect(personName(raw)).toBe(expected);
   });
 
   it("keeps a name its owner already spelled in mixed case", () => {
-    expect(personName("Sarah McDonald")).toBe("Sarah McDonald");
+    expect(personName("Casey McKenzie")).toBe("Casey McKenzie");
   });
 
   it("does not start a new word after an apostrophe", () => {
-    expect(personName("ra'ed")).toBe("Ra'ed");
+    expect(personName("jo'el")).toBe("Jo'el");
   });
 
   it("is idempotent, so formatting twice changes nothing", () => {
@@ -31,7 +31,7 @@ describe("personName", () => {
 
 describe("firstName", () => {
   it("is the first part of the formatted name", () => {
-    expect(firstName("lara haddad")).toBe("Lara");
+    expect(firstName("test person")).toBe("Test");
   });
 });
 
@@ -53,6 +53,6 @@ describe("officeLabel", () => {
 
 describe("characterFor", () => {
   it("draws the same default character however a name is capitalised", () => {
-    expect(characterFor("lara haddad").id).toBe(characterFor("Lara Haddad").id);
+    expect(characterFor("test person").id).toBe(characterFor("Test Person").id);
   });
 });

@@ -1,8 +1,4 @@
-// Data model for AIESEC XP. The authority for this design is Architecture.md
-// section 5; decisions are cited as D-xx and live in Context.md section 3.
-//
-// Connection URLs live in prisma.config.ts: Prisma 7 no longer accepts url or
-// directUrl here. The runtime connection is supplied by a driver adapter.
+// Prisma 7 takes connection URLs from prisma.config.ts and a driver adapter, not here.
 
 generator client {
   provider = "prisma-client-js"
@@ -19,8 +15,7 @@ model Office {
   name        String
   parentId    BigInt?
   isMc        Boolean @default(false)
-  // D-39. Closed offices stay in the tree so historical events still resolve a
-  // name, but their members neither compete nor sign in.
+  // Closed offices stay so historical events resolve a name; their members neither compete nor sign in.
   isOperating Boolean @default(false)
 
   members         Member[]        @relation("MemberHomeOffice")
@@ -36,7 +31,7 @@ model Member {
   aiesecEmail     String?
   profilePhotoUrl String?
   homeOfficeId    BigInt?
-  // D-32. The office whose LC total this member's points count towards.
+  // The office whose LC total this member's points count towards.
   scoringOfficeId BigInt?
   firstSeenAt     DateTime @default(now())
   lastSyncedAt    DateTime @updatedAt
@@ -53,15 +48,8 @@ model Member {
   @@index([scoringOfficeId])
 }
 
-// The member's chosen body and its colours (D-50, closes O-14).
-//
-// A table of its own rather than columns on Member, because Member is the GIS
-// sync projection: its `lastSyncedAt` is `@updatedAt` and means "when GIS last
-// confirmed this person", so saving an avatar there would keep reporting a sync
-// that never happened.
-//
-// A null colour means the part keeps the colour it was authored with, which is
-// not the same as any hex a member could pick.
+// Separate from Member, whose @updatedAt `lastSyncedAt` would misreport an avatar save as a sync.
+// A null colour keeps the authored colour.
 model MemberAvatar {
   memberId  BigInt   @id
   character String
@@ -95,11 +83,8 @@ model Position {
 
 // ── EP assignment: who is credited with an EP ───────────────────────────────
 
-// One row per EP and member (D-73). A row can come from several places at once,
-// and each automatic source is rewritten by its own sync: EXPA mirrors the EP's
-// managers in EXPA (D-74), SHEET the sheet's responsible member (D-77). ADMIN
-// is a manual add, which nothing automatic clears. A row counts while any
-// source is set and it has not been removed.
+// One row per EP and member. Each automatic source (EXPA, SHEET) is rewritten by its own
+// sync; ADMIN is never cleared automatically. Counts while any source is set and not removed.
 model EpAssignment {
   id         String    @id @default(cuid())
   epPersonId BigInt
@@ -107,12 +92,10 @@ model EpAssignment {
   fromExpa   Boolean   @default(false)
   fromSheet  Boolean   @default(false)
   fromAdmin  Boolean   @default(false)
-  // The EP's main manager (D-83), picked by an admin: full points while
-  // everyone else takes their role's %. Holds the row on the EP whatever EXPA
-  // or the sheet later say. At most one per EP, kept by the action that sets it.
+  // Full points while others take their role's %. Survives EXPA/sheet changes.
+  // At most one per EP, enforced by the action that sets it.
   isMain     Boolean   @default(false)
-  // An admin removal outranks every source, so the next sync cannot bring the
-  // credit back. Kept as a row rather than deleted for exactly that reason.
+  // Kept as a row, not deleted, so the next sync cannot bring the credit back.
   removedAt  DateTime?
   removedBy  BigInt?
   createdBy  BigInt
@@ -125,8 +108,7 @@ model EpAssignment {
   @@index([memberId])
 }
 
-// The MC's sign-up sheet (D-80). One active row: configuration rather than a
-// constant so a new term's sheet is a row change, not a deploy.
+// One active row, so a new term's sheet is a row change rather than a deploy.
 model AssignmentSheet {
   id              String    @id @default(cuid())
   label           String
@@ -139,10 +121,8 @@ model AssignmentSheet {
   lastImportAt    DateTime?
 }
 
-// An EP manager's name in the sheet matched to a member on the console (D-80):
-// the same shape as a row of the sheet's directory tab, and preferred over it
-// for the same name, LC and team. Keys are normalised; `name`, `lc` and `team`
-// keep the spelling the sheet used, for display.
+// Preferred over the sheet's directory tab for the same name, LC and team.
+// Keys are normalised; `name`, `lc` and `team` keep the sheet's spelling for display.
 model SheetManagerMapping {
   id        String   @id @default(cuid())
   nameKey   String
@@ -172,8 +152,7 @@ enum FunnelEvent {
   RE_BROKEN
 }
 
-// What a ledger entry pays for: an event's own stage, or for a break the stage
-// it takes back.
+// For a break, the stage it takes back.
 enum ScoredStage {
   APL
   APD
@@ -185,10 +164,7 @@ enum Direction {
   INCOMING
 }
 
-// D-42. Scoring facts only. No EP name, no opportunity title, nothing
-// descriptive: those are read live from GIS when something is displayed, never
-// held here. epPersonId stays because it is the join to EpAssignment, and
-// without it no event can be attributed to anyone.
+// Scoring facts only: nothing descriptive about the EP is stored; it is read live from GIS.
 model ExchangeEvent {
   id                  String      @id @default(cuid())
   applicationId       BigInt
@@ -197,10 +173,8 @@ model ExchangeEvent {
   epPersonId          BigInt // the join key to EpAssignment, and the only EP data held
   programmeId         Int // 7 | 8 | 9
   direction           Direction
-  // The application's current status, rewritten on every event of the
-  // application whenever its last action moves (D-76). Net APL is a status
-  // check rather than a dated reversal, because GIS dates neither withdrawal
-  // nor rejection in a filterable way (D-41).
+  // Rewritten whenever the application's last action moves. Net APL checks status
+  // because GIS doesn't date withdrawal or rejection filterably.
   applicationStatus   String?
   fetchedAt           DateTime    @updatedAt
 
@@ -220,19 +194,14 @@ model ScoreConfig {
   aplPoints        Decimal  @db.Decimal(10, 4)
   apdPoints        Decimal  @db.Decimal(10, 4)
   rePoints         Decimal  @db.Decimal(10, 4)
-  // D-41: an application that is withdrawn or rejected does not count. Ships on;
-  // configurable so the MC can reverse the decision without a deploy.
+  // Withdrawn or rejected applications don't count; switchable without a deploy.
   reverseApl       Boolean  @default(true)
-  // Which GIS statuses reverse an APL. Config rather than a constant: the
-  // observed vocabulary is open, withdrawn, approved, rejected, matched,
-  // finished, completed, realized and approval_broken, and GIS may add more.
+  // Which GIS statuses reverse an APL; config because GIS's status vocabulary is open.
   aplReversingStatuses Json
   productWeights   Json // { "7": 1, "8": 1, "9": 1 }
   directionWeights Json // { "OUTGOING": 1, "INCOMING": 1 }
-  scopeSides       Json // ["PERSON"] today; add "OPPORTUNITY" for incoming (D-27)
-  // Percentage of an EP's points each position role takes when more than one
-  // member is credited with that EP: { "TM": 40, "TL": 30, ... }, totalling 100
-  // (D-73). Rescaled over the roles actually on the EP.
+  scopeSides       Json // ["PERSON"]; add "OPPORTUNITY" for incoming
+  // { "TM": 40, "TL": 30, ... } totalling 100; rescaled over the roles actually on the EP.
   roleShares       Json     @default("{}")
   isActive         Boolean  @default(false)
   createdBy        BigInt
@@ -244,9 +213,7 @@ model ScoreConfig {
   @@index([isActive])
 }
 
-// Each scoring period keeps the weights it was given (D-85): a past period's
-// configVersion never changes, and where periods overlap the newest saved
-// (createdAt) decides.
+// A past period's configVersion never changes; where periods overlap, the newest createdAt wins.
 model DisplayWindow {
   id            String    @id @default(cuid())
   label         String
@@ -262,15 +229,8 @@ model DisplayWindow {
   @@index([configVersion])
 }
 
-// The term this system holds data for (D-58). Exactly one row, enforced by a
-// check constraint in the migration.
-//
-// It answers two questions with one date, because for this product they are the
-// same date. It is the collection floor, so sync fetches nothing earlier and the
-// active DisplayWindow can move without orphaning the history behind it; and it
-// is where the leaderboards' date range starts when nobody has picked one.
-// Events before it exist in GIS but predate the assignment register, so nothing
-// built from them could be attributed to the right member.
+// Exactly one row (check constraint in the migration). The start is both the sync floor
+// and the leaderboards' default range start; earlier events predate the assignment register.
 model TermSettings {
   id        String   @id @default("singleton")
   startsAt  DateTime
@@ -306,8 +266,7 @@ enum MatcherField {
   TITLE
 }
 
-// D-14, O-03. role.name = MCVP is deliberately absent: it also matches MXP and
-// MKT, which would hand admin to the wrong people.
+// role.name = MCVP is deliberately absent: it also matches MXP and MKT.
 model AdminMatcher {
   id      String       @id @default(cuid())
   pattern String
@@ -326,10 +285,9 @@ model ScoreLedgerEntry {
   stage           ScoredStage
   configVersion   Int
   points          Decimal     @db.Decimal(12, 4) // negative on break
-  // This member's part of the EP's points: 1 for the main or a sole manager,
-  // otherwise their role's % (D-83).
+  // 1 for the main or a sole manager, otherwise their role's %.
   share           Decimal     @default(1) @db.Decimal(7, 6)
-  // The same part of the stage's count, negative on a break (D-83).
+  // The same part of the stage's count, negative on a break.
   countDelta      Decimal     @db.Decimal(7, 6)
   occurredAt      DateTime
 
@@ -342,8 +300,8 @@ model ScoreLedgerEntry {
   @@index([exchangeEventId])
 }
 
-// D-34. A replay that no longer supports a grant deletes it; there is no
-// REVOKED state, because honouring an announced reward is an MC decision.
+// A replay that no longer supports a grant deletes it; no REVOKED state, since honouring
+// an announced reward is an MC decision.
 model RewardGrant {
   id       String   @id @default(cuid())
   memberId BigInt
@@ -363,8 +321,7 @@ enum AnomalyKind {
   UNATTRIBUTED
 }
 
-// Events the engine could not score confidently. Derived alongside the ledger
-// and rebuilt with it, so an admin queue can be read without running a replay.
+// Rebuilt with the ledger, so the admin queue can be read without running a replay.
 model ScoringAnomaly {
   id              String      @id @default(cuid())
   exchangeEventId String
@@ -412,10 +369,7 @@ enum SyncTrigger {
   MANUAL
 }
 
-// One row per scheduled job (D-66): "events" and "roster". Every trigger, a
-// GitHub schedule or an admin's button, takes the lease before running, so the
-// two can never run one job at once. The lease expires by itself, so a run the
-// platform killed at its time limit cannot wedge the job.
+// Every trigger takes the lease before running; it expires by itself so a killed run can't wedge the job.
 model SyncJob {
   name            String       @id
   leaseUntil      DateTime?
@@ -427,9 +381,7 @@ model SyncJob {
   lastError       String?
 }
 
-// D-66. One row, enforced by a check constraint like TermSettings. Hackathon
-// mode is an end time rather than a flag, so a switch nobody remembers to turn
-// off lapses back to the daily cadence by itself.
+// One row (check constraint). Hackathon mode is an end time, so a forgotten switch lapses by itself.
 model SyncSettings {
   id             String    @id @default("singleton")
   hackathonUntil DateTime?

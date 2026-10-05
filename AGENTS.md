@@ -18,9 +18,10 @@ assumption, including this file.
 - If code, another doc, or a request conflicts with them, `Architecture.md` /
   `Context.md` win. Flag the conflict instead of silently resolving it.
 - If you make or learn a decision that changes the domain model, scoring rules,
-  assignment logic, or system design, update `Context.md` (decisions D-xx / open
-  items O-xx) and/or `Architecture.md` in the same change — don't let them drift
-  from the actual implementation.
+  assignment logic, or system design, update `Context.md` and/or `Architecture.md`
+  in the same change — don't let them drift from the actual implementation.
+- The docs describe the current system only. Rewrite the affected rule in place;
+  don't append history, superseded decisions, measurements or real data.
 - Do not duplicate their content elsewhere (READMEs, other agent-instruction
   files, comments); link to them instead.
 

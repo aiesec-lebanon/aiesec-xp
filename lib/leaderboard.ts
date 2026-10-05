@@ -13,28 +13,8 @@ import { officePoints, score } from "@/lib/scoring/engine";
 import { weightSegments } from "@/lib/scoring/periods";
 import { loadConfigAt } from "@/lib/scoring/weight-periods";
 
-// Both boards are scored on the request that renders them, over whatever range
-// they were asked for (D-58).
-//
-// Individual rankings run the same pure engine the ledger replay runs, with the
-// requested range as its window. They used to read the derived ledger, which
-// cannot answer a historic question at all: the replay bakes the active display
-// window in, so the ledger only ever holds rows inside it. Scoring live keeps
-// every rule the engine owns -- break netting (D-26), APL reversal (D-41), role
-// shares (D-73) -- correct by construction, rather than re-deriving them in a
-// query.
-//
-// Office/LC rankings (D-56) read AIESEC's own analytics API, which takes the
-// same range as two dates: an office total doesn't need the per-EP attribution
-// the ledger exists for, and AIESEC's own published counts are a figure nobody
-// here can dispute.
-//
-// Both score every day with the weights of the period it fell in (D-85), so a
-// change to the current period's weights never rewrites a past one.
-//
-// The ledger is still what rewards are granted from, and still what /me's trail
-// and /tv's ticker read, because those are about the active window and nothing
-// else.
+// Boards are scored live per request: the ledger only holds the active window, so it
+// can't answer arbitrary ranges.
 
 export type Standing = {
   rank: number;
@@ -46,17 +26,11 @@ export type Standing = {
   aplCount: number;
   apdCount: number;
   reCount: number;
-  /** Earliest moment this member reached their current points, for tie-breaks. */
   reachedAt: Date | null;
 };
 
-/**
- * D-33: points, then RE, then APD, then APL, then whoever got there first.
- *
- * Ordering is explicit rather than left to the database, because a tie shown in
- * a different order on each render reads as the leaderboard being wrong.
- */
-export function rank(rows: readonly Omit<Standing, "rank">[]): Standing[] {
+// Fully deterministic so a tie never reorders between renders.
+function rank(rows: readonly Omit<Standing, "rank">[]): Standing[] {
   return [...rows]
     .sort(
       (a, b) =>
@@ -78,11 +52,6 @@ type MemberTotals = {
   reachedAt: Date | null;
 };
 
-/**
- * The range the reward race is measured in (D-07): what /tv, the personal
- * dashboard and reward grants are all scoped to, whatever range a leaderboard
- * is being browsed over.
- */
 export async function activeWindowRange(): Promise<DateRange> {
   const window = await db.displayWindow.findFirst({ where: { isActive: true } });
   if (!window) return defaultWindowRange();
@@ -93,14 +62,8 @@ function roundCount(value: number): number {
   return Math.round(value * 1_000_000) / 1_000_000;
 }
 
-/**
- * Runs the scoring engine over one range and totals the result per member.
- *
- * Every event of an application with activity in the range is read, not only
- * the in-range ones: the engine still scores only what falls inside the range,
- * but needs the application's other events to tell a re-approval from a break
- * (D-28).
- */
+// Reads every event of an active application, not just in-range ones: the engine needs
+// them to tell a re-approval from a break.
 async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotals>> {
   const [configAt, active, register] = await Promise.all([
     loadConfigAt(),
@@ -119,8 +82,7 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
     where: { applicationId: { in: active.map((row) => row.applicationId) } },
   });
 
-  // No rewards: grants belong to the active window and are derived by the
-  // replay, so evaluating them per request would be work nobody reads.
+  // No rewards: grants are derived by the replay for the active window only.
   const { ledger } = score({
     events,
     assignments: register.assignments,
@@ -136,12 +98,10 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
       totals.get(key) ?? { points: 0, aplCount: 0, apdCount: 0, reCount: 0, reachedAt: null };
 
     current.points = Math.round((current.points + entry.points) * 10_000) / 10_000;
-    // A count is a share of the stage too (D-83), so it is rounded like points.
     if (entry.stage === "APL") current.aplCount = roundCount(current.aplCount + entry.countDelta);
     if (entry.stage === "APD") current.apdCount = roundCount(current.apdCount + entry.countDelta);
     if (entry.stage === "RE") current.reCount = roundCount(current.reCount + entry.countDelta);
-    // The latest scored event is when the current total was reached, which is
-    // what D-33 breaks a tie on.
+    // The latest scored event is when the current total was reached, used for tie-breaks.
     if (!current.reachedAt || entry.occurredAt > current.reachedAt) {
       current.reachedAt = entry.occurredAt;
     }
@@ -152,12 +112,7 @@ async function totalsForRange(range: DateRange): Promise<Map<string, MemberTotal
   return totals;
 }
 
-/**
- * Individual standings over a range, optionally for one office.
- *
- * Every eligible member appears, including those on zero; `/leaderboard` and
- * `/tv` drop the zeros themselves (D-84).
- */
+// Includes members on zero; callers filter them out.
 export async function individualStandings(
   range: DateRange,
   officeId?: bigint
@@ -214,9 +169,7 @@ export type OfficeStanding = {
 
 export type OfficeStandingsResult = {
   standings: OfficeStanding[];
-  /** false when the AIESEC analytics API (or the scoring periods) couldn't
-   * be read -- every count and point below is then a zero placeholder, not a
-   * real "nothing happened this window" read, and callers should say so. */
+  // When false, every count is a zero placeholder, not a real "nothing happened".
   analyticsOk: boolean;
 };
 
@@ -239,23 +192,15 @@ async function memberCountsByOffice(): Promise<Map<string, number>> {
   return counts;
 }
 
-/** D-11: LC ranking, with MC-direct members as an entity of their own.
- * Points and funnel counts come from AIESEC's analytics API (D-56) -- see the
- * module comment above. The range is the caller's, which is the whole reason
- * this board can be read over a historic window at all: the analytics endpoint
- * takes two dates and holds no opinion about which ones. */
 export async function officeStandings(range: DateRange): Promise<OfficeStandingsResult> {
   const [offices, memberCounts, configAt] = await Promise.all([
-    // isMc excluded: the MC's own row is the subtree root the analytics query
-    // is scoped to, so its total is always identical to the sum of the other
-    // rows -- a 4th "entity" here would just repeat "all entities" (D-56).
+    // The MC row is the analytics subtree root, so its total would just repeat the sum of the rest.
     db.office.findMany({ where: { isOperating: true, isMc: false }, select: { id: true, name: true } }),
     memberCountsByOffice(),
     loadConfigAt(),
   ]);
 
-  // The API only returns totals between two dates, so a range spanning periods
-  // with different weights is asked for one run of days at a time (D-85).
+  // The API only returns totals between two dates, so query one weight period at a time.
   const segments = configAt ? weightSegments(range, configAt) : [];
   const parts = await Promise.all(
     segments.map(async (segment) => {
@@ -287,12 +232,8 @@ export async function officeStandings(range: DateRange): Promise<OfficeStandings
         totals.RE += sum.RE;
       }
 
-      // MC-direct's own committee (D-56): AIESEC's analytics API buckets its
-      // applications under this office's own GIS id (read above), but its
-      // members' positions record office 182 (D-32) -- so the row is shown
-      // under 182 instead, to join with individualStandings()'s
-      // scoringOfficeId grouping (used by the leading-office member group on
-      // /leaderboard/lcs), while its funnel counts still come from its own key.
+      // Analytics buckets MC-direct under its own office id, but its members' positions
+      // record the MC office, so the row is keyed by the MC id to join with member standings.
       const officeId = office.id === directEntityId ? mcOfficeId() : office.id;
 
       return {
@@ -322,14 +263,11 @@ export async function officeStandings(range: DateRange): Promise<OfficeStandings
 export type PersonalProgress = {
   standing: Standing | null;
   totalMembers: number;
-  /** The rank immediately above, for a concrete next target. */
   nextUp: Standing | null;
   trail: {
-    /** The stage credited, or `<stage>_BROKEN` for a break taking it back. */
     eventType: string;
     occurredAt: Date;
     points: number;
-    /** This member's part of the EP's points, 1 when nobody shares it (D-73). */
     share: number;
     programmeId: number;
   }[];
@@ -344,16 +282,11 @@ export type PersonalProgress = {
   }[];
 };
 
-/** A ledger entry as the member-facing screens name it: the stage, or its break. */
-export function trailLabel(stage: string, countDelta: number): string {
+function trailLabel(stage: string, countDelta: number): string {
   return countDelta < 0 ? `${stage}_BROKEN` : stage;
 }
 
-/**
- * Always the active display window, never a browsed range: what this returns
- * has to agree with the `RewardGrant` rows the replay derived, and those are
- * granted against the window alone (D-07, D-34).
- */
+// Always the active window, never a browsed range, so it agrees with the replay's RewardGrant rows.
 export async function personalProgress(memberId: bigint): Promise<PersonalProgress> {
   const [standings, entries, rewards, grants] = await Promise.all([
     activeWindowRange().then((range) => individualStandings(range)),

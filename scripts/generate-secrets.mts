@@ -1,5 +1,3 @@
-// Fills in any missing local secret in .env.local. Generates 32 random bytes
-// per secret and prints only whether each was written, never the value.
 import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 

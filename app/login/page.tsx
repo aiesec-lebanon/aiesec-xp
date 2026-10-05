@@ -26,11 +26,7 @@ const ERRORS: Record<string, { headline: string; detail: string }> = {
   },
 };
 
-// Three bodies to a side, so the middle of the frame stays empty for the
-// card. They are not the visitor -- nobody is signed in yet -- so they are
-// named for their position on the set, and each side is its own circle with
-// its own orbiting camera (D-63) rather than the one-live-body-plus-two-stills
-// this used to be: a real "calm" group, not a decoration standing in for one.
+// Nobody is signed in yet, so the bodies are named for their position on the set.
 const LEFT: readonly string[] = ["Group A1", "Group A2", "Group A3"];
 const RIGHT: readonly string[] = ["Group B1", "Group B2", "Group B3"];
 
@@ -60,9 +56,7 @@ export default async function LoginPage({
         <BrandMark size={28} type={18} />
       </div>
 
-      {/* Hidden below `lg`: two more live groups on a phone is six to ten WebGL
-          contexts nobody asked to load for a sign-in screen already spending
-          one on the card's own set dressing. */}
+      {/* Hidden below `lg` to spare phones the extra WebGL contexts. */}
       <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 z-0 hidden w-[38%] lg:block">
         <CharacterGroup members={sideMembers(LEFT)} mood="calm" heightFraction={0.62} floorFraction={0.06} />
       </div>
@@ -70,8 +64,6 @@ export default async function LoginPage({
         <CharacterGroup members={sideMembers(RIGHT)} mood="calm" heightFraction={0.62} floorFraction={0.06} />
       </div>
 
-      {/* The scrim the card sits on. Without it the bodies read straight through
-          the copy at narrow widths, which is exactly what this pass fixed. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-y-0 left-1/2 z-10 w-[700px] max-w-full -translate-x-1/2"
@@ -114,12 +106,8 @@ export default async function LoginPage({
               </div>
             ) : null}
 
-            {/*
-              A plain anchor, not next/link. Link routes client-side, and this
-              target is a route handler that sets a cookie and redirects to
-              another origin -- neither of which survives a client-side
-              navigation reliably. The browser has to make this request itself.
-            */}
+            {/* Plain anchor, not next/link: the handler sets a cookie and redirects
+                cross-origin, which a client-side navigation doesn't survive. */}
             <a
               href={`/api/auth/start?returnTo=${encodeURIComponent(returnTo)}`}
               className="mt-4.5 block rounded-2xl bg-stage-apl px-4 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-apl-ink"

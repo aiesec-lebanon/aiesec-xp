@@ -1,8 +1,5 @@
 import type { MatcherField } from "@prisma/client";
 
-// Pure role resolution: no I/O, so it can be unit-tested exhaustively. The
-// caller supplies the positions, the matcher list and the operating offices.
-
 export type Role = "ADMIN" | "LEAD" | "MEMBER" | "DENIED";
 
 export type PositionInput = {
@@ -10,7 +7,7 @@ export type PositionInput = {
   roleName: string | null;
   title: string | null;
   status: string | null;
-  /** Null when EXPA set no end date, which counts as not ended. */
+  /** Null counts as not ended. */
   endDate: Date | null;
 };
 
@@ -19,28 +16,20 @@ export type Matcher = {
   pattern: string;
 };
 
-/** GIS reports an in-force position as "active"; "current" is not a status value. */
+// GIS reports an in-force position as "active"; "current" is not a status value.
 const ACTIVE_STATUS = "active";
 
-// LEAD is the LC officer tier: assign EPs within their own LC (Architecture 4.2).
 const LEAD_ROLE_NAMES = new Set(["LCP", "LCVP", "TL"]);
 
-// Ranked most senior first. Used to pick one scoring office for a member who
-// holds several positions, so their points land in exactly one LC total (D-32),
-// and the one role they share an EP's points under (D-73).
+// Most senior first.
 export const ROLE_SENIORITY: readonly string[] = ["MCP", "MCVP", "LCP", "LCVP", "TL", "ESTL", "ESTM", "TM"];
 
 function isActive(position: Pick<PositionInput, "status">): boolean {
   return position.status?.toLowerCase() === ACTIVE_STATUS;
 }
 
-/**
- * The one test of "holds a member position this term" (D-71): active, in an
- * operating office, and not ended before the term start. Status alone is not
- * enough -- EXPA routinely leaves a departed member's position "active" after
- * its end date. `inTermMemberWhere()` (lib/org/members.ts) is the same rule as
- * a Prisma filter; change them together.
- */
+// EXPA often leaves a departed member's position "active" past its end date.
+// inTermMemberWhere() in lib/org/members.ts is the Prisma twin; change them together.
 export function isInTermPosition(
   position: Pick<PositionInput, "status" | "officeId" | "endDate">,
   operatingOfficeIds: ReadonlySet<string>,
@@ -53,7 +42,6 @@ export function isInTermPosition(
   );
 }
 
-/** GIS dates arrive as strings; an unparseable one is treated as absent. */
 export function parseGisDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
@@ -78,9 +66,8 @@ export type ResolveInput = {
 
 export type ResolvedAccess = {
   role: Role;
-  /** The office whose LC total this member's points count towards (D-32). */
   scoringOfficeId: bigint | null;
-  /** Offices this member may act within. Empty for ADMIN, who may act anywhere. */
+  /** Empty for ADMIN, who may act anywhere. */
   leadOfficeIds: bigint[];
   inScopePositions: PositionInput[];
 };
@@ -93,10 +80,7 @@ export function resolveAccess({
 }: ResolveInput): ResolvedAccess {
   const operating = new Set(operatingOfficeIds.map(String));
 
-  // Scope is applied before anything else. A position in a closed office, in an
-  // office outside the subtree entirely, or one that ended before this term
-  // confers nothing -- the service token is entity-wide, so GIS grants no
-  // isolation of its own (Architecture 4.4).
+  // Scope first: the service token is entity-wide, so GIS provides no isolation.
   const inScope = positions.filter((position) =>
     isInTermPosition(position, operating, termStart)
   );
@@ -127,10 +111,7 @@ export function resolveAccess({
   };
 }
 
-/**
- * One office per member. Seniority decides, because an MCVP who also holds an LC
- * position would otherwise make their points count twice (D-32).
- */
+// One office per member, so an MCVP who also holds an LC position isn't counted twice.
 export function chooseScoringOffice(positions: readonly PositionInput[]): bigint | null {
   if (positions.length === 0) return null;
 
@@ -138,11 +119,7 @@ export function chooseScoringOffice(positions: readonly PositionInput[]): bigint
   return ranked[0].officeId;
 }
 
-/**
- * The role a member takes a share of an EP's points under (D-73): the role of
- * their most senior position, ranked as D-32 ranks them, so an LCP who is also
- * an LCVP shares as an LCP. Pass only in-term positions.
- */
+// Pass only in-term positions.
 export function primaryRole(positions: readonly Pick<PositionInput, "roleName">[]): string | null {
   const ranked = [...positions].sort((a, b) => rank(a) - rank(b));
   const role = ranked[0]?.roleName?.trim().toUpperCase();

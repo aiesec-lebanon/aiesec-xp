@@ -1,36 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AIESEC XP
 
-## Getting Started
+A gamified performance dashboard for AIESEC in Lebanon. Members sign in with their AIESEC
+account and see their points, rank and progress towards admin-defined rewards, scored from
+their exchange funnel (APL → APD → RE) in EXPA. Leaderboards rank members and LCs, `/tv` is a
+live office screen, and admins configure scoring, periods, rewards and who is credited with
+each EP.
 
-First, run the development server:
+- **Domain and rules:** [`Context.md`](Context.md)
+- **System design:** [`Architecture.md`](Architecture.md)
+- **3D / icon asset pipeline:** [`assets/README.md`](assets/README.md)
+- **Third-party credits:** [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md)
+
+## Stack
+
+Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · Prisma 7 + PostgreSQL ·
+GraphQL (AIESEC GIS) · three.js / React Three Fiber · Motion · Vitest. Deployed on Vercel;
+data refresh is scheduled by GitHub Actions.
+
+## Getting started
+
+Requirements: Node.js 22+, a PostgreSQL database, an AIESEC OAuth application and a GIS
+service token.
 
 ```bash
+npm install                 # also runs prisma generate and copies vendor 3D assets into public/
+cp .env.example .env.local  # then fill it in
+npx tsx scripts/generate-secrets.mts   # fills SESSION_SECRET and CRON_SECRET
+npm run db:migrate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 and sign in with an AIESEC account that holds an active position
+in the configured office tree.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+All variables are documented in [`.env.example`](.env.example):
 
-## Learn More
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL`, `DIRECT_URL` | Pooled runtime connection, and the direct one migrations use |
+| `AIESEC_AUTH_URL`, `AIESEC_CLIENT_ID`, `AIESEC_CLIENT_SECRET`, `AIESEC_REDIRECT_URI` | Member sign-in |
+| `GIS_GRAPHQL_URL`, `GIS_SERVICE_TOKEN` | GIS access for sync and analytics (server-only secret) |
+| `MC_OFFICE_ID`, `MC_DIRECT_ENTITY_ID` | Root office of the competition; optional analytics id for MC-direct |
+| `SESSION_SECRET` | Signs the session cookie (32+ chars) |
+| `CRON_SECRET` | Bearer secret for `/api/cron/*` |
+| `NEXT_PUBLIC_BASE_URL` | Public base URL |
 
-To learn more about Next.js, take a look at the following resources:
+Never commit `.env.local` or real values; `.env.example` holds placeholders only.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### First data load
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+With `.env.local` filled in, populate offices, members and events:
 
-## Deploy on Vercel
+```bash
+npx tsx --conditions=react-server --env-file=.env.local scripts/sync-offices.mts
+npx tsx --conditions=react-server --env-file=.env.local scripts/sync-roster.mts
+npx tsx --conditions=react-server --env-file=.env.local scripts/sync.mts
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+After that, admins can run either job from **Admin → Updates**.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` / `build` / `start` | Next.js |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript, no emit |
+| `npm test` | Vitest suite (`tests/`) |
+| `npm run db:migrate` / `db:status` / `db:generate` | Prisma migrations and client |
+| `npm run gis:schema` | Re-captures the GIS schema into `gis/schema.graphql` |
+| `npm run gis:codegen` | Regenerates `gis/generated.ts` from `gis/operations.graphql` |
+| `npm run assets:models` | Compresses `assets/source/*.glb` into `public/models/` |
+| `npm run assets:vendor` | Copies the Draco decoder and HDRIs into `public/` (runs on install) |
+
+Scripts in `scripts/` that import server modules run with
+`npx tsx --conditions=react-server --env-file=.env.local scripts/<name>.mts`:
+
+- `sync.mts` — runs every sync pass.
+- `sync-offices.mts`, `sync-roster.mts` — office tree and roster only.
+- `import-preview.mts` — dry run of the sign-up sheet import.
+- `score-preview.mts` — runs the scoring engine read-only and prints the result.
+
+## Deployment
+
+1. Deploy to Vercel with the environment variables above (production uses a non-expiring GIS
+   service token).
+2. Run `npm run db:migrate` against the production database.
+3. In the GitHub repository, set the Actions secret `CRON_SECRET` (same value as on Vercel)
+   and the Actions variable `APP_URL` (the production URL). The workflows in
+   `.github/workflows/` then refresh EP data daily (every 5 minutes in hackathon mode) and
+   the member roster monthly.
+
+## Project layout
+
+```
+app/            routes (pages, admin, API)
+components/     UI: studio (dashboard set, characters), three (3D wrapper), motion, icons
+lib/            server logic: auth, sync, scoring, import, analytics, GIS client, design tokens
+prisma/         schema and migrations
+gis/            GIS schema, operations and generated SDK
+scripts/        operational and asset-pipeline scripts
+tests/          Vitest suite
+public/         served assets (models, character stills)
+```

@@ -1,16 +1,8 @@
-// How people and LCs are named on screen, whatever casing or suffix EXPA sends.
-// Pure, so tests/names.test.ts covers the rules directly.
-
 // Not after an apostrophe: in a transliterated Arabic name ("Ra'ed", "Sa'ad")
 // it marks a sound inside the word, not the start of a new one.
 const WORD_PART = /(^|[\s-])(\p{L})([\p{L}'’]*)/gu;
 
-/**
- * Capitalises the first letter of every part of a name, including after a
- * hyphen. The rest of a part is lowercased only when it arrived all capitals
- * ("JOHN"), so a name that already mixes case ("McDonald") keeps the spelling
- * its owner gave it.
- */
+// The rest of a part is lowercased only when it arrived all caps, so "McDonald" survives.
 export function personName(raw: string): string {
   return raw
     .trim()
@@ -27,10 +19,6 @@ export function firstName(fullName: string): string {
 
 export const MC_LABEL = "MC";
 
-/**
- * An office as members know it: "(EXP)" dropped from the name EXPA gives it,
- * and the MC shown as "MC" whichever of its ids a caller holds.
- */
 export function officeLabel(name: string, { isMc = false }: { isMc?: boolean } = {}): string {
   if (isMc) return MC_LABEL;
   return name.replace(/\s*\(EXP\)/gi, "").replace(/\s+/g, " ").trim();

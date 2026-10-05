@@ -1,5 +1,5 @@
 import { requireMemberPage } from "@/lib/auth/guards";
-import { activeWindow, recentActivity, topMembers } from "@/lib/dashboard";
+import { activeWindow, topMembers } from "@/lib/dashboard";
 import { activeWindowRange, officeStandings } from "@/lib/leaderboard";
 
 import { AutoRefresh } from "@/components/studio/auto-refresh";
@@ -11,44 +11,23 @@ import { RollingNumber } from "@/components/studio/rolling-number";
 
 export const dynamic = "force-dynamic";
 
-const STAGES: Record<string, string> = {
-  APL: "carried an application",
-  APD: "landed an approval",
-  RE: "realized an EP",
-  APD_BROKEN: "lost an approval",
-  RE_BROKEN: "lost a realization",
-};
-
 export default async function TvPage() {
-  // An office screen is signed in once and left running; there is no anonymous
-  // mode, because everything on this page is member data (D-16).
+  // No anonymous mode: an office screen signs in once and is left running.
   await requireMemberPage("/tv");
 
-  // The live screen for exchange hackathons, so it stays on the active display
-  // window and takes no range of its own: nobody standing in front of a TV is
-  // going to pick dates, and the race it announces is the one the window
-  // defines (D-58).
   const range = await activeWindowRange();
 
-  const [{ standings: entities, analyticsOk }, top, window, activity] = await Promise.all([
+  const [{ standings: entities, analyticsOk }, top, window] = await Promise.all([
     officeStandings(range),
     topMembers(10, range),
     activeWindow(),
-    recentActivity(8),
   ]);
 
-  // The board and the ticker both show people, so both show the character each
-  // of them picked.
   const characters = await memberAvatars(
-    [...top, ...activity].map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
+    top.map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
   );
 
-  // Rank, points and the per-entity APL/APD/RE counts all come from AIESEC's
-  // own analytics API (D-56) -- a live, external figure nobody can dispute,
-  // rather than a reflection of how completely this product's assignment
-  // register happens to cover that LC. "All entities" is the sum of the rows
-  // actually shown, so it never carries activity from a closed office that
-  // has no row of its own.
+  // Summed from the rows shown, so a closed office with no row adds nothing.
   const totals = entities.reduce(
     (sum, entity) => ({
       aplCount: sum.aplCount + entity.aplCount,
@@ -62,8 +41,6 @@ export default async function TvPage() {
     <main className="flex h-full flex-col overflow-hidden bg-wall">
       <AutoRefresh seconds={60} />
       <header className="flex shrink-0 items-center justify-between gap-6 px-[clamp(1.5rem,3vw,3.5rem)] py-[clamp(0.75rem,1.8vh,1.75rem)]">
-        {/* Already a link home, which is the only way off this screen now that
-            it carries no chrome. */}
         <BrandMark size={38} type={26} />
         <div className="flex items-center gap-3.5">
           <span
@@ -119,9 +96,6 @@ export default async function TvPage() {
             ))}
           </ol>
 
-          {/* The column ran out of rows halfway down. What belongs in the gap
-              is the sum no single row carries: APL, APD and RE across every
-              entity. */}
           <div className="mt-[clamp(0.5rem,1.2vh,2rem)] flex min-h-0 flex-[2] flex-col justify-center rounded-3xl bg-surface-raised px-[clamp(1.5rem,2.5vw,2.5rem)] py-[clamp(1rem,2.2vh,2rem)] shadow-e1">
             <p className="shrink-0 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">
               All of AIESEC in Lebanon
@@ -176,32 +150,6 @@ export default async function TvPage() {
           </ol>
         </section>
       </div>
-
-      {/* {activity.length > 0 ? (
-        <div className="flex h-[clamp(64px,9vh,120px)] shrink-0 items-center overflow-hidden bg-ink">
-          <div className="tv-ticker flex shrink-0 items-center gap-14 whitespace-nowrap pl-14">
-            {[0, 1].map((copy) =>
-              activity.map((item, index) => (
-                <div key={`${copy}-${index}`} className="flex items-center gap-3.5">
-                  <CharacterAvatar
-                    name={item.fullName}
-                    idOverride={characters.get(item.memberId)?.id}
-                    size={40}
-                    rounded="rounded-xl"
-                    tone="bg-[#2a2926]"
-                  />
-                  <span className="text-[17px] text-wall">
-                    <b>{item.fullName}</b> {STAGES[item.eventType] ?? item.eventType}
-                  </span>
-                  <span className="tabular text-[19px] font-bold text-re-mid">
-                    {formatSignedPoints(item.points)}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      ) : null} */}
     </main>
   );
 }

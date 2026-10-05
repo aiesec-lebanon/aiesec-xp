@@ -8,9 +8,6 @@ import {
   MIN_GAP_MS,
 } from "@/lib/sync/cadence";
 
-// D-66. The GitHub workflows only tick; these rules decide whether a tick has
-// work, which is what makes hackathon mode a switch in the admin console.
-
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;

@@ -1,29 +1,18 @@
-// Parses the MC's sign-up sheet (D-80). Pure, so the rules below are testable
-// without a network call.
-//
-// Each row is a full sign-up form: name, date of birth, email, phone,
-// nationality, languages, university, major, follow-up notes. None of that may
-// enter this system (D-42, Architecture.md 10). Four columns are read and the
-// row is then discarded, so there is no code path by which the rest could be
-// stored even by accident.
+// Sign-up rows carry personal data that must never be stored; only these four columns are read.
+const EP_ID_HEADER = "EP ID";
+const EP_MANAGER_HEADER = "EP Manager";
+const EP_LC_HEADER = "LC Assigned To";
+const EP_TEAM_HEADER = "Function Assigned to";
 
-export const EP_ID_HEADER = "EP ID";
-export const EP_MANAGER_HEADER = "EP Manager";
-export const EP_LC_HEADER = "LC Assigned To";
-export const EP_TEAM_HEADER = "Function Assigned to";
-
-// The EP managers' directory: one row per manager, the name MasterSheet uses
-// for them, where they sit, and their EXPA id.
 export const DIRECTORY_LC_HEADER = "LC";
 export const DIRECTORY_TEAM_HEADER = "Team";
 export const DIRECTORY_NAME_HEADER = "EP Manager Name";
 export const DIRECTORY_ID_HEADER = "EXPA ID";
 
 export type SignupRow = {
-  /** 1-based, counting the header, so it matches what the admin sees. */
+  // 1-based, counting the header, so it matches the sheet's row numbers.
   lineNumber: number;
   epPersonId: bigint;
-  /** Empty when the sheet names no manager for the EP yet. */
   managerLabel: string;
   lc: string;
   team: string;
@@ -40,12 +29,7 @@ export type ParsedSignups = {
   problems: RowProblem[];
 };
 
-/**
- * How a name, LC or team is compared between the tabs and the console: exact,
- * except for case, accents and spacing, which differ between cells typed by
- * different people and carry no meaning. Nothing fuzzier -- "Ahmad M" and
- * "Ahmad K" are two people.
- */
+// Deliberately nothing fuzzier than case/accents/spacing: "Ahmad M" and "Ahmad K" are two people.
 export function normaliseLabel(value: string): string {
   return value
     .trim()
@@ -55,11 +39,7 @@ export function normaliseLabel(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-/**
- * Minimal RFC 4180 reader. Google's CSV export quotes any field containing a
- * comma, and these sheets do, so splitting on commas would silently shift every
- * column after a comma-bearing name.
- */
+// Minimal RFC 4180 reader: Google quotes comma-bearing fields, so a naive split would shift columns.
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -119,11 +99,7 @@ function table(csv: string, tabName: string): string[][] {
   return rows;
 }
 
-/**
- * Columns are located by header rather than by position. The MC edits this
- * sheet, and a column inserted at the front would otherwise import the wrong
- * field silently -- names as ids, or one member's EPs credited to another.
- */
+// By header, not position: the MC edits this sheet and an inserted column would silently import the wrong field.
 function columnOf(header: readonly string[], name: string): number {
   return header.findIndex((cell) => normaliseLabel(cell) === normaliseLabel(name));
 }
@@ -193,7 +169,6 @@ export type DirectoryEntry = {
 
 export type ParsedDirectory = {
   entries: DirectoryEntry[];
-  /** Managers listed with no EXPA ID yet. */
   missingIds: string[];
   invalid: { lineNumber: number; detail: string }[];
 };
@@ -237,13 +212,7 @@ function readDirectory(csv: string, tabName: string, onWrongShape: () => SheetSh
   return parsed;
 }
 
-/**
- * Reads the EP managers' directory tab.
- *
- * Google answers a tab name it does not have with the spreadsheet's first tab
- * and a 200 -- measured: an unknown tab name returned sign-up rows. So the
- * header is the only proof the right tab came back.
- */
+// Google answers an unknown tab name with the first tab and a 200, so the header is the only proof.
 export function parseDirectory(csv: string, tabName: string): ParsedDirectory {
   return readDirectory(
     csv,
@@ -255,13 +224,8 @@ export function parseDirectory(csv: string, tabName: string): ParsedDirectory {
   );
 }
 
-/**
- * Reads a CSV an admin uploads to match many manager names at once. It takes
- * the same columns as the directory tab, so one template serves both.
- */
 export function parseManagerCsv(csv: string): ParsedDirectory {
-  // Excel's "CSV UTF-8" starts with a byte-order mark, which would otherwise
-  // become part of the first header and hide the "LC" column.
+  // Excel's "CSV UTF-8" adds a BOM that would otherwise hide the first header.
   return readDirectory(
     csv.charCodeAt(0) === 0xfeff ? csv.slice(1) : csv,
     "CSV",
@@ -276,11 +240,7 @@ export function directoryKey(entry: { name: string; lc: string; team: string }):
   return [entry.name, entry.lc, entry.team].map(normaliseLabel).join("|");
 }
 
-/**
- * One directory from the sheet's tab and the console's matches. A console match
- * replaces the sheet's entries for the same name, LC and team: it is an admin's
- * deliberate answer, and the sheet must not quietly reverse it.
- */
+// A console match overrides the sheet for the same key: the sheet must not quietly reverse an admin.
 export function mergeDirectory(
   sheet: readonly DirectoryEntry[],
   console: readonly DirectoryEntry[]
@@ -308,12 +268,7 @@ function single(entries: DirectoryEntry[]): Resolution | null {
   return { kind: "matched", memberId: entries[0].memberId, source };
 }
 
-/**
- * Who a sign-up row's manager is. By name first; when the same name belongs to
- * more than one member, the row's LC picks among them, then its team. Anything
- * still ambiguous matches nobody -- never a guess, because a wrong match sends
- * someone else's points to the wrong person.
- */
+// Still-ambiguous names match nobody: a wrong guess would send points to the wrong person.
 export function resolveManager(
   directory: readonly DirectoryEntry[],
   row: Pick<SignupRow, "managerLabel" | "lc" | "team">

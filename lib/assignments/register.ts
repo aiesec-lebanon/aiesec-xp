@@ -5,10 +5,6 @@ import { isActiveCredit, planSource, type AutomaticSource } from "@/lib/assignme
 import { inTermRoles } from "@/lib/org/members";
 import type { Assignment } from "@/lib/scoring/attribution";
 
-// The assignment register (D-73): who is credited with each EP, from which
-// source. The sync and the sheet import write it through `applySource`; the
-// replay and the live leaderboards read it through `creditRegister`.
-
 export const SYSTEM_ACTOR = 0n;
 
 export type SourceResult = { created: number; flagged: number; cleared: number; dropped: number };
@@ -17,12 +13,7 @@ function flag(source: AutomaticSource, value: boolean) {
   return source === "EXPA" ? { fromExpa: value } : { fromSheet: value };
 }
 
-/**
- * Writes one automatic source's current view of the EPs in `desired` (EP id to
- * member ids). Anyone who is not a member this term is left out here rather
- * than failing the foreign key or crediting someone who cannot compete (D-71).
- * One transaction, so a replay never reads a half-applied source.
- */
+// Non-members this term are filtered out rather than failing the FK or crediting someone who can't compete.
 export async function applySource(
   source: AutomaticSource,
   desired: ReadonlyMap<string, ReadonlySet<string>>,
@@ -70,13 +61,11 @@ export async function applySource(
 }
 
 export type CreditRegister = {
-  /** The credits that count: not removed, named by a source, held by a member this term. */
   assignments: Assignment[];
-  /** EP id to its main manager (D-83), including a main who is no longer a member. */
+  // Includes a main manager who is no longer a member.
   mains: Map<string, bigint>;
 };
 
-/** What the engine scores with: each credit and the role it is weighted by, and each EP's main. */
 export async function creditRegister(): Promise<CreditRegister> {
   const rows = await db.epAssignment.findMany({
     where: {

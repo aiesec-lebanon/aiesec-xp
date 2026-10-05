@@ -11,7 +11,6 @@ export default async function WelcomePage() {
   const user = await requireMemberPage("/welcome");
   const avatar = await memberAvatar(user.id, user.fullName);
 
-  // Nothing to do here once a member has picked; the dashboard is the point.
   if (avatar.chosen) redirect("/");
 
   return (

@@ -35,10 +35,6 @@ function Message({ state }: { state: ActionState | null }) {
   );
 }
 
-/**
- * Flipping the switch is the whole action. How long it stays on is asked only
- * on the way on; the way off has nothing to choose.
- */
 export function HackathonSwitch({ on }: { on: boolean }) {
   const [state, action, pending] = useActionState<ActionState | null, FormData>(
     setHackathonModeAction,

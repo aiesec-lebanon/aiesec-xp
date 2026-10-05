@@ -47,12 +47,7 @@ const windowSchema = z
     message: "The end date needs to be after the start date.",
   });
 
-/**
- * Sets the one active display window (D-07). The previous window is
- * deactivated, not deleted: it keeps its weights for the dates it still covers,
- * and the new one wins wherever they overlap (D-85). Saving replays the ledger
- * (D-15): the window bounds which events count at all.
- */
+// The previous window is deactivated, not deleted: it keeps its weights for dates it still covers.
 export async function setDisplayWindowAction(
   _previous: ActionState | null,
   formData: FormData
@@ -70,7 +65,7 @@ export async function setDisplayWindowAction(
     db.displayWindow.findFirst({ where: { isActive: true } }),
     db.scoreConfig.findFirst({ where: { isActive: true }, select: { version: true } }),
   ]);
-  // A new period starts with the weights of the one it replaces (D-85).
+  // A new period starts with the weights of the one it replaces.
   const configVersion = before?.configVersion ?? activeConfig?.version;
   if (configVersion === undefined) {
     return { ok: false, message: "Points aren't set up yet. Let whoever looks after the platform know." };
@@ -100,17 +95,7 @@ const termSchema = z.object({ startsAt: dateOnly }).transform(({ startsAt }) => 
   startsAt: new Date(`${startsAt}T00:00:00.000Z`),
 }));
 
-/**
- * Sets the term start (D-58): the collection floor, and where the leaderboards'
- * date range begins when nobody has picked one.
- *
- * No replay, unlike the display window above. The term bounds what is collected
- * and what a leaderboard may be read back to; the ledger is still derived
- * against the window, so nothing it holds changes here. Moving the term earlier
- * lets the next sync backfill; moving it later stops collecting further back but
- * deletes nothing, because the whole point of the term start is that history
- * behind the current window survives.
- */
+// No replay: the ledger is derived from the window, not the term. Moving it later deletes nothing.
 export async function setTermStartAction(
   _previous: ActionState | null,
   formData: FormData

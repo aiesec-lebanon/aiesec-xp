@@ -1,23 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  /* STUDIO (D-24). Mirrors lib/design/tokens.ts, which three.js and Recharts
-     read directly; tests/visual-stack.test.ts fails if the two drift. */
+  /* Mirrors lib/design/tokens.ts; tests/visual-stack.test.ts fails if they drift. */
   --surface-base: #fbfaf8;
   --surface-raised: #ffffff;
   --surface-sunken: #edeae4;
   --surface-line: #e3dfd7;
 
-  /* The same value as --surface-base on purpose: the chrome sits on the page
-     and the page is the back wall of the set, so there is no seam where the
-     cyclorama starts. */
+  /* Same as --surface-base on purpose, so there is no seam where the cyclorama starts. */
   --set-wall: #fbfaf8;
   --set-floor: #f1eee8;
   --set-horizon: #e6e2da;
   --set-ghost: #efece5;
 
-  /* One scale for everything a person touches. Motion picks its own numbers
-     for springs; these are for CSS transitions. */
   --motion-micro: 120ms;
   --motion-ui: 180ms;
   --motion-move: 320ms;
@@ -89,7 +84,7 @@
   --shadow-e2: var(--elevation-2);
   --shadow-e3: var(--elevation-3);
 
-  /* Faces come from lib/design/fonts.ts, bound by next/font on <html>. */
+  /* Bound by next/font on <html> (lib/design/fonts.ts). */
   --font-display: var(--face-display);
   --font-ui: var(--face-ui);
   --font-numeric: var(--face-numeric, var(--face-display));
@@ -103,9 +98,6 @@ body {
   font-family: var(--face-ui), system-ui, sans-serif;
 }
 
-/* Everything in the chrome a person can touch moves the same way: one step of
-   surface and a small lift. Colour is left to mean something, which is why sign
-   out no longer turns blue -- it was the loudest control on the page. */
 .control-surface {
   transition:
     background-color var(--motion-micro) var(--motion-ease),
@@ -122,16 +114,13 @@ body {
   transform: translateY(0);
 }
 
-/* Scores and ranks are read at a glance and compared down a column, so they get
-   the numeral face and fixed-width figures wherever they appear. */
 .tabular {
   font-family: var(--face-numeric, var(--face-display)), var(--face-ui), system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
-/* The idle loop. Written against `translate`/`scale` rather than `transform` so
-   a mirrored or offset body keeps its own transform while it breathes. */
+/* `translate`/`scale` rather than `transform`, so a mirrored body keeps its own transform. */
 @keyframes bob {
   0%,
   100% {
@@ -176,21 +165,6 @@ body {
   animation: squash 5.5s ease-in-out infinite;
 }
 
-/* /tv runs unattended on an office screen, so its ticker is CSS rather than a
-   React animation: nothing re-renders, and nothing accumulates over a week. */
-@keyframes tv-ticker {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.tv-ticker {
-  animation: tv-ticker 30s linear infinite;
-}
-
 @keyframes shimmer {
   100% {
     transform: translateX(200%);
@@ -208,12 +182,7 @@ body {
   animation: toast-in 0.18s ease-out;
 }
 
-/* D-46: motion is on for everyone; the member's own switch turns it down, and
-   the operating system's prefers-reduced-motion is deliberately not consulted.
-   The React layer reads the same state through useReduceMotion; this is the
-   backstop for anything animated purely in CSS. The attribute is rendered
-   server-side from the cookie, so a member who reduced motion never sees a
-   frame of the motion they asked not to see. */
+/* The member's own switch, not the OS setting, decides; this is the backstop for CSS-only motion. */
 [data-reduce-motion="true"] *,
 [data-reduce-motion="true"] *::before,
 [data-reduce-motion="true"] *::after {
@@ -223,16 +192,11 @@ body {
   scroll-behavior: auto !important;
 }
 
-/* The gutter every scrolling screen ends on. A page whose last card stops dead
-   at the fold reads as truncated rather than finished, so the end of the
-   content is always announced by the same band of empty set. */
 .page-end {
   padding-bottom: clamp(3rem, 7vh, 5rem);
 }
 
-/* The two readings flanking the hero start a little below its head. The offset
-   is a share of the body actually drawn, so on a short screen it tightens with
-   the stage instead of pushing the columns down past it. */
+/* Offset scales with the drawn body so it tightens on short screens. */
 @media (min-width: 64rem) {
   .hero-column {
     padding-top: clamp(0px, calc(var(--hero-body, 440px) * 0.11), 48px);

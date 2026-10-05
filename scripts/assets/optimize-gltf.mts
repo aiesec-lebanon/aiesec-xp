@@ -1,16 +1,3 @@
-// Compresses the models in assets/source/ into public/models/, ready to ship.
-// A Blender export, a Kenney pack or a Poly Haven download is routinely ten to
-// fifty times larger than it needs to be on a phone; this is the step between
-// "it looks right in Blender" and "it loads over Lebanese mobile data".
-//
-//   npm run assets:models            every model in assets/source
-//   npm run assets:models mascot     just assets/source/mascot.glb
-//
-// Draco is the geometry codec because lib/three/loaders.ts already serves its
-// decoder from public/draco. Textures become WebP rather than KTX2, which would
-// need a second self-hosted transcoder for a saving this product's handful of
-// props will not notice.
-
 import { execFile } from "node:child_process";
 import { mkdir, readdir, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -19,8 +6,7 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
-// Invoked through node on the resolved bin rather than npx: the arguments
-// include filenames off the disk, and a shell would be free to interpret them.
+// Run the bin through node, not npx, so no shell interprets on-disk filenames.
 const CLI = path.join(
   path.dirname(createRequire(import.meta.url).resolve("@gltf-transform/cli")),
   "..",

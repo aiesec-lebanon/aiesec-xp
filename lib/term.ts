@@ -2,20 +2,8 @@ import "server-only";
 
 import { db } from "@/lib/db";
 
-// The term start (D-58): the earliest date this system collects, scores or
-// shows anything for.
-//
-// It is deliberately not the active DisplayWindow's start. The window is the
-// range the reward race is measured in and the MC moves it; the term is the
-// floor under all of it, and moving the window must never decide how much
-// history survives.
-
-/**
- * Throws when the row is missing rather than falling back to a constant. The
- * migration creates it, so absent means migrations have not been run -- in
- * which case there is no ScoreConfig either and a silent default would only
- * turn a broken deployment into a wrong leaderboard.
- */
+// Throws instead of defaulting: a missing row means migrations haven't run, and a
+// silent default would turn a broken deployment into a wrong leaderboard.
 export async function termStart(): Promise<Date> {
   const settings = await db.termSettings.findUnique({ where: { id: "singleton" } });
   if (!settings) {
@@ -26,11 +14,6 @@ export async function termStart(): Promise<Date> {
 
 export type CurrentWindow = { startsAt: Date; endsAt: Date | null };
 
-/**
- * The window the MC is measuring now: the active DisplayWindow (D-07), or the
- * term from its start while none is set. The assignment console lists the EPs
- * updated since it opened (D-76), and the sync mirrors EXPA managers for them.
- */
 export async function currentWindow(): Promise<CurrentWindow> {
   const window = await db.displayWindow.findFirst({ where: { isActive: true } });
   if (window) return { startsAt: window.startsAt, endsAt: window.endsAt };

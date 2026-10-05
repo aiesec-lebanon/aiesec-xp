@@ -7,34 +7,23 @@ import { supportsWebGL } from "@/lib/three/webgl";
 
 import { SceneSkeleton } from "./skeleton";
 
-// three, drei and the scene graph are a large client bundle that most of the
-// dashboard never needs, so they load on demand and never on the server.
 const XpCanvas = dynamic(() => import("./canvas").then((mod) => mod.XpCanvas), {
   ssr: false,
   loading: () => <SceneSkeleton className="absolute inset-0" />,
 });
 
-// Whether this device has a GPU never changes, so there is nothing to subscribe
-// to -- but it also cannot be known on the server, and supportsWebGL caches, so
-// the snapshot stays stable across renders.
+// GPU support never changes and supportsWebGL caches, so the snapshot is stable.
 const noSubscription = () => () => {};
 const unknownOnServer = () => undefined;
 
 export type SceneProps = {
   children: ReactNode;
-  /**
-   * The same information in plain DOM. Always rendered -- visibly when there is
-   * no GPU, and to assistive technology otherwise -- because a <canvas> is
-   * invisible to a screen reader and unreachable by keyboard.
-   */
+  /** Always rendered: visibly without a GPU, otherwise for screen readers. */
   fallback: ReactNode;
-  /** Required unless `decorative`: the scene's accessible name. */
+  /** Required unless `decorative`. */
   label?: string;
-  /** A scene that carries no information of its own; its fallback is dropped. */
   decorative?: boolean;
-  /** Mount without waiting for the viewport, for a scene above the fold. */
   eager?: boolean;
-  /** Composite over the DOM instead of painting the canvas. */
   transparent?: boolean;
   className?: string;
 };
@@ -57,8 +46,6 @@ export function Scene({
     const node = container.current;
     if (!node) return;
 
-    // Booting a WebGL context for a canvas that is still below the fold costs a
-    // phone real memory and battery before the member has scrolled to it.
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) setVisible(true);

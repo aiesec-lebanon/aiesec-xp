@@ -78,7 +78,6 @@ export function WeightsForm({ roles, weights }: { roles: RoleRow[]; weights: Sta
   );
   const valid = Object.values(shares).every((share) => share >= 0 && share <= 100);
 
-  // The most-held role, as the one an admin most often sees beside a main.
   const example = useMemo(() => {
     const role = [...roles].sort((a, b) => b.members - a.members || a.role.localeCompare(b.role))[0];
     return role ? { role: role.role, points: (apdPoints * (shares[role.role] ?? 0)) / 100 } : null;

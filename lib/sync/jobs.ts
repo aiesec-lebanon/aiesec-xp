@@ -14,10 +14,6 @@ import {
 } from "@/lib/sync/cadence";
 import { runEventPasses, runMemberPasses, type PassResult } from "@/lib/sync/run";
 
-// The one way a sync job runs (D-66), whoever asked for it: a GitHub schedule
-// through /api/cron/*, or an admin's button. A single entry point is what lets
-// the lease promise that a job never runs twice at once.
-
 export type JobRun =
   | { outcome: "ran"; ok: boolean; steps: PassResult[]; durationMs: number }
   | { outcome: "skipped"; reason: SkipReason };
@@ -43,8 +39,6 @@ async function rebuildLedger(actorId: bigint): Promise<PassResult> {
 }
 
 const WORK: Record<SyncJobName, (now: Date, actorId: bigint) => Promise<PassResult[]>> = {
-  // Rebuilt from whatever the passes left behind, so a new event is scored in
-  // the same run that ingested it.
   events: async (now, actorId) => [...(await runEventPasses(now)), await rebuildLedger(actorId)],
   roster: () => runMemberPasses(),
 };
@@ -66,7 +60,7 @@ export async function syncJobState(job: SyncJobName): Promise<SyncJob | null> {
   return db.syncJob.findUnique({ where: { name: job } });
 }
 
-/** One UPDATE guarded on the lease, so two callers racing for it cannot both win. */
+// One UPDATE guarded on the lease, so two racing callers cannot both win.
 async function acquireLease(job: SyncJobName, trigger: SyncTrigger, now: Date): Promise<boolean> {
   await db.syncJob.createMany({ data: [{ name: job }], skipDuplicates: true });
 
@@ -82,11 +76,6 @@ async function acquireLease(job: SyncJobName, trigger: SyncTrigger, now: Date): 
   return count === 1;
 }
 
-/**
- * Runs a job if its trigger says it is due and nobody else is running it.
- * `actorId` is recorded against the ledger rebuild, so a replay an admin asked
- * for is audited as theirs rather than the system's.
- */
 export async function runSyncJob(
   job: SyncJobName,
   trigger: SyncTrigger,

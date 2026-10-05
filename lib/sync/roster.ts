@@ -9,14 +9,6 @@ import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
 import { termStart } from "@/lib/term";
 
-// Sync pass 8, the roster.
-//
-// Without it, Member holds only people who have signed in, which leaves an
-// admin mapping sheet labels to a near-empty list and a leaderboard that cannot
-// name anyone who has not visited yet. Positions are also what decide access
-// (D-31), so refreshing them here is what makes a term handover take effect
-// without each officer having to log in first (D-23).
-
 const PAGE_SIZE = 200;
 const MAX_PAGES = 20;
 
@@ -47,8 +39,7 @@ async function readOffice(officeId: bigint, endDateFrom: string): Promise<GisPos
       filters: {
         office_id: Number(officeId),
         status: ["active"],
-        // D-60: status alone keeps last term's officers, whose rows EXPA often
-        // never moves off "active".
+        // EXPA often leaves last term's positions "active", so status alone isn't enough.
         end_date: { from: endDateFrom },
       },
       pagination: { page, per_page: PAGE_SIZE },
@@ -92,14 +83,10 @@ export async function syncRoster(): Promise<RosterSyncResult> {
       collected.push(...(await readOffice(officeId, endDateFrom)));
     }
 
-    // office_id is scope-inclusive: querying the MC returns the whole subtree,
-    // closed offices included. Keeping those would put members of a closed LC on
-    // the leaderboard and offer them as candidates when mapping sheet names,
-    // which contradicts D-01 and D-31.
+    // office_id is scope-inclusive: the MC query returns the whole subtree, closed offices included.
     const positions = collected.filter((position) => officeSet.has(String(position.officeId)));
 
-    // The same position can arrive once per office queried, since each query
-    // returns the subtree beneath it.
+    // Subtree queries overlap, so a position can arrive once per office queried.
     const seen = new Set<string>();
     const deduped = positions.filter((position) => {
       const key = String(position.id);
@@ -110,8 +97,6 @@ export async function syncRoster(): Promise<RosterSyncResult> {
     positions.length = 0;
     positions.push(...deduped);
 
-    // Group by person: one member may hold several positions, and their scoring
-    // office is decided across all of them (D-32).
     const byMember = new Map<string, GisPosition[]>();
     for (const position of positions) {
       const key = String(position.memberId);
@@ -134,8 +119,7 @@ export async function syncRoster(): Promise<RosterSyncResult> {
       const profile = {
         fullName: held[0].fullName,
         profilePhotoUrl: held[0].profilePhotoUrl,
-        // Only set when the office is one we hold, since the column carries a
-        // foreign key and GIS reports offices outside the subtree.
+        // FK column, and GIS reports offices outside the subtree.
         scoringOfficeId:
           scoringOfficeId && officeSet.has(String(scoringOfficeId)) ? scoringOfficeId : null,
         lastSyncedAt: new Date(),
@@ -148,18 +132,12 @@ export async function syncRoster(): Promise<RosterSyncResult> {
       });
     }
 
-    // An empty read is a GIS failure, not a term with no members: replacing the
-    // roster with it would take away everyone's access at once.
+    // An empty read is a GIS failure; replacing the roster with it would revoke everyone's access.
     if (positions.length === 0) {
       throw new Error("GIS returned no active positions for any operating office; roster left unchanged");
     }
 
-    // The whole table is replaced with what GIS reports now (D-71). Replacing
-    // only the members this run saw left everyone else's rows in place: an
-    // officer whose term ended stops appearing in the floored query above, so
-    // under the old rule their stored "active" position -- and the access,
-    // leaderboard row and credit-to entry it grants -- simply never went away.
-    // One transaction, so no request ever sees the roster half-rebuilt.
+    // Full replace so ended terms drop out; one transaction so no request sees it half-rebuilt.
     await db.$transaction([
       db.position.deleteMany({}),
       db.position.createMany({

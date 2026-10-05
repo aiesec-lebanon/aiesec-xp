@@ -48,8 +48,6 @@ const rewardSchema = z.object({
   sortOrder: z.coerce.number().int(),
 });
 
-/** Creates or updates a reward, keyed by an optional hidden `id` field. Any
- * change replays the ledger (D-15): thresholds decide who has a grant. */
 export async function saveRewardAction(
   _previous: ActionState | null,
   formData: FormData

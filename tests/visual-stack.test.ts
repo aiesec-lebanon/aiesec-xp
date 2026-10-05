@@ -3,18 +3,10 @@ import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-// The 3D, chart and icon layers each ship with an upstream default that fetches
-// from a CDN -- drei's Environment presets, three's Draco decoder, troika's font
-// resolver. Each is overridden, and each override is one line that would be easy
-// to lose in a refactor without anything failing until a member with a strict
-// network or a working CSP opens the page. These tests read the sources as text,
-// in the same spirit as tests/no-personal-data.test.ts.
-
 const root = resolve(__dirname, "..");
 
 const VISUAL_DIRS = [
   "components/three",
-  "components/charts",
   "components/icons",
   "components/motion",
   "components/studio",
@@ -32,7 +24,7 @@ function sourcesIn(dir: string): { path: string; text: string }[] {
     });
 }
 
-/** Comments carry URLs on purpose -- they say which CDN is being avoided. */
+// Comments may name the CDN being avoided, so they are excluded.
 function withoutComments(text: string): string {
   return text
     .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -68,12 +60,6 @@ describe("the upstream CDN defaults are actually overridden", () => {
     expect(environment).toContain("files={hdriPath(environment)}");
     expect(environment).not.toMatch(/preset=/);
   });
-
-  it("gives both drei text components a self-hosted font", () => {
-    const text = readFileSync(join(root, "components/three/text.tsx"), "utf8");
-    expect(text).toContain("font={SCENE_FONT.sdf}");
-    expect(text).toContain("font={SCENE_FONT.typeface}");
-  });
 });
 
 describe("the vendor sync and the paths the app loads agree", () => {
@@ -91,16 +77,7 @@ describe("the vendor sync and the paths the app loads agree", () => {
     expect(list(script, "HDRI_ENVIRONMENTS")).toEqual(list(assets, "HDRI_ENVIRONMENTS"));
   });
 
-  it("extracts the fonts the scene text components reference", () => {
-    const fonts = list(script, "SCENE_FONTS");
-    for (const font of fonts) expect(assets).toContain(`/fonts/${font}`);
-  });
-
-  // Every directory the asset scripts write into has to be excluded from the
-  // proxy matcher, or the session check turns an asset request into a redirect
-  // to the sign-in page the moment a cookie expires mid-scene. Deriving the list
-  // from the scripts means adding a fifth directory fails here rather than
-  // silently 307-ing a decoder.
+  // An asset directory missing from the proxy matcher redirects to sign-in once a session expires.
   it("excludes every generated asset directory from the proxy matcher", () => {
     const optimise = readFileSync(join(root, "scripts/assets/optimize-gltf.mts"), "utf8");
     const proxy = readFileSync(join(root, "proxy.ts"), "utf8");
@@ -110,14 +87,14 @@ describe("the vendor sync and the paths the app loads agree", () => {
       ...[...optimise.matchAll(/OUTPUT_DIR = "public\/([a-z]+)"/g)].map((match) => match[1]!),
     ]);
 
-    expect(written.size).toBeGreaterThanOrEqual(4);
+    expect(written.size).toBeGreaterThanOrEqual(3);
     for (const directory of written) expect(proxy).toContain(`${directory}/|`);
   });
 });
 
 describe("three never enters a server bundle", () => {
   const importsThree = sources.filter((source) =>
-    /from "(three|@react-three\/|motion\/react|recharts)/.test(source.text),
+    /from "(three|@react-three\/|motion\/react)/.test(source.text),
   );
 
   it("finds the modules that import it", () => {
@@ -130,16 +107,10 @@ describe("three never enters a server bundle", () => {
   });
 });
 
-// D-46: motion is on for everyone and the member's own switch turns it down.
-// Two things have to stay true for that to be honest -- the switch must reach
-// every animated surface, and the operating system's setting must not quietly
-// reintroduce itself as a second, invisible trigger.
 describe("the member's switch reaches every animated surface", () => {
   it.each([
     ["components/three/canvas.tsx", "the canvas frame loop"],
-    ["components/three/physics.tsx", "the physics simulation"],
     ["components/three/skeleton.tsx", "the loading shimmer"],
-    ["components/charts/funnel-trend-chart.tsx", "chart animation"],
   ])("%s honours it for %s", (path) => {
     expect(readFileSync(join(root, path), "utf8")).toContain("useReduceMotion");
   });
@@ -156,9 +127,9 @@ describe("the member's switch reaches every animated surface", () => {
     expect(layout).toContain("data-reduce-motion");
   });
 
-  it("offers the control WCAG 2.2.2 asks for, on every page", () => {
-    const layout = readFileSync(join(root, "app/layout.tsx"), "utf8");
-    expect(layout).toContain("<ReduceMotionToggle />");
+  it("offers the control WCAG 2.2.2 asks for, on /me", () => {
+    const me = readFileSync(join(root, "app/me/page.tsx"), "utf8");
+    expect(me).toContain("<ReduceMotionToggle");
   });
 
   it("has a CSS backstop for anything animated outside React", () => {
@@ -168,8 +139,7 @@ describe("the member's switch reaches every animated surface", () => {
 });
 
 describe("the operating system's motion setting is not a second trigger", () => {
-  // Comments name it on purpose -- they record that not consulting it was a
-  // decision rather than an oversight.
+  // Comments may name it deliberately, so they are excluded.
   const css = readFileSync(join(root, "app/globals.css"), "utf8").replace(
     /\/\*[\s\S]*?\*\//g,
     "",

@@ -1,10 +1,5 @@
 "use client";
 
-// A WebGL2 context is not guaranteed: the TV mode runs on whatever screen the
-// office has, and members open the dashboard on old Android handsets. Every 3D
-// surface has to answer "what does this look like without a GPU" before it
-// renders, so detection is a precondition, not an error handler.
-
 let cached: boolean | undefined;
 
 export function supportsWebGL(): boolean {

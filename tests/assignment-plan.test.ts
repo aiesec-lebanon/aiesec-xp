@@ -25,7 +25,7 @@ function row(over: Partial<RegisterRow> = {}): RegisterRow {
 const desired = (entries: [bigint, bigint[]][]) =>
   new Map(entries.map(([ep, members]) => [String(ep), new Set(members.map(String))]));
 
-describe("planSource (D-73)", () => {
+describe("planSource", () => {
   it("credits a manager EXPA names for the first time", () => {
     const plan = planSource([], desired([[EP, [ALICE]]]), "EXPA");
     expect(plan.create).toEqual([{ epPersonId: EP, memberId: ALICE }]);
@@ -88,7 +88,7 @@ describe("planSource (D-73)", () => {
   });
 });
 
-describe("a main pick (D-83)", () => {
+describe("a main pick", () => {
   it("keeps the main on the EP when EXPA drops them", () => {
     const main = row({ fromExpa: true, isMain: true });
     const plan = planSource([main], desired([[EP, []]]), "EXPA");

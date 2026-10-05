@@ -1,16 +1,10 @@
 import type { ReactNode } from "react";
 
-// The set every member-facing screen is shot on: an infinite-white wall, a
-// horizon line, a floor. It is one element rather than three because the horizon
-// has to land on the same fraction of the frame on every screen -- a character
-// standing on a floor that moved would read as a different room.
-
 export function Cyclorama({
   floor = "28%",
   className = "",
   children,
 }: {
-  /** Height of the floor as a share of the frame. */
   floor?: string;
   className?: string;
   children: ReactNode;

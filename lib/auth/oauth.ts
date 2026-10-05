@@ -6,13 +6,7 @@ import { cookies } from "next/headers";
 import { authEnv } from "@/lib/env";
 import { randomToken } from "@/lib/auth/session";
 
-// Authorization Code against AIESEC auth, for identity only.
-//
-// `state` is unconditional. auth-template omits it, which leaves the callback
-// willing to accept any code an attacker can deliver -- login CSRF. PKCE is not
-// used: this is a confidential client so it adds little, AIESEC's handling of a
-// challenge is unverified, and with no staging environment (D-37) a half-honoured
-// challenge would break every login with no way to test the fix first.
+// No PKCE: confidential client, and AIESEC's handling of a challenge is unverified.
 
 const STATE_COOKIE = "xp_oauth_state";
 const RETURN_TO_COOKIE = "xp_oauth_return_to";
@@ -33,15 +27,8 @@ export type Handshake = {
   cookies: { name: string; value: string; options: ReturnType<typeof handshakeCookieOptions> }[];
 };
 
-/**
- * Starts a handshake, returning the cookies for the caller to attach.
- *
- * The cookies are returned rather than written through next/headers so the
- * route can set them on the very response that redirects to AIESEC. Setting
- * them out of band risks the browser following the redirect without having
- * stored the state, and the callback then rejects a sign-in that was never
- * actually wrong.
- */
+// Cookies are returned so the route sets them on the redirect response itself;
+// set out of band, the browser may follow the redirect without storing the state.
 export function beginHandshake(returnTo: string): Handshake {
   const state = randomToken(32);
   return {
@@ -62,8 +49,7 @@ export async function completeHandshake(returnedState: string | null): Promise<H
   const expected = store.get(STATE_COOKIE)?.value ?? null;
   const returnTo = store.get(RETURN_TO_COOKIE)?.value ?? "/";
 
-  // Cleared whatever the outcome: a handshake is single-use, and a surviving
-  // state could be replayed against an attacker-supplied code.
+  // Single-use: a surviving state could be replayed against an attacker-supplied code.
   for (const name of [STATE_COOKIE, RETURN_TO_COOKIE]) {
     store.set(name, "", { ...handshakeCookieOptions(), maxAge: 0 });
   }
@@ -109,11 +95,6 @@ export type TokenResponse = {
 
 const TOKEN_TIMEOUT_MS = 10_000;
 
-/**
- * Exchanges the authorization code for an access token. The token is returned
- * to the caller, used once for the identity call, and then goes out of scope.
- * Nothing in this module persists it.
- */
 export async function exchangeCode(code: string): Promise<string> {
   const { AIESEC_AUTH_URL, AIESEC_CLIENT_ID, AIESEC_CLIENT_SECRET, AIESEC_REDIRECT_URI } =
     authEnv();

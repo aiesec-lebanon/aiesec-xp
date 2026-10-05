@@ -21,14 +21,13 @@ import { advanceWatermark, windowFor } from "@/lib/sync/watermark";
 import { syncOfficeTree } from "@/lib/org/office-tree";
 import { currentWindow, termStart } from "@/lib/term";
 
-// Measured against GIS: 100 applications with every stage date and the EP's
-// managers answer in about 2s, 200 in 2.5-5s against a 15s client timeout.
+// Larger pages of this query approach the 15s GIS client timeout.
 const PAGE_SIZE = 100;
 const MAX_PAGES = 100;
 const PEOPLE_PAGE_SIZE = 200;
 const PEOPLE_BATCH_SIZE = 200;
 
-export const APPLICATIONS_PASS = "applications";
+const APPLICATIONS_PASS = "applications";
 
 export type PassResult = {
   pass: string;
@@ -44,15 +43,8 @@ type SyncScope = {
   allowedProgrammeIds: Set<number>;
 };
 
-/** EP id to who manages them in EXPA, as the scans below find it (D-74). */
 type ManagersByEp = Map<string, Set<string>>;
 
-/**
- * Sync scope comes from the active config, not from constants. The programmes
- * synced are exactly the programmes scored, so adding a product is one config
- * change rather than a code change (D-04), and enabling incoming exchange is
- * the same (D-27).
- */
 async function resolveScope(): Promise<SyncScope> {
   const config = await db.scoreConfig.findFirst({ where: { isActive: true } });
   if (!config) throw new Error("No active ScoreConfig; sync has no scope to run in");
@@ -82,11 +74,7 @@ function scopeFilter(side: ScopeSide, officeId: bigint) {
     : { opportunity_home_mc: [Number(officeId)] };
 }
 
-/**
- * Pages newest last action first and stops at the first row older than
- * `since` (D-76). GIS has no filter on `updated_at` it documents, but it sorts
- * on it, and a sorted read that stops is the same set.
- */
+// GIS can't filter on updated_at but can sort by it, so read newest-first and stop at `since`.
 async function scanApplications(
   side: ScopeSide,
   officeId: bigint,
@@ -132,21 +120,12 @@ async function writeApplication(events: readonly MappedEvent[], applicationId: b
       update: data,
     });
   }
-  // Every event of the application carries its status, including ones this
-  // row no longer dates (D-76) -- that is what makes a withdrawal net the APL.
+  // Includes events this row no longer dates, which is what lets a withdrawal net out the APL.
   await db.exchangeEvent.updateMany({ where: { applicationId }, data: { applicationStatus: status } });
 }
 
-/**
- * The EP data pass (D-76): one read of applications by last action replaces a
- * pass per stage date and the status refresh. An application whose last action
- * is newer than the watermark has its every stage date, break and status
- * written; anything that happened to it moved that timestamp.
- *
- * The same read goes back further, to the current window's start, only to
- * collect who manages each EP in EXPA, because the managers mirrored for the
- * console have to cover everyone it lists and not just who changed today.
- */
+// The scan reaches back to the current window's start only to collect EP managers,
+// which must cover every EP the console lists, not just those changed since the watermark.
 async function runApplicationsPass(now: Date, managers: ManagersByEp): Promise<PassResult> {
   const scope = await resolveScope();
   const officeId = mcOfficeId();
@@ -184,16 +163,12 @@ async function runApplicationsPass(now: Date, managers: ManagersByEp): Promise<P
           return;
         }
 
-        // Nothing before the term start is held (D-43, D-58): an application
-        // updated this term keeps only the stage changes this term saw.
         const kept = events.filter((event) => event.occurredAt >= floor);
         await writeApplication(kept, applicationId, row.status ?? null);
         eventsWritten += kept.length;
       });
     }
 
-    // Only now, with every page of every side read: a watermark advanced on a
-    // partial pass would silently skip whatever was missed.
     await advanceWatermark(APPLICATIONS_PASS, now);
     await db.syncRun.update({
       where: { id: run.id },
@@ -212,13 +187,7 @@ async function runApplicationsPass(now: Date, managers: ManagersByEp): Promise<P
   }
 }
 
-/**
- * Mirrors who manages each EP in EXPA into the register (D-74): everyone the
- * console lists -- updated since the current window opened, read by last
- * action -- plus by id any EP who can score whose record has not moved since
- * then. Only EPs actually read are reconciled, so a failed read takes nobody's
- * credit away.
- */
+// Only EPs actually read are reconciled, so a failed read takes nobody's credit away.
 async function runManagersPass(managers: ManagersByEp): Promise<PassResult> {
   const run = await db.syncRun.create({ data: { pass: "managers", status: "RUNNING" } });
   let rowsSeen = 0;
@@ -285,11 +254,6 @@ async function runManagersPass(managers: ManagersByEp): Promise<PassResult> {
   }
 }
 
-/**
- * The MC sign-up sheet's EP managers, credited after every sync (D-80) so a new
- * sign-up does not wait for an admin to press Import. A sheet that cannot be
- * read is an issue for the console, not a failed sync.
- */
 async function runSheetPass(): Promise<PassResult> {
   try {
     const result = await importAssignments(SYSTEM_ACTOR, { dryRun: false });
@@ -307,7 +271,6 @@ async function runSheetPass(): Promise<PassResult> {
   }
 }
 
-/** The EP data: applications, then who manages each EP, then the sheets. */
 export async function runEventPasses(now = new Date()): Promise<PassResult[]> {
   const managers: ManagersByEp = new Map();
   return [
@@ -317,10 +280,7 @@ export async function runEventPasses(now = new Date()): Promise<PassResult[]> {
   ];
 }
 
-/**
- * Pass 8: the office tree, then the roster, which is read per operating office.
- * Scheduled monthly rather than with the EP data (D-66).
- */
+// The roster is read per operating office, so the office tree must sync first.
 export async function runMemberPasses(): Promise<PassResult[]> {
   return [
     await runStructuralPass("offices", async () => (await syncOfficeTree()).officesSeen),
@@ -328,16 +288,10 @@ export async function runMemberPasses(): Promise<PassResult[]> {
   ];
 }
 
-/** Everything, membership first. What the sync CLI runs. */
 export async function runAllPasses(now = new Date()): Promise<PassResult[]> {
   return [...(await runMemberPasses()), ...(await runEventPasses(now))];
 }
 
-/**
- * Office tree and roster refresh state rather than ingesting dated events, so
- * they have no watermark. A failure is reported and the run continues: stale
- * membership is better than no sync at all.
- */
 async function runStructuralPass(
   name: string,
   work: () => Promise<number>
