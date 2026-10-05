@@ -64,7 +64,15 @@ function Digit({
   direction: number;
 }) {
   const index = DIGITS.indexOf(character);
-  if (index < 0) return <span aria-hidden>{character}</span>;
+  // Same 1em box as a digit: left as a bare flex item, a decimal point
+  // stretched to the line height and sat below the digits beside it.
+  if (index < 0) {
+    return (
+      <span aria-hidden className="inline-block h-[1em] leading-[1em]">
+        {character}
+      </span>
+    );
+  }
 
   return (
     <span aria-hidden className="relative inline-block h-[1em] w-[0.62em] overflow-hidden align-baseline">

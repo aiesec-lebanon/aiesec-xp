@@ -24,6 +24,9 @@ export type PodiumPlace = {
   name: string;
   office: string | null;
   points: number;
+  aplCount: number;
+  apdCount: number;
+  reCount: number;
   /** The member's chosen character, if it has been resolved. */
   characterId?: string;
 };
@@ -161,10 +164,13 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
         {places.map((place) => (
           <li
             key={place.name}
-            className={`min-w-0 flex-1 basis-0 rounded-[18px] bg-surface-raised px-2 py-3 text-center ${
+            // Focusable so the counts open on a tap or Tab too, not only hover.
+            tabIndex={0}
+            className={`group relative min-w-0 flex-1 basis-0 rounded-[18px] bg-surface-raised px-2 py-3 text-center outline-none focus-visible:ring-2 focus-visible:ring-ink ${
               FORM[place.rank].order
             } ${place.rank === 1 ? "shadow-e3" : "shadow-e1"}`}
           >
+            <PlaceCounts place={place} />
             <p
               className={`tabular text-lg font-bold leading-none ${
                 place.rank === 1 ? "text-re-ink" : "text-ink-faint"
@@ -187,6 +193,33 @@ export function Podium({ places }: { places: PodiumPlace[] }) {
         ))}
       </ol>
     </div>
+  );
+}
+
+const COUNTS = [
+  { key: "aplCount", label: "APL", ink: "text-apl-mid" },
+  { key: "apdCount", label: "APD", ink: "text-apd-mid" },
+  { key: "reCount", label: "RE", ink: "text-re-mid" },
+] as const;
+
+/** The APL, APD and RE the rows below the podium show, for the three on it. */
+function PlaceCounts({ place }: { place: PodiumPlace }) {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none invisible absolute bottom-full left-1/2 z-20 mb-2 flex -translate-x-1/2 translate-y-1 gap-3.5 whitespace-nowrap rounded-xl bg-ink px-3.5 py-2 opacity-0 shadow-e2 transition-[opacity,translate] duration-[var(--motion-ui)] ease-[var(--motion-ease)] group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus:visible group-focus:translate-y-0 group-focus:opacity-100"
+    >
+      {COUNTS.map((count) => (
+        <span key={count.key} className="flex flex-col items-center">
+          <span className={`tabular text-[15px] font-bold leading-none ${count.ink}`}>
+            {formatPoints(place[count.key])}
+          </span>
+          <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-faint">
+            {count.label}
+          </span>
+        </span>
+      ))}
+    </span>
   );
 }
 

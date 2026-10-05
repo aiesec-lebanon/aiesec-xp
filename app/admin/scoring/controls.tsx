@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 
 import { saveWeightsAction, type ActionState } from "@/lib/admin/scoring-actions";
 import { formatPoints } from "@/lib/design/points";
+import { DIRECTION_LABEL, PROGRAMME_LABEL } from "@/lib/scoring/labels";
 import { SHARE_FIELD_PREFIX } from "@/lib/scoring/shares";
 import { DIRECTION_FIELD_PREFIX, POINTS_FIELD, PRODUCT_FIELD_PREFIX } from "@/lib/scoring/weights";
 import { useActionToast } from "@/components/studio/toast";
@@ -23,8 +24,6 @@ export type StageWeights = {
   directionWeights: Record<string, number>;
 };
 
-const PROGRAMMES: Record<string, string> = { "7": "GV", "8": "GTa", "9": "GTe" };
-const DIRECTIONS: Record<string, string> = { OUTGOING: "Outgoing", INCOMING: "Incoming" };
 const STAGES = [
   { key: "aplPoints", label: "Application", tone: "text-stage-apl" },
   { key: "apdPoints", label: "Approval", tone: "text-stage-apd" },
@@ -110,7 +109,7 @@ export function WeightsForm({ roles, weights }: { roles: RoleRow[]; weights: Sta
               key={id}
               id={`product-${id}`}
               name={`${PRODUCT_FIELD_PREFIX}${id}`}
-              label={PROGRAMMES[id] ?? `Programme ${id}`}
+              label={PROGRAMME_LABEL[id] ?? `Programme ${id}`}
               defaultValue={value}
             />
           ))}
@@ -125,7 +124,7 @@ export function WeightsForm({ roles, weights }: { roles: RoleRow[]; weights: Sta
               key={key}
               id={`direction-${key}`}
               name={`${DIRECTION_FIELD_PREFIX}${key}`}
-              label={DIRECTIONS[key] ?? key}
+              label={DIRECTION_LABEL[key] ?? key}
               defaultValue={value}
             />
           ))}
