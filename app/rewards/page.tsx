@@ -49,7 +49,7 @@ function amount(thresholdType: string, value: number): string {
 }
 
 function worth(reward: Reward): string | null {
-  if (reward.valueAmount === null) return null;
+  if (!reward.valueAmount) return null;
   return `${formatPoints(reward.valueAmount)}${reward.valueCurrency ? ` ${reward.valueCurrency}` : ""}`;
 }
 
