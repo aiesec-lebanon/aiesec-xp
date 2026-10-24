@@ -15,6 +15,12 @@ const eslintConfig = defineConfig([
     // Vendor assets copied out of node_modules by scripts/assets: minified
     // decoder builds, not our source.
     "public/draco/**",
+    // Written by `npm run gis:codegen`, not by hand.
+    "gis/generated.ts",
+    // Git-ignored local folders: agent worktrees carry their own .next builds,
+    // and ref/ holds design references.
+    ".claude/**",
+    "ref/**",
   ]),
 ]);
 

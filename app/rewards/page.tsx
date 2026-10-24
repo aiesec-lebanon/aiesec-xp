@@ -65,7 +65,6 @@ export default async function RewardsPage() {
 
   const rewards = progress.rewards;
   const next = pace(progress, window);
-  const earnedCount = rewards.filter((reward) => reward.earned).length;
 
   const lanes = LANES.flatMap((lane, index) => {
     const onLane = rewards
