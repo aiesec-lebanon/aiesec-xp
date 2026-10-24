@@ -1,4 +1,3 @@
-import { requireMemberPage } from "@/lib/auth/guards";
 import { activeWindow, recentActivity, topMembers } from "@/lib/dashboard";
 import { activeWindowRange, officeStandings } from "@/lib/leaderboard";
 
@@ -11,23 +10,7 @@ import { RollingNumber } from "@/components/studio/rolling-number";
 
 export const dynamic = "force-dynamic";
 
-const STAGES: Record<string, string> = {
-  APL: "carried an application",
-  APD: "landed an approval",
-  RE: "realized an EP",
-  APD_BROKEN: "lost an approval",
-  RE_BROKEN: "lost a realization",
-};
-
 export default async function TvPage() {
-  // An office screen is signed in once and left running; there is no anonymous
-  // mode, because everything on this page is member data (D-16).
-  await requireMemberPage("/tv");
-
-  // The live screen for exchange hackathons, so it stays on the active display
-  // window and takes no range of its own: nobody standing in front of a TV is
-  // going to pick dates, and the race it announces is the one the window
-  // defines (D-58).
   const range = await activeWindowRange();
 
   const [{ standings: entities, analyticsOk }, top, window, activity] = await Promise.all([

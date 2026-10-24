@@ -680,7 +680,7 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 | `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11), over the same date range. Points and counts read live from AIESEC's own analytics API, not the ledger (D-56) |
 | `/rewards` | Rewards by unit: one curved road each for points, APL, APD and RE that has a reward, with reward markers at their thresholds and the member's character at their count. Next up is the closest unearned reward by share reached (D-87, D-88) |
 | `/me` | Full event history and point trail |
-| `/tv` | Fullscreen display mode for office screens. Stays on the active display window; no range picker (D-58) |
+| `/tv` | Fullscreen display mode for office screens. Stays on the active display window; no range picker (D-58). Public: no sign-in required (D-89) |
 | `/admin/*` | Configuration |
 
 ### Interactions

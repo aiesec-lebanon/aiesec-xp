@@ -17,6 +17,16 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
+  it("lets an anonymous visitor watch /tv", () => {
+    const response = proxy(new NextRequest("https://xp.example/tv"));
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not open paths that merely start with /tv", () => {
+    const response = proxy(new NextRequest("https://xp.example/tvx"));
+    expect(response.headers.get("location")).toContain("/login");
+  });
+
   it("still sends an anonymous visitor to sign in", () => {
     const response = proxy(new NextRequest("https://xp.example/admin/sync"));
     expect(response.headers.get("location")).toContain("/login");

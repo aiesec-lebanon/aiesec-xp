@@ -7,7 +7,6 @@ import { CharacterGroup } from "@/components/studio/character-group";
 import { memberAvatars } from "@/lib/design/avatar";
 import { characterFor } from "@/lib/design/character";
 import { GhostNumber, Rise } from "@/components/studio/motion";
-import { Crown } from "@/components/studio/podium";
 import { RangeFilter } from "@/components/studio/range-filter";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +40,6 @@ export default async function LcLeaderboardPage({
     name: standing.fullName,
     characterId: characters.get(standing.memberId)?.id,
   }));
-
-  const totalMembers = standings.reduce((sum, entry) => sum + entry.memberCount, 0);
 
   return (
     // One column, not a split: there are three entities and there will be
