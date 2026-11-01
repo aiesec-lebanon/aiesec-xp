@@ -73,6 +73,10 @@ export function CharacterStage({
           : `flex items-end justify-center ${className}`
       }
     >
+      <div
+        style={fill ? undefined : { width: Math.round(height * 1.4) }}
+        className={fill ? "size-full" : "pointer-events-none h-full shrink-0"}
+      >
       <Scene
         eager={eager}
         transparent
@@ -115,6 +119,7 @@ export function CharacterStage({
           />
         ) : null}
       </Scene>
+      </div>
     </div>
   );
 }
