@@ -49,6 +49,7 @@ model Member {
   ledgerEntries ScoreLedgerEntry[]
   rewardGrants  RewardGrant[]
   avatar        MemberAvatar?
+  loginEvents   LoginEvent[]
 
   @@index([scoringOfficeId])
 }
@@ -73,6 +74,19 @@ model MemberAvatar {
   updatedAt DateTime @updatedAt
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+// One row per successful sign-in. Member.lastSyncedAt is touched by the roster
+// sync too, so it cannot answer "when did this member last log in".
+model LoginEvent {
+  id       String   @id @default(cuid())
+  memberId BigInt
+  at       DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, at])
+  @@index([at])
 }
 
 model Position {

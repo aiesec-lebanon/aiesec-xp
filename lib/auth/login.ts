@@ -79,6 +79,7 @@ export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
       create: { id: memberId, ...profile },
       update: profile,
     }),
+    db.loginEvent.create({ data: { memberId } }),
     db.position.deleteMany({ where: { memberId } }),
     db.position.createMany({
       data: positions.map((position) => ({
