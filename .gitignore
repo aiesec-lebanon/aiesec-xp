@@ -67,3 +67,10 @@ ref/
 
 # Python bytecode from the Blender asset scripts
 __pycache__/
+
+# Licensed character models (CGTrader Royalty Free, Mixamo; D-91). This
+# repository is public and the licences forbid re-uploading the files, so only
+# their encrypted copies in assets/sealed/ are tracked.
+/assets/source/avatar-*
+/assets/models/
+/public/models/avatar-*

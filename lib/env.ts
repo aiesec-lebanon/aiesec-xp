@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { parseModelKey } from "@/lib/models/sealing";
+
 // Grouped rather than one all-or-nothing object. Signing a session cookie needs
 // SESSION_SECRET and nothing else, and the proxy does exactly that on every
 // request -- validating the GIS and OAuth configuration there would couple route
@@ -70,6 +72,13 @@ export const mcDirectEntityId = (): bigint | null => {
   const id = read("scope").MC_DIRECT_ENTITY_ID;
   return id === undefined ? null : BigInt(id);
 };
+
+/**
+ * Read on first use rather than in `groups`: a missing MODEL_KEY should cost
+ * the characters, not fail `assertEnv` and take every page down with them.
+ */
+let cachedModelKey: Buffer | null = null;
+export const modelKey = (): Buffer => (cachedModelKey ??= parseModelKey(process.env.MODEL_KEY));
 
 /** Fails fast at boot rather than on the first request that needs a variable. */
 export function assertEnv(): void {

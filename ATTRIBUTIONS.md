@@ -2,15 +2,13 @@
 
 Third-party assets used in AIESEC XP, and where each came from.
 
-**This file is the whole of the product's attribution surface (D-49).** AIESEC XP
-is internal: every viewer signs in through AIESEC OAuth2 and holds an active
-position in office 182 or a descendant, there is no public route, and nothing is
-distributed outside the MC. Credit is therefore recorded here, next to the source,
-and never rendered in the UI — no footer credits line, no licence notice, no
-about page. Anyone who can reach the product can reach this file.
+**This file is the whole of the product's attribution surface (D-49).** Credit is
+recorded here, next to the source, and never rendered in the UI — no footer
+credits line, no licence notice, no about page.
 
-If AIESEC XP is ever opened beyond the member wall, this stops being sufficient
-and every line below marked *unconfirmed* has to be settled first.
+AIESEC XP has public pages (`/login`, `/unauthorized`, `/tv`; D-89) and a public
+repository, so licences that restrict redistribution are met in how the assets
+are stored and served, not by keeping the product behind the member wall (D-91).
 
 ## Credited here
 
@@ -22,43 +20,67 @@ delivered through [`react-icons`](https://react-icons.github.io/react-icons/)
 Delapouite and Skoll. See https://game-icons.net/about.html#authors for the full
 list.
 
-## Character renders — licence unconfirmed
+## Character models — CGTrader, Royalty Free (no AI)
 
-`public/characters/avatar-*.png` and `avatar-*-portrait.png` are renders of the four CGTrader characters
-described below, produced by `scripts/assets/avatar-stills.py` from the shipped
-`.glb` files and used on every screen that shows more than one body at a time
-(D-52, `components/studio/character.tsx`). They inherit the same open licence
-question as the models they were rendered from.
+The member-avatar bodies come from [CGTrader](https://www.cgtrader.com). Three
+carry a Mixamo auto-rig, which their `mixamorig:` bone naming and the export
+paths still packed into the source file both record; the fourth has a 24-bone rig
+of separate origin.
+
+| Listing | Licence |
+| --- | --- |
+| [Cute Cartoon Boy Character Rigged Animated 3D Kid Game Character](https://www.cgtrader.com/3d-models/character/child/cute-cartoon-boy-character-rigged-animated-3d-kid-game-character) | Royalty Free License (no AI) |
+| [Stylized Cartoon Boy 3D Kid Character Rigged and Animated](https://www.cgtrader.com/3d-models/character/child/stylized-cartoon-boy-3d-kid-character-rigged-and-animated) | Royalty Free License (no AI) |
+
+Every CGTrader model used is under this licence, as the listings showed it on
+2026-11-14. They were free downloads when obtained and are paid listings now. A
+licence is granted when the model is acquired, so a later price change does not
+take it back. The account's download history is the proof of that, so keep it.
+The authors aren't recorded here; CGTrader doesn't require credit.
+
+What the licence allows, from the listing and the
+[Terms and Conditions](https://www.cgtrader.com/pages/terms-and-conditions)
+(§20, §21A, §21B):
+
+- **Allowed:** use in our own projects, including commercial ones; modifying and
+  combining with other assets; backups and sharing within the team.
+- **Not allowed:** redistributing, reselling or re-uploading the file; any
+  machine-learning or generative-AI use, including as training input.
+- **Condition for apps:** the model is licensed only built into a larger work it
+  can't be extracted from, and the buyer must take "all commercially reasonable
+  measures to prevent the end user from gaining access to the Product".
+
+How AIESEC XP meets that (D-91):
+
+- **The repository holds no usable copy.** The raw and optimised `.glb` files are
+  gitignored and were purged from git history. Only AES-256-GCM copies under
+  `MODEL_KEY`, which exists only in the deployment environment and on the
+  authoring machine, are tracked (`assets/sealed/`).
+- **No page exposes the file.** `/api/models/[name]` answers only a same-origin
+  `fetch` from one of our pages, re-encrypted. The browser decrypts it in memory
+  and parses it directly, so there is no `.glb` URL to open or save, including
+  on the public `/login` page.
+- **Renders are a permitted use.** `public/characters/*.png`, rendered from the
+  models by `scripts/assets/avatar-stills.py`, and any video made from them stay
+  public.
+- **No AI use.** The models must not be given to an AI or ML tool as input or
+  training data. Blender scripting of our own files is not that.
+
+What this can't do: anything a browser renders can be pulled out by someone
+determined to read the client code or capture the GPU buffers. The licence asks
+for reasonable measures, not the impossible, and this is the same protection
+games ship with.
 
 ## Character animation — Mixamo
 
-The clips in `public/models/avatar-animations.glb` are from
+The clips in `avatar-animations` and `avatar-animations-social` are from
 [Mixamo](https://www.mixamo.com) (Adobe), which grants royalty-free use of its
 animations, including commercially, to anyone with a free Adobe account. Juno's
 skeleton is also Mixamo's, from its auto-rigger.
 
-This is the first source in the product that is free but **account-gated rather
-than CC0** (D-47, D-53). Nothing is fetched from Adobe at runtime: the clips are
-baked into our own `.glb` and served from our origin like everything else.
-
-## Character models — licence unconfirmed
-
-The four member-avatar characters — `avatar-hoodie-joggers`, `avatar-tee-shorts`,
-`avatar-hoodie-cargo` and `avatar-tee-skirt` — were obtained as free downloads
-from [CGTrader](https://www.cgtrader.com). Three carry a Mixamo auto-rig, which
-their `mixamorig:` bone naming and the export paths still packed into the source
-file both record; the fourth has a 24-bone rig of separate origin.
-
-This is the only asset class in the product that is not CC0. CGTrader free
-downloads ship under more than one licence: its Royalty-Free terms permit
-embedding in an application, while its Editorial terms would forbid it. The
-distinction is not visible in the downloaded files, so it would have to come from
-the source pages.
-
-D-49 accepts that as an open question rather than a blocker, because this is an
-internal tool that is not distributed. Still worth recording if anyone goes back
-to the source pages, and required before any external release: the CGTrader
-product URL, the author and the licence actually granted, per model.
+Adobe allows the animations built into a project, but not handed out as
+standalone animation files, so the clip libraries are sealed and served exactly
+like the CGTrader models. Nothing is fetched from Adobe at runtime.
 
 ## Public domain — no attribution required
 

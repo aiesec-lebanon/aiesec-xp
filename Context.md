@@ -136,6 +136,7 @@ Two behavioural goals:
 | D-88 | **"Next up" is the unearned reward the member is closest to, not the first in the admin's order.** On Home and `/rewards`, `closestReward()` (`lib/dashboard.ts`) picks the unearned reward with the highest share of its threshold already reached (`current / threshold`), because units differ and a raw "amount left" would compare approvals with points. Ties go to the smaller amount left, then to `sortOrder`. `pace()` builds the per-week number on that reward. `sortOrder` still decides display order elsewhere (Home's reward ladder). |
 | D-89 | **`/tv` is public; every other page still requires sign-in.** The office and hackathon screen is left running on displays nobody wants to sign into, so the proxy lists `/tv` as a public path and the page has no guard. What it exposes to anyone with the URL: LC standings from the Analytics API, the top 10 members' full names, points and characters, and the active window's label. Nothing else changes: its brandmark links to `/`, which sends an anonymous visitor to `/login`, and every route and action still authorizes for itself (Architecture.md 4.4). Requested by the MC on 2026-10-25. Amends D-16 and D-49. |
 | D-90 | **Every successful sign-in is recorded as a `LoginEvent` (member, time).** `Member.lastSyncedAt` is `@updatedAt` and the roster sync writes it too, so it could not say when a member last logged in. The row is written in the same transaction as the member upsert in `lib/auth/login.ts`, so a sign-in that fails writes nothing; a sign-in denied for having no position still records one, because the member row is upserted for it. Last login is `max(at)` per member; cascades with the member. Migration `20261105000000_login_event`; no backfill, so history starts at deploy. |
+| D-91 | **The licensed character models are never in the repository or at a URL in plain form.** The CGTrader characters are licensed Royalty Free (no AI), which forbids redistributing or re-uploading the file and requires an app to take "commercially reasonable measures" to keep end users from getting at the model. The Mixamo clips carry a similar standalone-file restriction. The repository is public and must stay so, and `/login`, `/unauthorized` and the old `public/models/` path all exposed the `.glb` files to anyone. So: the raw and optimised `avatar-*` files stay on the authoring machine (gitignored) and are purged from git history. Only AES-256-GCM copies under a server-only `MODEL_KEY` are tracked (`assets/sealed/`). `/api/models/[name]` serves each one re-encrypted, to same-origin fetches only, and the client decrypts in memory and never exposes a URL to the plain model (Architecture.md 9, *The 3D layer*). Nothing rendered in a browser can be made impossible to extract, so this is the licence's "reasonable measures" bar, not DRM. Renders (`public/characters/*.png`) are a permitted use and stay public. Amends D-47 and D-49.
 ---
 
 ## 4. Identity: what exists in GIS and what does not
@@ -294,11 +295,9 @@ Closed:
   member's EXPA id, and an admin can match a name on the console instead. What
   remains is data entry: until Sheet7 is filled in or names are matched on the
   console, no sheet credit resolves.
-- **O-12** — closed by D-49. The CGTrader character models' licence is still
-  unconfirmed, and that is accepted rather than resolved: the product is
-  internal, behind the member wall, and is not distributed. The models ship. The
-  unanswered question is recorded in `ATTRIBUTIONS.md` and has to be settled
-  before any public or external release.
+- **O-12** — closed by D-49, then settled by D-91. Every CGTrader model used is
+  Royalty Free (no AI); the conditions that licence sets for a public repository
+  and public pages are met as D-91 records, and `ATTRIBUTIONS.md` has the detail.
 - **O-11** — closed by D-48. STUDIO is the direction; the three unchosen type
   systems are deleted rather than left switchable. The typeface question that
   sat underneath it is not settled and continues as O-13.

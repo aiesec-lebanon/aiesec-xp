@@ -20,12 +20,12 @@ FORMS = [
 
 
 def names(repo_root):
-    """Every body in public/models: the four forms and each one's palettes.
+    """Every body in assets/models: the four forms and each one's palettes.
 
     Discovered rather than listed, so adding a palette to `avatar-variants.py`
     does not also mean remembering to add it here.
     """
-    models = os.path.join(repo_root, "public", "models")
+    models = os.path.join(repo_root, "assets", "models")
     found = {f[: -len(".glb")] for f in os.listdir(models) if f.endswith(".glb")}
     ordered = []
     for form in FORMS:
@@ -133,7 +133,7 @@ def pose_arms(name):
 
 def render_one(repo_root, name):
     clear_models()
-    bpy.ops.import_scene.gltf(filepath=os.path.join(repo_root, "public", "models", f"{name}.glb"))
+    bpy.ops.import_scene.gltf(filepath=os.path.join(repo_root, "assets", "models", f"{name}.glb"))
     bpy.context.view_layer.update()
     pose_arms(name)
 

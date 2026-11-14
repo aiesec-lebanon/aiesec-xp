@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "assets:vendor": "node scripts/assets/sync-vendor-assets.mjs",
-    "assets:models": "tsx scripts/assets/optimize-gltf.mts"
+    "assets:models": "tsx scripts/assets/optimize-gltf.mts",
+    "assets:seal": "tsx scripts/assets/seal-models.mts"
   },
   "dependencies": {
     "@pmndrs/assets": "^1.7.0",

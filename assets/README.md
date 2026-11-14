@@ -5,10 +5,23 @@
 ```
 assets/source/*.glb   ──  npm run assets:models  ──▶  public/models/*.glb
  (tracked, raw)            gltf-transform             (tracked, Draco + WebP)
+
+assets/source/avatar-*.glb  ──▶  assets/models/avatar-*.glb  ──▶  assets/sealed/avatar-*.bin
+ (local only)                     (local only)                    (tracked, AES-256-GCM)
 ```
 
 Both ends are tracked. The source is what makes the output reproducible; the
 output is what deploys, so a build never depends on the optimiser running.
+
+The licensed characters and their Mixamo clips (`avatar-*`) are the exception
+(D-91). The repository is public and their licences forbid re-uploading the
+files, so the raw and optimised `.glb` files stay on the machine that authors
+them, and only their encrypted copies under `MODEL_KEY` are tracked.
+`app/api/models` decrypts those and serves them re-encrypted to the page, so no
+`.glb` is ever reachable at a URL. `npm run assets:models` seals what it writes;
+`npm run assets:seal` re-seals everything in `assets/models/` after the key
+changes. Losing `assets/source/` and `assets/models/` loses the only plain copies,
+so back them up outside the repo.
 
 Two directories are **not** tracked, because `npm run assets:vendor` regenerates
 them from `node_modules` on every install and they must never drift from the

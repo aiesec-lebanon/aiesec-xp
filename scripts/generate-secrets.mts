@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 const path = ".env.local";
 let text = readFileSync(path, "utf8");
 
-for (const key of ["SESSION_SECRET", "CRON_SECRET"]) {
+for (const key of ["SESSION_SECRET", "CRON_SECRET", "MODEL_KEY"]) {
   const line = new RegExp(`^\s*${key}\s*=.*$`, "m");
   const current = line.exec(text)?.[0]?.split("=")[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
   if (current.length >= 32) {
