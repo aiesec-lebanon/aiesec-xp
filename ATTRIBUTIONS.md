@@ -2,6 +2,24 @@
 
 Third-party assets used in AIESEC XP, and where each came from.
 
+## What the MIT licence does not cover
+
+The code in this repository is MIT-licensed (`LICENSE`). That licence comes
+from AIESEC in Lebanon, so it covers only what AIESEC in Lebanon owns. These
+are not ours to license and are excluded from it:
+
+- **The character models and their renders.** `assets/sealed/` and
+  `public/characters/`. CGTrader, Royalty Free (no AI); our licence to use them
+  can't be passed on, so they may not be reused outside AIESEC XP.
+- **The Mixamo animation clips** inside `assets/sealed/avatar-animations*.bin`.
+  Adobe's terms.
+- **Icons, typefaces and other third-party assets** listed below, each under its
+  own licence.
+- **The AIESEC name, logo and brand marks.** Trademarks of AIESEC International.
+  Neither MIT nor any other code licence grants a right to use them.
+
+A fork that wants characters has to source its own.
+
 **This file is the whole of the product's attribution surface (D-49).** Credit is
 recorded here, next to the source, and never rendered in the UI — no footer
 credits line, no licence notice, no about page.
