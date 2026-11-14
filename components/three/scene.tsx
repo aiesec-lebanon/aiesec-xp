@@ -1,7 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Component,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { supportsWebGL } from "@/lib/three/webgl";
 
@@ -19,6 +26,20 @@ const XpCanvas = dynamic(() => import("./canvas").then((mod) => mod.XpCanvas), {
 // the snapshot stays stable across renders.
 const noSubscription = () => () => {};
 const unknownOnServer = () => undefined;
+
+// A model that fails to load -- offline, or a fork without MODEL_KEY to open the
+// sealed characters (D-91) -- shows the DOM fallback instead of taking the page down.
+class SceneBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 export type SceneProps = {
   children: ReactNode;
@@ -74,15 +95,17 @@ export function Scene({
   return (
     <div ref={container} className={`relative ${className}`}>
       {webgl && visible ? (
-        <XpCanvas
-          fallback={fallback}
-          transparent={transparent}
-          aria-hidden
-          tabIndex={-1}
-          role="presentation"
-        >
-          {children}
-        </XpCanvas>
+        <SceneBoundary fallback={fallback}>
+          <XpCanvas
+            fallback={fallback}
+            transparent={transparent}
+            aria-hidden
+            tabIndex={-1}
+            role="presentation"
+          >
+            {children}
+          </XpCanvas>
+        </SceneBoundary>
       ) : (
         <SceneSkeleton className="absolute inset-0" />
       )}
