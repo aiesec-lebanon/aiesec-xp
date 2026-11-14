@@ -26,3 +26,8 @@ export function hdriPath(environment: HdriEnvironment): string {
 export function modelPath(name: string): string {
   return `/models/${name}.glb`;
 }
+
+/** A licensed model, served encrypted by app/api/models (D-91). */
+export function sealedModelPath(name: string): string {
+  return `/api/models/${name}`;
+}

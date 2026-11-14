@@ -24,7 +24,7 @@ import {
   characterModelPath,
   type CharacterMood,
 } from "@/lib/design/character";
-import { preloadModel, useModel } from "@/lib/three/loaders";
+import { preloadSealedModel, useSealedModel } from "@/lib/three/sealed-loader";
 
 export type CharacterModelProps = {
   id: string;
@@ -97,9 +97,9 @@ export function CharacterModel({
   beat = null,
   lock = null,
 }: CharacterModelProps) {
-  const { scene } = useModel(characterModelPath(id));
-  const core = useModel(characterModelPath(ANIMATION_LIBRARY));
-  const extra = useModel(characterModelPath(social ? SOCIAL_LIBRARY : ANIMATION_LIBRARY));
+  const { scene } = useSealedModel(characterModelPath(id));
+  const core = useSealedModel(characterModelPath(ANIMATION_LIBRARY));
+  const extra = useSealedModel(characterModelPath(social ? SOCIAL_LIBRARY : ANIMATION_LIBRARY));
   const reduceMotion = useReduceMotion();
   const invalidate = useThree((state) => state.invalidate);
 
@@ -297,6 +297,6 @@ export function CharacterModel({
 }
 
 export function preloadCharacter(id: string): void {
-  preloadModel(characterModelPath(id));
-  preloadModel(characterModelPath(ANIMATION_LIBRARY));
+  preloadSealedModel(characterModelPath(id));
+  preloadSealedModel(characterModelPath(ANIMATION_LIBRARY));
 }

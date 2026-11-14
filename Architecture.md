@@ -793,6 +793,18 @@ remembered:
   copy under `public/`, synced from `node_modules` at install time so it cannot
   drift from the installed version.
 
+**Licensed models are sealed, not static (D-91).** The character bodies and
+their clip libraries are never under `public/`. The repository holds them
+AES-256-GCM encrypted under `MODEL_KEY` (`assets/sealed/`). `GET
+/api/models/[name]` decrypts one, re-encrypts it under a fresh key, and answers
+only a same-origin `fetch` (`Sec-Fetch-Site`/`Sec-Fetch-Dest`, or a same-host
+Referer). `lib/three/sealed-loader.ts` decrypts that in memory and hands the
+buffer straight to `GLTFLoader.parse`. The route is public, because `/login` and
+`/unauthorized` draw characters before anyone signs in. This doesn't stop someone
+determined to read the client code or capture the GPU buffers, and nothing a
+browser renders can. It keeps the model off any URL a viewer could save, which
+is the measure CGTrader's Royalty Free licence asks of an app.
+
 ### Non-negotiables
 
 - Mobile-first.

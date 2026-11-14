@@ -5,8 +5,8 @@ import { contentSecurityPolicy, generateNonce, NONCE_HEADER } from "@/lib/securi
 
 const PUBLIC_PATHS =
   process.env.NODE_ENV === "development"
-    ? ["/login", "/unauthorized", "/api/auth", "/api/cron", "/tv", "/lab"]
-    : ["/login", "/unauthorized", "/api/auth", "/api/cron", "/tv"];
+    ? ["/login", "/unauthorized", "/api/auth", "/api/cron", "/api/models", "/tv", "/lab"]
+    : ["/login", "/unauthorized", "/api/auth", "/api/cron", "/api/models", "/tv"];
 
 function withSecurityHeaders(request: NextRequest): NextResponse {
   const nonce = generateNonce();

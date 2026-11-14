@@ -7,7 +7,7 @@
 // paused code reads, and `lib/design/avatar-actions.ts`, `character-model.tsx`
 // and `app/me/character-lab.tsx` hold the rest of it in comments.
 
-import { modelPath } from "@/lib/three/assets";
+import { sealedModelPath } from "@/lib/three/assets";
 
 export type CharacterForm = {
   id: string;
@@ -108,7 +108,7 @@ export function characterById(id: string | null | undefined): CharacterDefinitio
 
 /** The body the 3D stage loads. */
 export function characterModelPath(id: string): string {
-  return modelPath(id);
+  return sealedModelPath(id);
 }
 
 /** Full body, rendered from the same .glb by `scripts/assets/avatar-stills.py`. */
