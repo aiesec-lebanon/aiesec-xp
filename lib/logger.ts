@@ -14,6 +14,11 @@ function secrets(): string[] {
     process.env.AIESEC_CLIENT_SECRET,
     process.env.SESSION_SECRET,
     process.env.CRON_SECRET,
+    process.env.DATABASE_URL,
+    process.env.DIRECT_URL,
+    process.env.DATABASE_PASSWORD,
+    process.env.MODEL_KEY,
+    process.env.GOOGLE_PRIVATE_KEY,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 

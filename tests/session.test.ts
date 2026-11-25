@@ -12,12 +12,12 @@ const { issueSession, readSession } = await import("@/lib/auth/session");
 
 describe("session cookie", () => {
   it("round-trips the person id", () => {
-    const { value } = issueSession(6199568n);
-    expect(readSession(value)?.sub).toBe("6199568");
+    const { value } = issueSession(900001n, 0);
+    expect(readSession(value)?.sub).toBe("900001");
   });
 
   it("rejects a tampered payload", () => {
-    const { value } = issueSession(1n);
+    const { value } = issueSession(1n, 0);
     const [, signature] = value.split(".");
     const forged = Buffer.from(
       JSON.stringify({ sub: "999", iat: 0, exp: Math.floor(Date.now() / 1000) + 60 })
@@ -27,7 +27,7 @@ describe("session cookie", () => {
   });
 
   it("rejects a tampered signature", () => {
-    const { value } = issueSession(1n);
+    const { value } = issueSession(1n, 0);
     const [body] = value.split(".");
     expect(readSession(`${body}.not-the-signature`)).toBeNull();
   });
@@ -66,8 +66,23 @@ describe("session cookie", () => {
   });
 
   it("does not put the OAuth token anywhere in the cookie", () => {
-    const { value } = issueSession(1n);
+    const { value } = issueSession(1n, 0);
     const decoded = Buffer.from(value.split(".")[0], "base64url").toString("utf8");
-    expect(Object.keys(JSON.parse(decoded)).sort()).toEqual(["exp", "iat", "sub"]);
+    expect(Object.keys(JSON.parse(decoded)).sort()).toEqual(["exp", "iat", "sub", "v"]);
+  });
+});
+
+describe("session versions", () => {
+  it("carry the member's session version", () => {
+    const { value } = issueSession(1n, 3);
+    expect(readSession(value)?.v).toBe(3);
+  });
+
+  it("reject a cookie issued before versions existed", () => {
+    const body = Buffer.from(
+      JSON.stringify({ sub: "1", iat: 0, exp: Math.floor(Date.now() / 1000) + 60 })
+    ).toString("base64url");
+    const signature = createHmac("sha256", process.env.SESSION_SECRET!).update(body).digest("base64url");
+    expect(readSession(`${body}.${signature}`)).toBeNull();
   });
 });

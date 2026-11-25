@@ -8,6 +8,7 @@ import { STAGE, STAGE_TINT, stageColour } from "@/lib/design/tokens";
 import { formatPoints, formatSignedPoints } from "@/lib/design/points";
 
 import { ReduceMotionToggle } from "@/components/motion/reduce-motion-toggle";
+import { TvNameToggle } from "@/components/privacy/tv-name-toggle";
 import { GrowBar, Rise } from "@/components/studio/motion";
 
 import { memberAvatar } from "@/lib/design/avatar";
@@ -190,6 +191,40 @@ export default async function MePage({
           </p>
         </div>
         <ReduceMotionToggle hideLabel />
+      </div>
+
+      <div className="mx-6 mt-4 flex items-center justify-between gap-6 rounded-[22px] bg-surface-raised px-7 py-6 shadow-e2 sm:mx-16">
+        <div>
+          <p className="text-sm font-semibold text-ink">Show my name on the office screen</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            The office board can be seen without signing in. When this is off you appear there as
+            &ldquo;AIESEC member&rdquo;. Nothing else changes.
+          </p>
+        </div>
+        <TvNameToggle initial={user.tvNameConsent === true} />
+      </div>
+
+      <div className="mx-6 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-[22px] bg-surface-raised px-7 py-6 shadow-e2 sm:mx-16">
+        <div>
+          <p className="text-sm font-semibold text-ink">Your data</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            Download what AIESEC XP holds about you, or read how it is used.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3 text-xs font-semibold">
+          <a
+            href="/api/me/export"
+            className="rounded-full bg-surface px-4 py-2.5 text-ink shadow-e1 hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            Download my data
+          </a>
+          <Link
+            href="/privacy"
+            className="rounded-full bg-surface px-4 py-2.5 text-ink shadow-e1 hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            Privacy notice
+          </Link>
+        </div>
       </div>
 
     </main>

@@ -33,13 +33,13 @@ function row(
   } = {}
 ) {
   return {
-    id: over.id ?? "7163866",
+    id: over.id ?? "9000301",
     status: over.status ?? "open",
     created_at: over.created_at ?? "2026-08-31T10:41:48Z",
     updated_at: over.updated_at ?? "2026-09-25T16:10:37Z",
-    person: { id: "5534242", managers: over.managers === undefined ? [{ id: "5663710" }] : over.managers },
+    person: { id: "9000102", managers: over.managers === undefined ? [{ id: "9000201" }] : over.managers },
     opportunity: {
-      id: "1338627",
+      id: "9000401",
       programme: { id: over.programme ?? "8" },
     },
     meta: {
@@ -145,10 +145,10 @@ describe("mapApplication", () => {
   it("maps an open application to its APL alone", () => {
     expect(mapApplication(row(), OPTIONS)).toEqual([
       {
-        applicationId: 7163866n,
+        applicationId: 9000301n,
         eventType: "APL",
         occurredAt: new Date("2026-08-31T10:41:48Z"),
-        epPersonId: 5534242n,
+        epPersonId: 9000102n,
         programmeId: 8,
         direction: "OUTGOING",
         applicationStatus: "open",
@@ -231,7 +231,7 @@ describe("mapApplication", () => {
 
 describe("managerIds (D-74)", () => {
   it("reads the EP's managers as ids", () => {
-    expect(managerIds([{ id: "5663710" }, { id: "5157924" }])).toEqual([5663710n, 5157924n]);
+    expect(managerIds([{ id: "9000201" }, { id: "9000204" }])).toEqual([9000201n, 9000204n]);
   });
 
   it("drops duplicates and nulls", () => {

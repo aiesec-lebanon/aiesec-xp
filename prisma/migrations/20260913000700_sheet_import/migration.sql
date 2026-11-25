@@ -25,7 +25,4 @@ CREATE TABLE "AssignmentSheet" (
 CREATE UNIQUE INDEX "AssignmentSheet_spreadsheetId_key"
   ON "AssignmentSheet"("spreadsheetId");
 
-INSERT INTO "AssignmentSheet" ("id", "label", "spreadsheetId", "tabName") VALUES
-  ('sheet_a', 'Sign-up form responses A', '[sheet-id-removed]', 'ViewOnly'),
-  ('sheet_b', 'Sign-up form responses B', '[sheet-id-removed]', 'ViewOnly')
-ON CONFLICT ("spreadsheetId") DO NOTHING;
+-- The sheet itself is chosen by an admin in XP's settings, never committed here.

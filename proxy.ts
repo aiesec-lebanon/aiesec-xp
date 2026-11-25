@@ -5,8 +5,8 @@ import { contentSecurityPolicy, generateNonce, NONCE_HEADER } from "@/lib/securi
 
 const PUBLIC_PATHS =
   process.env.NODE_ENV === "development"
-    ? ["/login", "/unauthorized", "/api/auth", "/api/cron", "/api/models", "/tv", "/lab"]
-    : ["/login", "/unauthorized", "/api/auth", "/api/cron", "/api/models", "/tv"];
+    ? ["/login", "/unauthorized", "/api/auth", "/api/cron", "/api/models", "/tv", "/privacy", "/lab"]
+    : ["/login", "/unauthorized", "/api/auth", "/api/cron", "/api/models", "/tv", "/privacy"];
 
 function withSecurityHeaders(request: NextRequest): NextResponse {
   const nonce = generateNonce();
@@ -18,6 +18,12 @@ function withSecurityHeaders(request: NextRequest): NextResponse {
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", policy);
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  if (process.env.NODE_ENV === "production") {
+    response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+  }
   return response;
 }
 

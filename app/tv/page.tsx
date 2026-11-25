@@ -4,26 +4,33 @@ import { activeWindowRange, officeStandings } from "@/lib/leaderboard";
 import { AutoRefresh } from "@/components/studio/auto-refresh";
 import { CharacterAvatar } from "@/components/studio/character";
 import { memberAvatars } from "@/lib/design/avatar";
+import { withTvNames } from "@/lib/privacy/tv-names";
 import { BrandMark } from "@/components/studio/chrome";
 import { Lift } from "@/components/studio/motion";
 import { RollingNumber } from "@/components/studio/rolling-number";
 
 export const dynamic = "force-dynamic";
 
+// Public by design (D-89), so it stays out of search engines.
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function TvPage() {
   const range = await activeWindowRange();
 
-  const [{ standings: entities, analyticsOk }, top, window, activity] = await Promise.all([
+  const [{ standings: entities, analyticsOk }, ranked, window, recent] = await Promise.all([
     officeStandings(range),
     topMembers(10, range),
     activeWindow(),
     recentActivity(8),
   ]);
 
-  // The board and the ticker both show people, so both show the character each
-  // of them picked.
+  // Anyone can open this board, so a name is shown only with the member's
+  // consent; everyone else is the placeholder, drawn as the placeholder too.
+  const [top, activity] = await Promise.all([withTvNames(ranked), withTvNames(recent)]);
   const characters = await memberAvatars(
-    [...top, ...activity].map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
+    [...top, ...activity]
+      .filter((entry) => entry.named)
+      .map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
   );
 
   // Rank, points and the per-entity APL/APD/RE counts all come from AIESEC's
@@ -143,7 +150,7 @@ export default async function TvPage() {
                   </span>
                   <CharacterAvatar
                     name={standing.fullName}
-                    idOverride={characters.get(standing.memberId)?.id}
+                    idOverride={standing.named ? characters.get(standing.memberId)?.id : undefined}
                     size={36}
                     rounded="rounded-[11px]"
                   />
@@ -168,7 +175,7 @@ export default async function TvPage() {
                 <div key={`${copy}-${index}`} className="flex items-center gap-3.5">
                   <CharacterAvatar
                     name={item.fullName}
-                    idOverride={characters.get(item.memberId)?.id}
+                    idOverride={item.named ? characters.get(item.memberId)?.id : undefined}
                     size={40}
                     rounded="rounded-xl"
                     tone="bg-[#2a2926]"

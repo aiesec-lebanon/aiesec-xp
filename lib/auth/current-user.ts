@@ -13,7 +13,8 @@ import { termStart } from "@/lib/term";
 export type CurrentUser = ResolvedAccess & {
   id: bigint;
   fullName: string;
-  profilePhotoUrl: string | null;
+  /** Null until the member has answered the /tv name question. */
+  tvNameConsent: boolean | null;
 };
 
 /**
@@ -44,7 +45,8 @@ export const currentUser = cache(async (): Promise<CurrentUser | null> => {
     termStart(),
   ]);
 
-  if (!member) return null;
+  // A bumped version (sign-out, erasure) ends every session issued before it.
+  if (!member || member.sessionVersion !== session.v) return null;
 
   const access = resolveAccess({
     positions: member.positions.map((position) => ({
@@ -63,6 +65,6 @@ export const currentUser = cache(async (): Promise<CurrentUser | null> => {
     ...access,
     id: member.id,
     fullName: personName(member.fullName),
-    profilePhotoUrl: member.profilePhotoUrl,
+    tvNameConsent: member.tvNameConsent,
   };
 });

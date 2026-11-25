@@ -9,8 +9,7 @@ DELETE FROM "AssignmentSheet";
 
 ALTER TABLE "AssignmentSheet" ALTER COLUMN "managersTabName" SET DEFAULT 'Sheet7';
 
-INSERT INTO "AssignmentSheet" ("id", "label", "spreadsheetId", "tabName", "managersTabName") VALUES
-  ('mc_signups', 'MC sign-up sheet', '[sheet-id-removed]', 'MasterSheet', 'Sheet7');
+-- The MC sheet is chosen by an admin in XP's settings, never committed here.
 
 -- ── Names matched on the console ────────────────────────────────────────────
 CREATE TABLE "SheetManagerMapping" (

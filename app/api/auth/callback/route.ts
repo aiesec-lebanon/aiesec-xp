@@ -5,6 +5,7 @@ import { fetchIdentity } from "@/lib/auth/identity";
 import { recordLogin } from "@/lib/auth/login";
 import { issueSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/session";
 import { logger } from "@/lib/logger";
+import { checkRateLimit, clientIp } from "@/lib/security/rate-limit";
 
 function failure(request: NextRequest, reason: string): NextResponse {
   logger.warn("Sign-in failed", { reason });
@@ -12,6 +13,9 @@ function failure(request: NextRequest, reason: string): NextResponse {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  if (!checkRateLimit("signIn", `callback:${clientIp(request.headers) ?? "unknown"}`).allowed) {
+    return failure(request, "rate_limited");
+  }
   const params = request.nextUrl.searchParams;
 
   if (params.get("error")) {
@@ -46,8 +50,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // of an otherwise successful sign-in. Left unguarded it surfaces as a 500 on
   // the callback, which reads as an auth fault rather than a missing variable.
   try {
-    const session = issueSession(result.memberId);
-    const response = NextResponse.redirect(new URL(handshake.returnTo, request.url));
+    const session = issueSession(result.memberId, result.sessionVersion);
+    // The /tv name question is asked once, before anything else.
+    const target = result.needsTvConsent
+      ? `/consent?returnTo=${encodeURIComponent(handshake.returnTo)}`
+      : handshake.returnTo;
+    const response = NextResponse.redirect(new URL(target, request.url));
     response.cookies.set(SESSION_COOKIE, session.value, sessionCookieOptions(session.expiresAt));
     return response;
   } catch (error) {

@@ -15,7 +15,6 @@
     "db:status": "prisma migrate status",
     "gis:schema": "node scripts/gis-schema.mjs",
     "gis:codegen": "graphql-codegen",
-    "gis:spike": "node scripts/spike/run.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "assets:vendor": "node scripts/assets/sync-vendor-assets.mjs",

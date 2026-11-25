@@ -7,6 +7,7 @@ import { personName } from "@/lib/design/names";
 import { gis } from "@/lib/gis/client";
 import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
+import { isOptedOut, keyedRef } from "@/lib/privacy/refs";
 import { termStart } from "@/lib/term";
 
 // Sync pass 8, the roster.
@@ -36,7 +37,7 @@ type GisPosition = {
   startDate: Date | null;
   endDate: Date | null;
   fullName: string;
-  profilePhotoUrl: string | null;
+  statisticsOptOut: boolean;
 };
 
 async function readOffice(officeId: bigint, endDateFrom: string): Promise<GisPosition[]> {
@@ -67,7 +68,7 @@ async function readOffice(officeId: bigint, endDateFrom: string): Promise<GisPos
         startDate: parseGisDate(position.start_date),
         endDate: parseGisDate(position.end_date),
         fullName: personName(position.person.full_name ?? `Person ${position.person.id}`),
-        profilePhotoUrl: position.person.profile_photo ?? null,
+        statisticsOptOut: isOptedOut(position.person.meta?.opt_out_of_statistical_data),
       });
     }
 
@@ -110,6 +111,16 @@ export async function syncRoster(): Promise<RosterSyncResult> {
     positions.length = 0;
     positions.push(...deduped);
 
+    // Members erased at their request are never read back in.
+    const tombstones = new Set(
+      (await db.erasureTombstone.findMany({ select: { personRef: true } })).map((row) => row.personRef)
+    );
+    const kept = positions.filter(
+      (position) => !tombstones.has(keyedRef("erased", String(position.memberId)))
+    );
+    positions.length = 0;
+    positions.push(...kept);
+
     // Group by person: one member may hold several positions, and their scoring
     // office is decided across all of them (D-32).
     const byMember = new Map<string, GisPosition[]>();
@@ -133,7 +144,7 @@ export async function syncRoster(): Promise<RosterSyncResult> {
       const scoringOfficeId = chooseScoringOffice(inputs);
       const profile = {
         fullName: held[0].fullName,
-        profilePhotoUrl: held[0].profilePhotoUrl,
+        statisticsOptOut: held[0].statisticsOptOut,
         // Only set when the office is one we hold, since the column carries a
         // foreign key and GIS reports offices outside the subtree.
         scoringOfficeId:

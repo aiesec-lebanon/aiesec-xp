@@ -8,7 +8,9 @@ query CurrentPerson {
   currentPerson {
     id
     full_name
-    profile_photo
+    meta {
+      opt_out_of_statistical_data
+    }
     current_office {
       id
       name
@@ -81,7 +83,9 @@ query MemberPositions($filters: MemberPositionFilter, $pagination: Pagination) {
       person {
         id
         full_name
-        profile_photo
+        meta {
+          opt_out_of_statistical_data
+        }
       }
     }
     paging {

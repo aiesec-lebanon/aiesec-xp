@@ -4,9 +4,17 @@ import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { applySource, SYSTEM_ACTOR } from "@/lib/assignments/register";
 import { inTermRoles } from "@/lib/org/members";
+import { readSheetColumns, SheetAccessError } from "@/lib/import/sheets-api";
 import {
-  csvExportUrl,
+  DIRECTORY_ID_HEADER,
+  DIRECTORY_LC_HEADER,
+  DIRECTORY_NAME_HEADER,
+  DIRECTORY_TEAM_HEADER,
   directoryKey,
+  EP_ID_HEADER,
+  EP_LC_HEADER,
+  EP_MANAGER_HEADER,
+  EP_TEAM_HEADER,
   mergeDirectory,
   parseDirectory,
   parseSignups,
@@ -15,8 +23,6 @@ import {
   type DirectoryEntry,
   type DirectorySource,
 } from "@/lib/import/sheet-parser";
-
-const FETCH_TIMEOUT_MS = 30_000;
 
 export type ImportIssue = {
   lineNumber: number | null;
@@ -53,49 +59,16 @@ export type ImportResult = {
   issues: ImportIssue[];
 };
 
-export const NOT_SHARED_MESSAGE =
-  "The sign-up sheet isn't shared. In Google Sheets, set General access to \"Anyone with the link\" (Viewer).";
-
-type Fetcher = (url: string) => Promise<{ status: number; ok: boolean; text: () => Promise<string> }>;
-
-/**
- * Reads one tab as CSV, turning every way Google can refuse into a message an
- * admin can act on.
- *
- * Exported and fetch-injectable so the refusal paths are testable: an unshared
- * sheet must be a reported issue, never something that takes the page down.
- */
-export async function readSheetCsv(
-  spreadsheetId: string,
-  tabName: string,
-  fetcher: Fetcher = (url) => fetch(url, { cache: "no-store", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
-): Promise<string> {
-  let response;
-  try {
-    response = await fetcher(csvExportUrl(spreadsheetId, tabName));
-  } catch (error) {
-    logger.warn("Sign-up sheet unreachable", { error });
-    throw new Error("Google Sheets didn't respond. Try again in a few minutes.");
-  }
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(NOT_SHARED_MESSAGE);
-  }
-  if (!response.ok) {
-    logger.warn("Sign-up sheet read failed", { status: response.status });
-    throw new Error(`Google Sheets couldn't open the sign-up sheet (error ${response.status}). Try again in a few minutes.`);
-  }
-
-  const body = await response.text();
-  // An unshared sheet can also answer 200 with an HTML sign-in page.
-  if (body.trimStart().startsWith("<")) {
-    throw new Error(NOT_SHARED_MESSAGE);
-  }
-  return body;
-}
+const SIGNUP_COLUMNS = [EP_ID_HEADER, EP_MANAGER_HEADER, EP_LC_HEADER, EP_TEAM_HEADER] as const;
+const DIRECTORY_COLUMNS = [
+  DIRECTORY_LC_HEADER,
+  DIRECTORY_TEAM_HEADER,
+  DIRECTORY_NAME_HEADER,
+  DIRECTORY_ID_HEADER,
+] as const;
 
 function describe(error: unknown): string {
-  if (error instanceof SheetShapeError) return error.message;
+  if (error instanceof SheetShapeError || error instanceof SheetAccessError) return error.message;
   return error instanceof Error ? error.message : "The sign-up sheet couldn't be read. Try again in a few minutes.";
 }
 
@@ -155,7 +128,10 @@ export async function importAssignments(
 
   let signups;
   try {
-    signups = parseSignups(await readSheetCsv(sheet.spreadsheetId, sheet.tabName), sheet.tabName);
+    signups = parseSignups(
+      await readSheetColumns(sheet.spreadsheetId, sheet.tabName, SIGNUP_COLUMNS),
+      sheet.tabName
+    );
   } catch (error) {
     return emptyResult(dryRun, sheet.label, [{ lineNumber: null, detail: describe(error) }]);
   }
@@ -165,7 +141,7 @@ export async function importAssignments(
   let fromSheet: DirectoryEntry[] = [];
   try {
     const directory = parseDirectory(
-      await readSheetCsv(sheet.spreadsheetId, sheet.managersTabName),
+      await readSheetColumns(sheet.spreadsheetId, sheet.managersTabName, DIRECTORY_COLUMNS),
       sheet.managersTabName
     );
     fromSheet = directory.entries;

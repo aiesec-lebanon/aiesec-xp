@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { currentUser } from "@/lib/auth/current-user";
 import { memberAvatar } from "@/lib/design/avatar";
 import { MotionProvider } from "@/components/motion/motion-provider";
+import { CookieConsent } from "@/components/privacy/cookie-consent";
 import { SiteFooter } from "@/components/studio/chrome";
 import { HeaderSlot } from "@/components/studio/header-slot";
 import { ToastProvider } from "@/components/studio/toast";
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <HeaderSlot user={user} characterId={avatar?.character.id} />
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
             <SiteFooter />
+            <CookieConsent />
           </ToastProvider>
         </MotionProvider>
       </body>

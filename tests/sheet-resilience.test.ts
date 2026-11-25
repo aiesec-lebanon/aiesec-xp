@@ -1,62 +1,106 @@
-import { describe, expect, it, vi } from "vitest";
+import { generateKeyPairSync } from "node:crypto";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-// Imported for its module graph only; nothing here touches the database.
-vi.mock("@/lib/db", () => ({ db: {} }));
 
-const { readSheetCsv, NOT_SHARED_MESSAGE } = await import("@/lib/import/run-import");
+const { readSheetColumns, NOT_CONNECTED_MESSAGE, SheetAccessError } = await import(
+  "@/lib/import/sheets-api"
+);
 
 // An unreadable sign-up sheet has to be a reported issue an admin can act on,
-// never something that takes the admin page or the sync down.
+// never something that takes the admin page or the sync down. And only the
+// four columns XP uses may ever be requested from Google.
 
-function respond(status: number, body: string) {
-  return async () => ({ status, ok: status >= 200 && status < 300, text: async () => body });
+const ACCOUNT = "xp-reader@example-project.iam.gserviceaccount.com";
+const WANTED = ["EP ID", "EP Manager", "LC Assigned To", "Function Assigned to"] as const;
+const HEADER = ["Timestamp", "EP Name", "EP ID", "Email", "EP Manager", "Phone", "LC Assigned To", "Function Assigned to"];
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-describe("an unshared sheet", () => {
-  it.each([401, 403])("is reported with instructions on %i", async (status) => {
-    await expect(readSheetCsv("id", "MasterSheet", respond(status, ""))).rejects.toThrow(
-      NOT_SHARED_MESSAGE
-    );
-  });
+function google(values: (url: string) => Response) {
+  const calls: string[] = [];
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.startsWith("https://oauth2.googleapis.com/token")) {
+      return json(200, { access_token: "test-access", expires_in: 3600 });
+    }
+    return values(url);
+  }) as typeof fetch;
+  return { fetcher, calls };
+}
 
-  it("tells the admin exactly what to change", () => {
-    expect(NOT_SHARED_MESSAGE).toMatch(/General access to "Anyone with the link"/);
-  });
-
-  it("is caught even when Google answers 200 with a sign-in page", async () => {
-    const html = '<!DOCTYPE html><html><head><title>Sign in</title></head></html>';
-    await expect(readSheetCsv("id", "MasterSheet", respond(200, html))).rejects.toThrow(
-      NOT_SHARED_MESSAGE
-    );
-  });
-
-  it("reports other failures with their status rather than a generic error", async () => {
-    await expect(readSheetCsv("id", "MasterSheet", respond(500, ""))).rejects.toThrow(/500/);
-  });
-
-  it("still reads a sheet that is shared", async () => {
-    const csv = '"Responsible Member","EP ID"\n"Sirine","6023224"';
-    await expect(readSheetCsv("id", "MasterSheet", respond(200, csv))).resolves.toBe(csv);
-  });
-
-  it("does not mistake a leading blank line for HTML", async () => {
-    const csv = '\n"Responsible Member","EP ID"\n"Sirine","1"';
-    await expect(readSheetCsv("id", "MasterSheet", respond(200, csv))).resolves.toContain("EP ID");
-  });
+beforeEach(() => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL = ACCOUNT;
+  process.env.GOOGLE_PRIVATE_KEY = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
 });
 
-describe("the import loop's contract", () => {
-  // importAssignments records a read failure as an issue. These assert the shape
-  // that behaviour depends on: a failure is a thrown Error carrying a message
-  // worth showing, so the console can show it instead of failing the page.
-  it("throws an Error, so the caller can record its message as an issue", async () => {
-    const error = await readSheetCsv("id", "MasterSheet", respond(401, "")).catch((e) => e);
-    expect(error).toBeInstanceOf(Error);
-    expect(String(error.message).length).toBeGreaterThan(20);
+afterEach(() => {
+  delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  delete process.env.GOOGLE_PRIVATE_KEY;
+});
+
+describe("reading the sign-up sheet", () => {
+  it("says XP isn't connected yet when no service account is set", async () => {
+    delete process.env.GOOGLE_PRIVATE_KEY;
+    await expect(readSheetColumns("sheet", "MasterSheet", WANTED)).rejects.toThrow(NOT_CONNECTED_MESSAGE);
   });
 
-  it("rejects rather than resolving to empty, which would look like an empty sheet", async () => {
-    await expect(readSheetCsv("id", "MasterSheet", respond(403, ""))).rejects.toBeInstanceOf(Error);
+  it("asks for the sheet to be shared with the service account, and never for a public link", async () => {
+    const { fetcher } = google(() => json(403, {}));
+    const error = await readSheetColumns("sheet", "MasterSheet", WANTED, fetcher).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SheetAccessError);
+    expect((error as Error).message).toContain(ACCOUNT);
+    expect((error as Error).message).toMatch(/Restricted/);
+    expect((error as Error).message).not.toMatch(/Anyone with the link/);
+  });
+
+  it("names a tab that does not exist", async () => {
+    const { fetcher } = google(() => json(400, {}));
+    await expect(readSheetColumns("sheet", "Gone", WANTED, fetcher)).rejects.toThrow(/no tab called "Gone"/);
+  });
+
+  it("reports a server error with its code", async () => {
+    const { fetcher } = google(() => json(500, {}));
+    await expect(readSheetColumns("sheet", "MasterSheet", WANTED, fetcher)).rejects.toThrow(/500/);
+  });
+
+  it("requests only the four columns it uses, located by header", async () => {
+    const { fetcher, calls } = google((url) =>
+      url.includes(":batchGet")
+        ? json(200, {
+            valueRanges: [
+              { values: [["EP ID", "900101", "900102"]] },
+              { values: [["EP Manager", "Test Manager"]] },
+              { values: [["LC Assigned To", "LC Test"]] },
+              { values: [["Function Assigned to", "oGV"]] },
+            ],
+          })
+        : json(200, { values: [HEADER] })
+    );
+
+    const csv = await readSheetColumns("sheet", "MasterSheet", WANTED, fetcher);
+
+    expect(csv.split("\n")[0]).toBe("EP ID,EP Manager,LC Assigned To,Function Assigned to");
+    expect(csv).toContain("900102,,,");
+    expect(csv).not.toMatch(/EP Name|Email|Phone|Timestamp/);
+
+    const batch = decodeURIComponent(calls.find((url) => url.includes(":batchGet")) ?? "");
+    expect(batch).toContain("'MasterSheet'!C:C");
+    expect(batch).toContain("'MasterSheet'!E:E");
+    expect(batch).toContain("'MasterSheet'!G:G");
+    expect(batch).toContain("'MasterSheet'!H:H");
+    expect(batch).not.toMatch(/!(A|B|D|F):/);
+  });
+
+  it("turns a network failure into a message an admin can act on", async () => {
+    const fetcher = (async () => {
+      throw new Error("socket hang up");
+    }) as typeof fetch;
+    await expect(readSheetColumns("sheet", "MasterSheet", WANTED, fetcher)).rejects.toThrow(/didn't respond/);
   });
 });

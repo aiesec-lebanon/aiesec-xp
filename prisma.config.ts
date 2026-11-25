@@ -9,6 +9,13 @@ try {
   // Absent in CI and on Vercel, where the platform injects the variables.
 }
 
+// Migrations go over TLS like the app does; a local database has none.
+const LOCAL_DB = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/i;
+const withTls = (url: string | undefined): string | undefined => {
+  if (!url || LOCAL_DB.test(url) || /[?&]sslmode=/i.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}sslmode=require`;
+};
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   // Configuration is seeded by migration, not by a seed script, so a deploy
@@ -19,6 +26,6 @@ export default defineConfig({
   datasource: {
     // Migrations run over the session-mode pooler. The transaction-mode pooler
     // in DATABASE_URL cannot run DDL or hold advisory locks.
-    url: process.env.DIRECT_URL,
+    url: withTls(process.env.DIRECT_URL),
   },
 });

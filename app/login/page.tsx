@@ -20,6 +20,7 @@ const ERRORS: Record<string, { headline: string; detail: string }> = {
     detail: "Please sign in again.",
   },
   gis_unavailable: { headline: "AIESEC isn't responding.", detail: "Try again in a few minutes." },
+  rate_limited: { headline: "Too many sign-in attempts.", detail: "Wait a few minutes, then try again." },
   session_unavailable: {
     headline: "Sign-in isn't working right now.",
     detail: "It's a problem on our side. Let the MCVP IM know.",

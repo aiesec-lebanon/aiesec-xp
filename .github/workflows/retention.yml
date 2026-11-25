@@ -1,0 +1,37 @@
+# Retention: deletes what the privacy notice says is kept no longer (sign-in
+# events, refused sign-ins, old events, leavers, closed requests). Daily, after
+# the EP sync. Needs the same repository settings as sync-ep-data.yml.
+name: Retention
+
+on:
+  schedule:
+    # 02:45 UTC every day.
+    - cron: "45 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: retention
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Call /api/cron/retention
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          : "${APP_URL:?Set the APP_URL repository variable}"
+          : "${CRON_SECRET:?Set the CRON_SECRET repository secret}"
+
+          # The body is statuses and counts only: these logs are public.
+          status=$(curl --silent --show-error --max-time 330 \
+            --output response.json --write-out '%{http_code}' \
+            --request POST --header "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/retention")
+          cat response.json; echo
+          test "$status" = 200

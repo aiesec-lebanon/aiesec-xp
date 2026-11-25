@@ -156,9 +156,9 @@ describe("the member's switch reaches every animated surface", () => {
     expect(layout).toContain("data-reduce-motion");
   });
 
-  it("offers the control WCAG 2.2.2 asks for, on every page", () => {
-    const layout = readFileSync(join(root, "app/layout.tsx"), "utf8");
-    expect(layout).toContain("<ReduceMotionToggle />");
+  it("offers the control WCAG 2.2.2 asks for, on the member's profile (D-46)", () => {
+    const profile = readFileSync(join(root, "app/me/page.tsx"), "utf8");
+    expect(profile).toContain("<ReduceMotionToggle");
   });
 
   it("has a CSS backstop for anything animated outside React", () => {

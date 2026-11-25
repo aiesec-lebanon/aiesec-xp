@@ -326,8 +326,3 @@ export function resolveManager(
   const byTeam = narrow(byLc, "team", row.team);
   return single(named) ?? single(byLc) ?? single(byTeam) ?? { kind: "ambiguous" };
 }
-
-export function csvExportUrl(spreadsheetId: string, tabName: string): string {
-  const params = new URLSearchParams({ tqx: "out:csv", sheet: tabName });
-  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?${params.toString()}`;
-}

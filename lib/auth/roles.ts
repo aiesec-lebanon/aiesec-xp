@@ -54,6 +54,17 @@ export function isInTermPosition(
 }
 
 /** GIS dates arrive as strings; an unparseable one is treated as absent. */
+/**
+ * Whether a position still holds today. Access needs one (a member who leaves
+ * mid-term loses it at once), while the boards keep the term rule above so the
+ * points they earned this term stay visible until the term ends.
+ */
+export function hasNotEnded(position: Pick<PositionInput, "endDate">, now: Date): boolean {
+  if (position.endDate === null) return true;
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return position.endDate >= today;
+}
+
 export function parseGisDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
@@ -74,6 +85,7 @@ export type ResolveInput = {
   matchers: readonly Matcher[];
   operatingOfficeIds: readonly bigint[];
   termStart: Date;
+  now?: Date;
 };
 
 export type ResolvedAccess = {
@@ -90,6 +102,7 @@ export function resolveAccess({
   matchers,
   operatingOfficeIds,
   termStart,
+  now = new Date(),
 }: ResolveInput): ResolvedAccess {
   const operating = new Set(operatingOfficeIds.map(String));
 
@@ -97,12 +110,20 @@ export function resolveAccess({
   // office outside the subtree entirely, or one that ended before this term
   // confers nothing -- the service token is entity-wide, so GIS grants no
   // isolation of its own (Architecture 4.4).
-  const inScope = positions.filter((position) =>
+  const inTerm = positions.filter((position) =>
     isInTermPosition(position, operating, termStart)
   );
+  const inScope = inTerm.filter((position) => hasNotEnded(position, now));
 
   if (inScope.length === 0) {
-    return { role: "DENIED", scoringOfficeId: null, leadOfficeIds: [], inScopePositions: [] };
+    // A member who left this term keeps their scoring office, so the points
+    // they earned stay on the boards until the term ends.
+    return {
+      role: "DENIED",
+      scoringOfficeId: chooseScoringOffice(inTerm),
+      leadOfficeIds: [],
+      inScopePositions: [],
+    };
   }
 
   const isAdmin = inScope.some((position) =>

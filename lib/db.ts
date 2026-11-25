@@ -2,6 +2,30 @@ import "server-only";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import type { PoolConfig } from "pg";
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * node-postgres sends nothing over TLS unless told to. Remote connections are
+ * always encrypted; the server certificate is verified once DATABASE_CA_CERT
+ * (Supabase dashboard, Database, SSL) is set. An explicit `sslmode` in the URL
+ * is the operator's choice and is left to pg.
+ */
+export function sslOption(connectionString: string): PoolConfig["ssl"] {
+  if (/[?&]sslmode=/i.test(connectionString)) return undefined;
+
+  const ca = process.env.DATABASE_CA_CERT?.trim();
+  // Env UIs often store a PEM on one line with literal "\n" separators.
+  if (ca) return { ca: ca.replace(/\\n/g, "\n"), rejectUnauthorized: true };
+
+  try {
+    if (LOCAL_HOSTS.has(new URL(connectionString).hostname)) return undefined;
+  } catch {
+    // Not a URL pg can parse either; let it report that.
+  }
+  return { rejectUnauthorized: false };
+}
 
 // Prisma 7 takes its connection from a driver adapter rather than the schema.
 // DATABASE_URL is the transaction-mode pooler; migrations use DIRECT_URL and
@@ -13,7 +37,7 @@ function createClient(): PrismaClient {
   }
 
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg({ connectionString, ssl: sslOption(connectionString) }),
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 }

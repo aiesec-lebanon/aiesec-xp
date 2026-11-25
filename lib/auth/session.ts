@@ -13,7 +13,10 @@ import { sessionSecret } from "@/lib/env";
 // both of which the user already knows. Integrity is what matters, so a signed
 // cookie is enough and avoids a JWT dependency.
 
-export const SESSION_COOKIE = "xp_session";
+// __Host- pins the cookie to this exact host over HTTPS. Plain HTTP on
+// localhost cannot carry it, so development keeps the bare name.
+export const SESSION_COOKIE =
+  process.env.NODE_ENV === "production" ? "__Host-xp_session" : "xp_session";
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 
@@ -24,6 +27,8 @@ export type SessionPayload = {
   iat: number;
   /** Expires at, epoch seconds. */
   exp: number;
+  /** Member.sessionVersion when issued; a later bump ends this session. */
+  v: number;
 };
 
 function b64url(input: Buffer | string): string {
@@ -34,12 +39,16 @@ function sign(body: string): string {
   return createHmac("sha256", sessionSecret()).update(body).digest("base64url");
 }
 
-export function issueSession(personId: bigint | string): { value: string; expiresAt: Date } {
+export function issueSession(
+  personId: bigint | string,
+  version: number
+): { value: string; expiresAt: Date } {
   const now = Math.floor(Date.now() / 1000);
   const payload: SessionPayload = {
     sub: String(personId),
     iat: now,
     exp: now + SESSION_TTL_SECONDS,
+    v: version,
   };
 
   const body = b64url(JSON.stringify(payload));
@@ -71,7 +80,13 @@ export function readSession(cookieValue: string | undefined): SessionPayload | n
     return null;
   }
 
-  if (typeof payload.sub !== "string" || typeof payload.exp !== "number") return null;
+  if (
+    typeof payload.sub !== "string" ||
+    typeof payload.exp !== "number" ||
+    typeof payload.v !== "number"
+  ) {
+    return null;
+  }
   if (payload.exp * 1000 <= Date.now()) return null;
 
   return payload;

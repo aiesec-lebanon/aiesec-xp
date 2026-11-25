@@ -1,16 +1,22 @@
 import "server-only";
 
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { GisIdentity } from "@/lib/auth/identity";
 import { parseGisDate, resolveAccess, type PositionInput, type Role } from "@/lib/auth/roles";
 import { personName } from "@/lib/design/names";
 import { logger } from "@/lib/logger";
 import { operatingOfficeIds } from "@/lib/org/office-tree";
+import { isErased } from "@/lib/privacy/member-data";
+import { isOptedOut, keyedRef } from "@/lib/privacy/refs";
 import { termStart } from "@/lib/term";
 
 export type LoginResult = {
   memberId: bigint;
   role: Role;
+  /** True until the member has answered the /tv name question. */
+  needsTvConsent: boolean;
+  sessionVersion: number;
 };
 
 function toPositionInputs(
@@ -39,18 +45,31 @@ function toPositionInputs(
  * from GIS must disappear here too, or a terminated officer would keep the
  * access their vanished row still grants (D-23).
  *
- * A DENIED member is still written. They hold no access, but recording the
- * attempt is what lets an admin see that someone tried and why it failed,
- * rather than the sign-in vanishing without trace.
+ * Someone with no position in scope this term keeps no profile: the refusal is
+ * recorded under a keyed reference and a reason, and deleted after 30 days. A
+ * member who left this term is still updated, so their term points stay on the
+ * boards, but they get no session.
  */
 export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
   const memberId = BigInt(identity.id);
   const positions = toPositionInputs(identity);
 
-  const [matchers, operating, floor] = await Promise.all([
+  // Erased at their request: XP keeps nothing new about them.
+  if (await isErased(memberId)) {
+    await db.refusedSignIn.create({
+      data: { personRef: keyedRef("refused-sign-in", String(memberId)), reason: "erased" },
+    });
+    return { memberId, role: "DENIED", needsTvConsent: false, sessionVersion: 0 };
+  }
+
+  const [matchers, operating, floor, existing] = await Promise.all([
     db.adminMatcher.findMany(),
     operatingOfficeIds(),
     termStart(),
+    db.member.findUnique({
+      where: { id: memberId },
+      select: { tvNameConsent: true, sessionVersion: true },
+    }),
   ]);
 
   const access = resolveAccess({
@@ -60,12 +79,25 @@ export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
     termStart: floor,
   });
 
+  if (access.role === "DENIED" && access.scoringOfficeId === null && !existing) {
+    await db.refusedSignIn.create({
+      data: {
+        personRef: keyedRef("refused-sign-in", String(memberId)),
+        reason: positions.length === 0 ? "no_positions" : "no_position_in_scope",
+      },
+    });
+    logger.warn("Sign-in refused: no position in scope this term", {
+      positionCount: positions.length,
+    });
+    return { memberId, role: "DENIED", needsTvConsent: false, sessionVersion: 0 };
+  }
+
   const homeOfficeId = identity.current_office?.id ? BigInt(identity.current_office.id) : null;
   const knownOffices = new Set(operating.map(String));
 
   const profile = {
     fullName: personName(identity.full_name ?? `Person ${memberId}`),
-    profilePhotoUrl: identity.profile_photo ?? null,
+    statisticsOptOut: isOptedOut(identity.meta?.opt_out_of_statistical_data),
     // Only set when the office is one we actually hold, since these columns
     // carry a foreign key and GIS will report offices outside the subtree.
     homeOfficeId: homeOfficeId && knownOffices.has(String(homeOfficeId)) ? homeOfficeId : null,
@@ -73,13 +105,24 @@ export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
     lastSyncedAt: new Date(),
   };
 
-  await db.$transaction([
+  const denied = access.role === "DENIED";
+
+  const writes: Prisma.PrismaPromise<unknown>[] = [
     db.member.upsert({
       where: { id: memberId },
       create: { id: memberId, ...profile },
       update: profile,
     }),
-    db.loginEvent.create({ data: { memberId } }),
+    ...(denied
+      ? [
+          db.refusedSignIn.create({
+            data: {
+              personRef: keyedRef("refused-sign-in", String(memberId)),
+              reason: "position_ended",
+            },
+          }),
+        ]
+      : [db.loginEvent.create({ data: { memberId } })]),
     db.position.deleteMany({ where: { memberId } }),
     db.position.createMany({
       data: positions.map((position) => ({
@@ -94,15 +137,19 @@ export async function recordLogin(identity: GisIdentity): Promise<LoginResult> {
       })),
       skipDuplicates: true,
     }),
-  ]);
+  ];
+  await db.$transaction(writes);
 
-  if (access.role === "DENIED") {
-    logger.warn("Sign-in denied: no active position in an operating office", {
-      memberId: String(memberId),
-      positionCount: positions.length,
-      officeIds: positions.map((position) => String(position.officeId)),
+  if (denied) {
+    logger.warn("Sign-in refused: the member's position has ended", {
+      memberRef: keyedRef("log", String(memberId)),
     });
   }
 
-  return { memberId, role: access.role };
+  return {
+    memberId,
+    role: access.role,
+    needsTvConsent: !denied && (existing?.tvNameConsent ?? null) === null,
+    sessionVersion: existing?.sessionVersion ?? 0,
+  };
 }

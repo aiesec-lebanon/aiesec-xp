@@ -22,6 +22,8 @@ import { AdminNav } from "../admin-nav";
 import { ImportButtons } from "./controls";
 import { CsvImport } from "./csv-import";
 import { SheetNames } from "./sheet-names";
+import { SheetSettings } from "./sheet-settings";
+import { serviceAccount } from "@/lib/google/service-account";
 import {
   AssignmentsTable,
   type AssignmentRow,
@@ -72,6 +74,10 @@ export default async function AssignmentsAdminPage() {
   }
 
   const current = await currentWindow();
+  const activeSheet = await db.assignmentSheet.findFirst({
+    where: { isActive: true },
+    select: { tabName: true, managersTabName: true },
+  });
   const [preview, roles, credits, scorable, eventsJob, config] = await Promise.all([
     importAssignments(currentUser.id, { dryRun: true }),
     // Only members this term can be credited -- never an EP, never a departed
@@ -321,6 +327,13 @@ export default async function AssignmentsAdminPage() {
           ) : null}
 
           {preview.sheetRead ? <SheetNames names={sheetNames} members={memberOptions} /> : null}
+
+          <SheetSettings
+            configured={activeSheet !== null}
+            tabName={activeSheet?.tabName ?? "MasterSheet"}
+            managersTabName={activeSheet?.managersTabName ?? "Sheet7"}
+            serviceAccountEmail={serviceAccount()?.email ?? null}
+          />
         </section>
 
         <section className="flex flex-col gap-3.5 rounded-[22px] bg-surface-raised px-7 py-6.5">

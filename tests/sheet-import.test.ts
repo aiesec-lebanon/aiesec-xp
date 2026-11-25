@@ -24,9 +24,9 @@ const HEADER =
 // a test file is committed, and committing someone's date of birth to prove a
 // parser ignores it would be the exact failure the parser exists to prevent.
 const ROW =
-  '"2026-03-03T19:53:58.138Z","6023224","Test Person","1990-01-01",' +
+  '"2026-03-03T19:53:58.138Z","9000101","Test Person","1990-01-01",' +
   '"test.person@example.invalid","+96100000000","testland","alpha,beta,gamma",' +
-  '"Other","testing","bachelor_ongoing","7","AUB","OGX","x-1","Sirine","called twice"';
+  '"Other","testing","bachelor_ongoing","7","AUB","OGX","x-1","Test Manager","called twice"';
 
 const TAB = "MasterSheet";
 
@@ -62,7 +62,7 @@ describe("parseSignups (D-80)", () => {
   it("reads the EP, its manager, LC and team", () => {
     const parsed = parseSignups(`${HEADER}\n${ROW}`, TAB);
     expect(parsed.rows).toEqual([
-      { lineNumber: 2, epPersonId: 6023224n, managerLabel: "Sirine", lc: "AUB", team: "OGX" },
+      { lineNumber: 2, epPersonId: 9000101n, managerLabel: "Test Manager", lc: "AUB", team: "OGX" },
     ]);
   });
 
@@ -85,30 +85,30 @@ describe("parseSignups (D-80)", () => {
   });
 
   it("locates columns by header, not position", () => {
-    const moved = '"EP Manager","EP ID"\n"Sirine","6023224"';
-    expect(parseSignups(moved, TAB).rows[0]).toMatchObject({ managerLabel: "Sirine", epPersonId: 6023224n });
+    const moved = '"EP Manager","EP ID"\n"Test Manager","9000101"';
+    expect(parseSignups(moved, TAB).rows[0]).toMatchObject({ managerLabel: "Test Manager", epPersonId: 9000101n });
   });
 
   it("keeps an EP with no manager, which the sheet credits to nobody", () => {
-    const parsed = parseSignups('"EP ID","EP Manager"\n"6023224",""', TAB);
+    const parsed = parseSignups('"EP ID","EP Manager"\n"9000101",""', TAB);
     expect(parsed.rows[0]).toMatchObject({ managerLabel: "", lc: "", team: "" });
     expect(parsed.problems).toHaveLength(0);
   });
 
   it("recognises another tab, which Google returns for a tab name it does not have", () => {
     // Measured: an unknown tab name answers 200 with the first tab's rows.
-    const otherTab = '"Timestamp","EP ID","Full Name","LC"\n"x","6023224","Test Person","AUB"';
+    const otherTab = '"Timestamp","EP ID","Full Name","LC"\n"x","9000101","Test Person","AUB"';
     expect(() => parseSignups(otherTab, TAB)).toThrow(/"EP Manager"/);
   });
 
   it("reports an EP ID that is not a number instead of importing it", () => {
-    const parsed = parseSignups('"EP ID","EP Manager"\n"not-a-number","Sirine"', TAB);
+    const parsed = parseSignups('"EP ID","EP Manager"\n"not-a-number","Test Manager"', TAB);
     expect(parsed.rows).toHaveLength(0);
     expect(parsed.problems[0].reason).toBe("INVALID_EP_ID");
   });
 
   it("reports a row with no EP ID", () => {
-    const parsed = parseSignups('"EP ID","EP Manager"\n"","Sirine"', TAB);
+    const parsed = parseSignups('"EP ID","EP Manager"\n"","Test Manager"', TAB);
     expect(parsed.problems[0].reason).toBe("MISSING_EP_ID");
   });
 
@@ -140,13 +140,13 @@ describe("normaliseLabel", () => {
 
 // Sheet7 as the MC keeps it: A = LC, B = Team, C = EP Manager Name, D = EXPA ID.
 const DIRECTORY =
-  '"LC","Team","EP Manager Name","EXPA ID"\n"AUB","OGX","Sirine","5663710"\n"LAU","MOGX","Ahmad M","5194055"';
+  '"LC","Team","EP Manager Name","EXPA ID"\n"AUB","OGX","Test Manager","9000201"\n"LAU","MOGX","Ahmad M","9000202"';
 
 describe("parseDirectory (D-80)", () => {
   it("reads each manager's LC, team, name and EXPA ID", () => {
     expect(parseDirectory(DIRECTORY, "Sheet7").entries).toEqual([
-      { name: "Sirine", lc: "AUB", team: "OGX", memberId: 5663710n, source: "SHEET" },
-      { name: "Ahmad M", lc: "LAU", team: "MOGX", memberId: 5194055n, source: "SHEET" },
+      { name: "Test Manager", lc: "AUB", team: "OGX", memberId: 9000201n, source: "SHEET" },
+      { name: "Ahmad M", lc: "LAU", team: "MOGX", memberId: 9000202n, source: "SHEET" },
     ]);
   });
 
@@ -159,8 +159,8 @@ describe("parseDirectory (D-80)", () => {
   });
 
   it("lists managers with no EXPA ID yet", () => {
-    const directory = parseDirectory('"EP Manager Name","EXPA ID"\n"Sirine",""\n"Maram","5790695"', "Sheet7");
-    expect(directory.missingIds).toEqual(["Sirine"]);
+    const directory = parseDirectory('"EP Manager Name","EXPA ID"\n"Test Manager",""\n"Other Manager","9000203"', "Sheet7");
+    expect(directory.missingIds).toEqual(["Test Manager"]);
     expect(directory.entries).toHaveLength(1);
   });
 
@@ -182,13 +182,13 @@ describe("parseManagerCsv", () => {
   });
 
   it("finds columns by header, in any order", () => {
-    expect(parseManagerCsv("EXPA ID,EP Manager Name\r\n5663710,Sirine\r\n").entries).toEqual([
-      { name: "Sirine", lc: "", team: "", memberId: 5663710n, source: "SHEET" },
+    expect(parseManagerCsv("EXPA ID,EP Manager Name\r\n9000201,Test Manager\r\n").entries).toEqual([
+      { name: "Test Manager", lc: "", team: "", memberId: 9000201n, source: "SHEET" },
     ]);
   });
 
   it("explains the expected columns when they are missing", () => {
-    expect(() => parseManagerCsv("Name,ID\nSirine,5663710")).toThrow(/"EP Manager Name" and "EXPA ID"/);
+    expect(() => parseManagerCsv("Name,ID\nTest Manager,9000201")).toThrow(/"EP Manager Name" and "EXPA ID"/);
   });
 });
 
@@ -200,8 +200,8 @@ describe("resolveManager (D-80)", () => {
   const row = (managerLabel: string, lc = "", team = "") => ({ managerLabel, lc, team });
 
   it("matches a name listed once, whatever its LC and team", () => {
-    const directory = [entry("Sirine", "AUB", "OGX", 1n)];
-    expect(resolveManager(directory, row("sirine", "LAU", "MOGX"))).toEqual({
+    const directory = [entry("Test Manager", "AUB", "OGX", 1n)];
+    expect(resolveManager(directory, row("test manager", "LAU", "MOGX"))).toEqual({
       kind: "matched",
       memberId: 1n,
       source: "SHEET",
@@ -234,7 +234,7 @@ describe("resolveManager (D-80)", () => {
   });
 
   it("reports a name nobody lists", () => {
-    expect(resolveManager([entry("Sirine", "", "", 1n)], row("Maram"))).toEqual({ kind: "unlisted" });
+    expect(resolveManager([entry("Test Manager", "", "", 1n)], row("Other Manager"))).toEqual({ kind: "unlisted" });
   });
 });
 
@@ -253,7 +253,7 @@ describe("mergeDirectory (D-80)", () => {
   });
 
   it("fills a name the sheet does not list", () => {
-    const merged = mergeDirectory([], [entry("Maram", "LAU", "OGX", 4n, "CONSOLE")]);
-    expect(resolveManager(merged, { managerLabel: "Maram", lc: "LAU", team: "OGX" })).toMatchObject({ memberId: 4n });
+    const merged = mergeDirectory([], [entry("Other Manager", "LAU", "OGX", 4n, "CONSOLE")]);
+    expect(resolveManager(merged, { managerLabel: "Other Manager", lc: "LAU", team: "OGX" })).toMatchObject({ memberId: 4n });
   });
 });

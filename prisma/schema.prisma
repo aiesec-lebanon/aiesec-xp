@@ -33,13 +33,22 @@ model Office {
 model Member {
   id              BigInt   @id // GIS person id, always present at login
   fullName        String
-  aiesecEmail     String?
-  profilePhotoUrl String?
   homeOfficeId    BigInt?
   // D-32. The office whose LC total this member's points count towards.
   scoringOfficeId BigInt?
   firstSeenAt     DateTime @default(now())
   lastSyncedAt    DateTime @updatedAt
+  // Kept off every leaderboard: EXPA's statistical opt-out, synced from GIS,
+  // or an admin honouring an objection.
+  statisticsOptOut Boolean  @default(false)
+  hiddenFromBoards Boolean  @default(false)
+  // Consent to show the name on the public /tv board. Null until asked, which
+  // counts as no.
+  tvNameConsent   Boolean?
+  tvConsentAt     DateTime?
+  // A session carries the version it was issued at; bumping it signs the
+  // member out everywhere.
+  sessionVersion  Int      @default(0)
 
   homeOffice    Office?            @relation("MemberHomeOffice", fields: [homeOfficeId], references: [id], onDelete: SetNull)
   scoringOffice Office?            @relation("MemberScoringOffice", fields: [scoringOfficeId], references: [id], onDelete: SetNull)
@@ -87,6 +96,24 @@ model LoginEvent {
 
   @@index([memberId, at])
   @@index([at])
+}
+
+// A sign-in refused for having no position in scope. No profile is kept: a
+// keyed reference tells repeated attempts apart. Deleted after 30 days.
+model RefusedSignIn {
+  id        String   @id @default(cuid())
+  personRef String
+  reason    String
+  at        DateTime @default(now())
+
+  @@index([at])
+}
+
+// People erased at their request. The roster and sign-in skip them, so the
+// weekly roster read does not bring an erased member back.
+model ErasureTombstone {
+  personRef String   @id
+  erasedAt  DateTime @default(now())
 }
 
 model Position {
@@ -448,6 +475,26 @@ model SyncSettings {
   id             String    @id @default("singleton")
   hackathonUntil DateTime?
   updatedAt      DateTime  @updatedAt
+}
+
+// Messages to the privacy team from the privacy notice's contact form. Not a
+// relation to Member: a request outlives an erased member.
+model PrivacyRequest {
+  id         String    @id @default(cuid())
+  memberId   BigInt?
+  kind       String
+  status     String    @default("RECEIVED")
+  senderName String
+  replyEmail String?
+  message    String
+  ipHash     String?
+  receivedAt DateTime  @default(now())
+  dueAt      DateTime
+  closedAt   DateTime?
+
+  @@index([status, dueAt])
+  @@index([ipHash, receivedAt])
+  @@index([memberId])
 }
 
 model AuditLog {

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { CurrentUser } from "@/lib/auth/current-user";
 import { firstName } from "@/lib/design/names";
+import { CookieSettingsButton } from "@/components/privacy/cookie-consent";
 
 import { BrandGlyph } from "./brand-glyph";
 import { DockSlot } from "./dock-slot";
@@ -90,6 +91,15 @@ export function SiteFooter() {
     <footer className="shrink-0 px-6 pb-2 pt-2 text-center sm:px-11">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
         Proudly presented by AIESEC in Lebanon
+        <span aria-hidden> · </span>
+        <Link
+          href="/privacy"
+          className="underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          Privacy
+        </Link>
+        <span aria-hidden> · </span>
+        <CookieSettingsButton />
       </p>
     </footer>
   );

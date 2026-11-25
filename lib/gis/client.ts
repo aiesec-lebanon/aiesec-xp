@@ -30,12 +30,21 @@ function createSdk() {
     try {
       return await action();
     } catch (error) {
-      // graphql-request attaches the failing request, headers included, to the
-      // error. Logging it raw would print the token; redact() strips it.
+      // graphql-request attaches the failing request and response to the error:
+      // variables, headers and data, which can name people. Only the operation,
+      // the status and the message are logged.
+      const response = (error as { response?: { status?: number; errors?: { message?: string }[] } })
+        ?.response;
+      const status = response?.status;
+      // A ClientError's own message embeds the whole request and response as JSON.
+      const message =
+        response?.errors?.map((entry) => entry.message ?? "").join("; ").slice(0, 300) ||
+        (error instanceof Error ? error.message.split(": {")[0].slice(0, 200) : "unknown");
       logger.error("GIS request failed", {
         operationName,
         elapsedMs: Date.now() - startedAt,
-        error,
+        status,
+        message,
       });
       throw new GisError(`GIS operation ${operationName} failed`);
     }

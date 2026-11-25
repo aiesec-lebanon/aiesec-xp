@@ -87,9 +87,15 @@ JavaScript.
    generated and validated server-side.
 2. Server-side code exchange at the token endpoint.
 3. Call GIS `currentPerson` **with the user's own token** to establish identity.
-4. Resolve positions. No active position inside the 182 subtree means `DENIED`
-   (D-31).
-5. Upsert `Member` and `Position`, issue our own signed session cookie.
+4. Resolve positions. No active position inside the 182 subtree that is still
+   held today means `DENIED` (D-31, D-96). Someone with no position in scope
+   this term keeps no profile: only a `RefusedSignIn` row with a keyed reference
+   (D-95). Someone erased at their request is refused outright (D-95).
+5. Upsert `Member` and `Position`, issue our own signed session cookie
+   (`__Host-xp_session` in production), carrying `Member.sessionVersion`.
+   Signing out bumps the version, which ends every session of that member.
+6. A member who has not answered the office-screen question goes to `/consent`
+   first (D-94).
 
 The user's token is used only for that identity call and is then discarded. It is
 never stored, never placed in a cookie, and never used for data sync.
@@ -175,8 +181,6 @@ model Office {
 model Member {
   id              BigInt  @id     // GIS person id, always present at login
   fullName        String
-  aiesecEmail     String?
-  profilePhotoUrl String?
   homeOfficeId    BigInt?
   scoringOfficeId BigInt?                   // D-32, highest-ranked active position
   firstSeenAt     DateTime
@@ -680,7 +684,9 @@ Every mutation writes an `AuditLog` row with before/after JSON.
 | `/leaderboard/lcs` | LC ranking, MC-direct as its own entity (D-11), over the same date range. Points and counts read live from AIESEC's own analytics API, not the ledger (D-56) |
 | `/rewards` | Rewards by unit: one curved road each for points, APL, APD and RE that has a reward, with reward markers at their thresholds and the member's character at their count. Next up is the closest unearned reward by share reached (D-87, D-88) |
 | `/me` | Full event history and point trail |
-| `/tv` | Fullscreen display mode for office screens. Stays on the active display window; no range picker (D-58). Public: no sign-in required (D-89) |
+| `/tv` | Fullscreen display mode for office screens. Stays on the active display window; no range picker (D-58). Public: no sign-in required (D-89); a member's name only with their consent, otherwise "AIESEC member" (D-94) |
+| `/consent` | The office-screen question, asked once after sign-in (D-94) |
+| `/privacy` | Privacy notice, cookie table and the privacy contact form. Public (D-92) |
 | `/admin/*` | Configuration |
 
 ### Interactions
@@ -838,9 +844,14 @@ is the measure CGTrader's Royalty Free licence asks of an app.
 
 ## 10. Data handling
 
-Recorded decisions (D-17, D-18, D-19): the MC is the data controller, the MCVP IM
-is the responsible officer, there is no in-product privacy notice, consent prompt
-or opt-out, and EP details appear in the audit trail behind AIESEC auth.
+AIESEC in Lebanon is the controller. `/privacy` is the privacy notice (Annex E
+of the AIESEC in Lebanon policy), with the cookie table and a contact form at its
+end; every page has a cookie banner and a footer Cookies button (D-92). The
+legal basis for the boards is legitimate interest, backed by a legitimate
+interest assessment and a DPIA; names on the public `/tv` need consent (D-94).
+EXPA statistical opt-outs, and members an admin hides after an objection, are on
+no board (D-93). The Data Protection Officer's address is not published: the
+contact form stores a `PrivacyRequest` that admins handle at `/admin/privacy`.
 
 Technical measures that remain regardless:
 
@@ -863,8 +874,18 @@ Technical measures that remain regardless:
 - No third-party analytics with cross-site tracking.
 - Access restricted to authenticated members of the 182 subtree (D-16).
 - `AuditLog` covers every administrative mutation and every export.
-- An admin-only single-person export exists so an access or rectification request
-  can be serviced in minutes.
+- Members download their own data from `/me` (`/api/me/export`); admins export a
+  linked requester's data, hide them from the boards, or erase them from
+  `/admin/privacy` (D-95).
+- Retention is a daily job (`/api/cron/retention`, `.github/workflows/retention.yml`):
+  sign-in events 90 days, refused sign-ins 30 days, admin change log 24 months,
+  events and points for the term plus 12 months, members 12 months after their
+  last position ends, closed privacy requests 3 years, EP ids EXPA no longer
+  returns at once (D-95). `lib/privacy/retention.ts` holds the periods; the
+  privacy notice states them.
+- Hosting is Mumbai (Supabase, Vercel `bom1`). India has no EU adequacy
+  decision, so the transfer relies on the providers' SCCs and a transfer impact
+  assessment (D-21, amended).
 
 ---
 
@@ -875,7 +896,19 @@ Technical measures that remain regardless:
 - Every route and server action authorizes independently; GIS permissions are not
   relied on for isolation.
 - CSRF protection on server actions, strict `SameSite` cookies.
-- Rate limiting on auth, admin and sync-trigger routes.
+- Rate limiting on the sign-in routes and the privacy contact form, in memory
+  per instance (`lib/security/rate-limit.ts`); the contact form also counts rows
+  in the database so the limit holds across instances.
+- The database connection is TLS (verified once `DATABASE_CA_CERT` is set); RLS
+  is enabled on every table and Supabase's API roles are revoked, since the app
+  connects as the owner and never uses the Data API.
+- Referrer-Policy, nosniff, Permissions-Policy and HSTS are set in `proxy.ts`.
+- CI (`.github/workflows/ci.yml`) runs lint, types, tests and a gitleaks scan.
+- GIS errors are logged as operation, status and message only; database URLs,
+  `MODEL_KEY` and the Google key are redacted with the other secrets.
+- The analytics API accepts the service token only as a URL parameter (a header
+  was refused when tested on 25/11/2026), so it stays there, over HTTPS and
+  redacted from logs.
 - The cron routes (`/api/cron/*`) are the one API surface with no session behind
   them: the proxy lets them through and each authenticates with `CRON_SECRET`
   itself. The job lease and the two-minute gap bound how often even a leaked
@@ -908,8 +941,8 @@ Technical measures that remain regardless:
 **Day 1 — MVP**
 
 1. **GIS spike — done.** Verified against office 182 with the service token;
-   harness in `scripts/spike`, reports written to `scripts/spike/out` and not
-   committed, since they contain EP names. What it established:
+   the harness was removed from the repository once its findings were recorded
+   here, since it ran ad-hoc queries. What it established:
 
    - Auth is a raw `Authorization` header with no `Bearer` prefix; `Bearer` is
      rejected. Introspection is enabled, 473 types, which is the codegen source.

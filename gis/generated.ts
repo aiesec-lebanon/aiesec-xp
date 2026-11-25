@@ -250,7 +250,7 @@ export type RangeInput = {
 export type CurrentPersonQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type CurrentPersonQuery = { currentPerson: { id: string, full_name: string | null, profile_photo: string | null, current_office: { id: string, name: string | null } | null, current_positions: Array<{ id: number | null, title: string | null, status: string | null, start_date: string | null, end_date: string | null, office: { id: string, name: string | null, tag: string | null } | null, role: { id: string | null, name: string | null } | null } | null> | null } | null };
+export type CurrentPersonQuery = { currentPerson: { id: string, full_name: string | null, meta: { opt_out_of_statistical_data: string | null } | null, current_office: { id: string, name: string | null } | null, current_positions: Array<{ id: number | null, title: string | null, status: string | null, start_date: string | null, end_date: string | null, office: { id: string, name: string | null, tag: string | null } | null, role: { id: string | null, name: string | null } | null } | null> | null } | null };
 
 export type OfficeChildrenQueryVariables = Exact<{
   parentIds?: Array<number | null | undefined> | number | null | undefined;
@@ -265,7 +265,7 @@ export type MemberPositionsQueryVariables = Exact<{
 }>;
 
 
-export type MemberPositionsQuery = { memberPositions: { data: Array<{ id: number | null, title: string | null, status: string | null, start_date: string | null, end_date: string | null, office: { id: string, name: string | null } | null, role: { id: string | null, name: string | null, is_active: boolean | null } | null, person: { id: string, full_name: string | null, profile_photo: string | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
+export type MemberPositionsQuery = { memberPositions: { data: Array<{ id: number | null, title: string | null, status: string | null, start_date: string | null, end_date: string | null, office: { id: string, name: string | null } | null, role: { id: string | null, name: string | null, is_active: boolean | null } | null, person: { id: string, full_name: string | null, meta: { opt_out_of_statistical_data: string | null } | null } | null } | null> | null, paging: { total_items: number | null, total_pages: number | null, current_page: number | null } | null } | null };
 
 export type ApplicationsQueryVariables = Exact<{
   filters?: ApplicationFilter | null | undefined;
@@ -305,7 +305,9 @@ export const CurrentPersonDocument = gql`
   currentPerson {
     id
     full_name
-    profile_photo
+    meta {
+      opt_out_of_statistical_data
+    }
     current_office {
       id
       name
@@ -368,7 +370,9 @@ export const MemberPositionsDocument = gql`
       person {
         id
         full_name
-        profile_photo
+        meta {
+          opt_out_of_statistical_data
+        }
       }
     }
     paging {

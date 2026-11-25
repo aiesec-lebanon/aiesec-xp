@@ -167,6 +167,9 @@ export async function individualStandings(
       where: {
         ...(await inTermMemberWhere()),
         ...(officeId === undefined ? {} : { scoringOfficeId: officeId }),
+        // EXPA's statistical opt-out, or an objection an admin has honoured.
+        statisticsOptOut: false,
+        hiddenFromBoards: false,
       },
       select: {
         id: true,

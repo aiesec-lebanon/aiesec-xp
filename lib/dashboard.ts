@@ -189,6 +189,7 @@ export type ActivityItem = {
  */
 export async function recentActivity(limit = 12): Promise<ActivityItem[]> {
   const entries = await db.scoreLedgerEntry.findMany({
+    where: { member: { statisticsOptOut: false, hiddenFromBoards: false } },
     orderBy: { occurredAt: "desc" },
     take: limit,
     select: {

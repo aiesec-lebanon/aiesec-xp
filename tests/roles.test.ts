@@ -99,8 +99,9 @@ describe("term (D-71)", () => {
     expect(resolve([ended]).role).toBe("DENIED");
   });
 
-  it("counts a position ending on the term start day", () => {
-    expect(resolve([position({ endDate: TERM_START })]).role).toBe("MEMBER");
+  it("counts a position ending on the term start day as in the term", () => {
+    const operating = new Set(OPERATING.map(String));
+    expect(isInTermPosition(position({ endDate: TERM_START }), operating, TERM_START)).toBe(true);
   });
 
   it("counts a position ending later in the term", () => {
@@ -291,5 +292,43 @@ describe("primaryRole (D-73)", () => {
   it("is null for a member with no role", () => {
     expect(primaryRole([])).toBeNull();
     expect(primaryRole([{ roleName: null }])).toBeNull();
+  });
+});
+
+describe("members who leave mid-term", () => {
+  const NOW = new Date("2026-11-25T10:00:00Z");
+  const resolveAt = (positions: PositionInput[]) =>
+    resolveAccess({
+      positions,
+      matchers: MATCHERS,
+      operatingOfficeIds: OPERATING,
+      termStart: TERM_START,
+      now: NOW,
+    });
+
+  it("lose access once their position has ended", () => {
+    const left = position({ endDate: new Date("2026-11-24T00:00:00Z") });
+    expect(resolveAt([left]).role).toBe("DENIED");
+  });
+
+  it("keep access on the last day of their position", () => {
+    const lastDay = position({ endDate: new Date("2026-11-25T00:00:00Z") });
+    expect(resolveAt([lastDay]).role).toBe("MEMBER");
+  });
+
+  it("keep their scoring office, so this term's points stay on the boards", () => {
+    const left = position({ officeId: LAU, endDate: new Date("2026-10-01T00:00:00Z") });
+    const access = resolveAt([left]);
+    expect(access.role).toBe("DENIED");
+    expect(access.scoringOfficeId).toBe(LAU);
+  });
+
+  it("lose admin rights the same way", () => {
+    const formerMcp = position({ officeId: MC, roleName: "MCP", endDate: new Date("2026-11-01T00:00:00Z") });
+    expect(resolveAt([formerMcp]).role).toBe("DENIED");
+  });
+
+  it("give nobody outside the term a scoring office", () => {
+    expect(resolveAt([position({ endDate: new Date("2026-07-01T00:00:00Z") })]).scoringOfficeId).toBeNull();
   });
 });
