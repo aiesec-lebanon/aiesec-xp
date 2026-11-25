@@ -5,6 +5,7 @@ import { AutoRefresh } from "@/components/studio/auto-refresh";
 import { CharacterAvatar } from "@/components/studio/character";
 import { memberAvatars } from "@/lib/design/avatar";
 import { withTvNames } from "@/lib/privacy/tv-names";
+import { memoFor } from "@/lib/security/memo";
 import { BrandMark } from "@/components/studio/chrome";
 import { Lift } from "@/components/studio/motion";
 import { RollingNumber } from "@/components/studio/rolling-number";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 // Public by design (D-89), so it stays out of search engines.
 export const metadata = { robots: { index: false, follow: false } };
 
-export default async function TvPage() {
+async function loadBoard() {
   const range = await activeWindowRange();
 
   const [{ standings: entities, analyticsOk }, ranked, window, recent] = await Promise.all([
@@ -31,6 +32,17 @@ export default async function TvPage() {
     [...top, ...activity]
       .filter((entry) => entry.named)
       .map((entry) => ({ id: entry.memberId, fullName: entry.fullName })),
+  );
+  return { entities, analyticsOk, top, window, activity, characters };
+}
+
+export default async function TvPage() {
+  // Public, so reloads share one read per 30 seconds rather than each costing
+  // an analytics call on the service token. The screen refreshes every 60.
+  const { entities, analyticsOk, top, window, characters } = await memoFor(
+    "tv-board",
+    30_000,
+    loadBoard,
   );
 
   // Rank, points and the per-entity APL/APD/RE counts all come from AIESEC's

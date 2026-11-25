@@ -111,3 +111,35 @@ describe("no other model stores EP contact details", () => {
     expect(modelBody(model)).not.toMatch(FORBIDDEN);
   });
 });
+
+// Every operation, not just the sync: a field is selected only if this list
+// says which operation may select it, so a new name, photo or contact field
+// anywhere fails here.
+describe("every GIS operation selects only allowed personal fields", () => {
+  const ALLOWED: Record<string, readonly string[]> = {
+    // Identity at sign-in and the roster: the member's own name.
+    CurrentPerson: ["full_name"],
+    MemberPositions: ["full_name"],
+    // The assignment console names EPs and their EXPA managers live (D-61, D-70);
+    // nothing it reads is stored.
+    People: ["full_name"],
+  };
+  const PERSONAL = /\b(full_name|first_name|last_name|email|phone|profile_photo|dob|gender|nationalit\w*)\b/g;
+
+  const names = [...operations.matchAll(/^query (\w+)/gm)].map((match) => match[1]);
+
+  it("finds the operations to check", () => {
+    expect(names.length).toBeGreaterThan(5);
+  });
+
+  for (const name of names) {
+    it(`${name} selects nothing beyond its allowance`, () => {
+      const selected = new Set(operationBody(name).match(PERSONAL) ?? []);
+      for (const field of selected) expect(ALLOWED[name] ?? []).toContain(field);
+    });
+  }
+
+  it("never asks for a profile photo", () => {
+    expect(operations).not.toMatch(/profile_photo/);
+  });
+});
