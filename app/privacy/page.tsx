@@ -100,8 +100,7 @@ export default function PrivacyPage() {
       <ul className={LIST}>
         <li>
           <strong className="text-ink">Recognising and motivating members</strong> through points,
-          leaderboards and rewards: our legitimate interest (GDPR Art. 6(1)(f)), weighed in a data
-          protection impact assessment.
+          leaderboards and rewards: our legitimate interest (GDPR Art. 6(1)(f)).
         </li>
         <li>
           <strong className="text-ink">Your name on the office screen</strong>: your consent (Art.

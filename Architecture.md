@@ -847,7 +847,7 @@ is the measure CGTrader's Royalty Free licence asks of an app.
 AIESEC in Lebanon is the controller. `/privacy` is the privacy notice (Annex E
 of the AIESEC in Lebanon policy), with the cookie table and a contact form at its
 end; every page has a cookie banner and a footer Cookies button (D-92). The
-legal basis for the boards is legitimate interest, backed by a DPIA; names on the public `/tv` need consent (D-94).
+legal basis for the boards is legitimate interest; names on the public `/tv` need consent (D-94).
 EXPA statistical opt-outs, and members an admin hides after an objection, are on
 no board (D-93). The Data Protection Officer's address is not published: the
 contact form stores a `PrivacyRequest` that admins handle at `/admin/privacy`.
