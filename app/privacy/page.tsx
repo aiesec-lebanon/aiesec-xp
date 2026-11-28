@@ -100,8 +100,8 @@ export default function PrivacyPage() {
       <ul className={LIST}>
         <li>
           <strong className="text-ink">Recognising and motivating members</strong> through points,
-          leaderboards and rewards: our legitimate interest (GDPR Art. 6(1)(f)), weighed in a
-          legitimate interest assessment and a data protection impact assessment.
+          leaderboards and rewards: our legitimate interest (GDPR Art. 6(1)(f)), weighed in a data
+          protection impact assessment.
         </li>
         <li>
           <strong className="text-ink">Your name on the office screen</strong>: your consent (Art.
@@ -153,7 +153,7 @@ export default function PrivacyPage() {
         The database (Supabase) and the application (Vercel) run in{" "}
         <strong className="text-ink">Mumbai, India</strong>. India has no adequacy decision from the
         European Commission, so these transfers rely on the Standard Contractual Clauses in our
-        providers&apos; data processing agreements, and we keep a transfer impact assessment on file.
+        providers&apos; data processing agreements.
         The scheduled updates are started from GitHub in the United States, which receives no
         personal data.
       </p>

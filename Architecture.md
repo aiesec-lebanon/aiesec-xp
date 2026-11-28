@@ -847,8 +847,7 @@ is the measure CGTrader's Royalty Free licence asks of an app.
 AIESEC in Lebanon is the controller. `/privacy` is the privacy notice (Annex E
 of the AIESEC in Lebanon policy), with the cookie table and a contact form at its
 end; every page has a cookie banner and a footer Cookies button (D-92). The
-legal basis for the boards is legitimate interest, backed by a legitimate
-interest assessment and a DPIA; names on the public `/tv` need consent (D-94).
+legal basis for the boards is legitimate interest, backed by a DPIA; names on the public `/tv` need consent (D-94).
 EXPA statistical opt-outs, and members an admin hides after an objection, are on
 no board (D-93). The Data Protection Officer's address is not published: the
 contact form stores a `PrivacyRequest` that admins handle at `/admin/privacy`.
@@ -884,8 +883,8 @@ Technical measures that remain regardless:
   returns at once (D-95). `lib/privacy/retention.ts` holds the periods; the
   privacy notice states them.
 - Hosting is Mumbai (Supabase, Vercel `bom1`). India has no EU adequacy
-  decision, so the transfer relies on the providers' SCCs and a transfer impact
-  assessment (D-21, amended).
+  decision, so the transfer relies on the Standard Contractual Clauses in the
+  providers' DPAs (D-21, amended).
 
 ---
 
